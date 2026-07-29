@@ -1,0 +1,21177 @@
+import './style.css';
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { explorationSites, type ExplorationSite } from './assets/narrative';
+import { createSoftParticleTexture } from './assets/materials';
+import { MODEL_ASSET_AUDIT, type ModelAssetAuditEntry } from './assets/modelAssetAudit';
+import { firstLandingZone } from './assets/landingZoneDefinitions';
+import { descentLore, orbitalMarkerLore } from './assets/loreEntries';
+import { AssetLoader, type AssetLoadState } from './core/AssetLoader';
+import { Diagnostics, type ArcaDiagnostics } from './core/Diagnostics';
+import { LightPool } from './game/LightPool';
+import { PostProcessing } from './core/PostProcessing';
+import { Mothership } from './entities/Mothership';
+import { PlayerShip } from './entities/PlayerShip';
+import { SurfaceCharacter } from './entities/SurfaceCharacter';
+import { ShipAccessLift } from './entities/ShipAccessLift';
+import {
+  CockpitInterior,
+  type CockpitAlertSeverity,
+  type CockpitGlbStatus,
+  type CockpitRadarContact,
+  type CockpitTelemetry
+} from './entities/CockpitInterior';
+import { PlanetGroup } from './entities/Planets';
+import { AsteroidField } from './entities/AsteroidField';
+import { AlienRuin } from './entities/AlienRuin';
+import { DerelictWreck } from './entities/DerelictWreck';
+import { LandingZone } from './entities/LandingZone';
+import { OrbitalMarker } from './entities/OrbitalMarker';
+import { PleyadanRelayBeacon } from './entities/PleyadanRelayBeacon';
+import { PleyadanHologram } from './entities/PleyadanHologram';
+import { DefensiveBeacon } from './entities/DefensiveBeacon';
+import { DefenseNetworkLinks } from './entities/DefenseNetworkLinks';
+import { SilentProbe } from './entities/SilentProbe';
+import { Starfield } from './effects/Starfield';
+import { NebulaBackdrop } from './effects/NebulaBackdrop';
+import { EngineTrail } from './effects/EngineTrail';
+import { ScannerPulse } from './effects/ScannerPulse';
+import { ShieldEffect } from './effects/ShieldEffect';
+import { DiscoveryEffect } from './effects/DiscoveryEffect';
+import { AnomalyEffect } from './effects/AnomalyEffect';
+import { RadiationStormEffect } from './effects/RadiationStormEffect';
+import { GravityAnomalyEffect } from './effects/GravityAnomalyEffect';
+import { createCinematicDustField } from './effects/cinematicDustField';
+import { AtmosphericEntryEffect } from './effects/AtmosphericEntryEffect';
+import { InterferenceField } from './effects/InterferenceField';
+import { candidatePlanetE01 } from './assets/planetDefinitions';
+import { CandidatePlanet } from './entities/CandidatePlanet';
+import { ColonizationPlan } from './game/ColonizationPlan';
+import { CameraModeSystem, type CameraMode } from './game/CameraModeSystem';
+import {
+  PlayerModeSystem,
+  type CharacterControlState,
+  type PlayerMode
+} from './game/PlayerModeSystem';
+import { DescentSystem } from './game/DescentSystem';
+import { DescentSafetyGate, type DescentSafetySnapshot } from './game/DescentSafetyGate';
+import { HabitabilitySystem } from './game/HabitabilitySystem';
+import { MissionManager } from './game/MissionManager';
+import { ArkDepartureSequence, type ArkDepartureSnapshot } from './game/ArkDepartureSequence';
+import { createEntryProfile, updateEntryProfile } from './game/entryProfile';
+import { ArkDockingAssembly } from './entities/ArkDockingAssembly';
+import {
+  arkDepartureTuning,
+  ARK_DEPARTURE_DIALOGUE,
+  ARK_DEPARTURE_TITLE,
+  type ArkDepartureStepId
+} from './assets/arkDepartureDefinitions';
+import { OrbitalMarkerSystem } from './game/OrbitalMarkerSystem';
+import { SurfaceArrivalSystem } from './game/SurfaceArrivalSystem';
+import { ThreatDirector } from './game/ThreatDirector';
+import { StarMap, type StarMapEntity } from './game/StarMap';
+import { WeaponSystem, type WeaponTarget } from './systems/WeaponSystem';
+import { PlanetaryWorld, type ResourceSiteTerrainMetric } from './game/PlanetaryWorld';
+import { ColonyManager } from './game/ColonyManager';
+import { FirstFootholdMission } from './game/FirstFootholdMission';
+import { Mission03FirstContact, type Mission03Snapshot } from './game/Mission03FirstContact';
+import { Mission04OrbitalDefense, type Mission04Snapshot } from './game/Mission04OrbitalDefense';
+import { Mission05ShadowInOrbit, type Mission05Snapshot } from './game/Mission05ShadowInOrbit';
+import { Mission06NereidaShield } from './game/Mission06NereidaShield';
+import { Mission07SubsurfaceEchoes, type Mission07Snapshot } from './game/Mission07SubsurfaceEchoes';
+import { Mission08SignalFracture, type Mission08Snapshot } from './game/Mission08SignalFracture';
+import { Mission09AuroraExpedition, type Mission09Snapshot } from './game/Mission09AuroraExpedition';
+import { AuroraSectorRoute } from './game/AuroraSectorRoute';
+import { CloakingProjector } from './entities/CloakingProjector';
+import { CloakingField } from './entities/CloakingField';
+import { AtlasEchoNode } from './entities/AtlasEchoNode';
+import { AtlasSeedArchive } from './entities/AtlasSeedArchive';
+import { SignalFractureNode } from './entities/SignalFractureNode';
+import { SignalFractureEffect } from './effects/SignalFractureEffect';
+import { AtlasRouteBeacon } from './entities/AtlasRouteBeacon';
+import { AuroraRevealEffect } from './effects/AuroraRevealEffect';
+import { AuroraTravelDirector } from './game/AuroraTravelDirector';
+import { Mission10AuroraFoothold, type Mission10Snapshot } from './game/Mission10AuroraFoothold';
+import {
+  auroraSamplePointDefinitions,
+  auroraSettlementSiteDefinition,
+  mission10Tuning,
+  type AuroraSampleKind
+} from './assets/mission10Definitions';
+import { AuroraSurveyProbe } from './entities/AuroraSurveyProbe';
+import { AuroraSettlementBeacon } from './entities/AuroraSettlementBeacon';
+import { AuroraHabitatModule } from './entities/AuroraHabitatModule';
+import { Mission11AuroraExpansion, type Mission11Snapshot } from './game/Mission11AuroraExpansion';
+import {
+  auroraCultivationBedDefinition,
+  auroraEnergyLinkDefinition,
+  auroraSecondModuleSiteDefinition,
+  auroraWaterFilterDefinition,
+  mission11Tuning
+} from './assets/mission11Definitions';
+import { AuroraSecondModule } from './entities/AuroraSecondModule';
+import { AuroraEnergyLink } from './entities/AuroraEnergyLink';
+import { AuroraWaterFilter } from './entities/AuroraWaterFilter';
+import { AuroraCultivationBed } from './entities/AuroraCultivationBed';
+import { AuroraCoreDressing } from './entities/AuroraCoreDressing';
+import { Mission12FirstInhabitants, type Mission12Snapshot } from './game/Mission12FirstInhabitants';
+import {
+  auroraCrewDefinitions,
+  auroraLandingZoneDefinition,
+  mission12Tuning
+} from './assets/mission12Definitions';
+import { AuroraCrewCapsule } from './entities/AuroraCrewCapsule';
+import { Mission13FirstStorm, type Mission13Snapshot } from './game/Mission13FirstStorm';
+import {
+  auroraStormAntennaDefinition,
+  auroraStormGeneratorDefinition,
+  mission13Tuning
+} from './assets/mission13Definitions';
+import { AuroraStormStations } from './entities/AuroraStormStations';
+import { AuroraStormEffect } from './effects/AuroraStormEffect';
+import { Mission13AudioDirector } from './audio/Mission13AudioDirector';
+import { Mission14CoalitionTrace, type Mission14Snapshot } from './game/Mission14CoalitionTrace';
+import {
+  coalitionHiddenNodeDefinition,
+  coalitionTerminalDefinition,
+  mission14Tuning
+} from './assets/mission14Definitions';
+import { AuroraCoalitionTraceNodes } from './entities/AuroraCoalitionTraceNodes';
+import { CoalitionTraceEffect } from './effects/CoalitionTraceEffect';
+import { Mission15AuroraSabotage, type Mission15Snapshot } from './game/Mission15AuroraSabotage';
+import { Mission16PleyadianProtocol, type Mission16Snapshot } from './game/Mission16PleyadianProtocol';
+import { Mission17DefensePreparations, type Mission17Snapshot } from './game/Mission17DefensePreparations';
+import { Mission18FirstFire, type Mission18Snapshot } from './game/Mission18FirstFire';
+import { Mission19NereidaUnderAttack, type Mission19Snapshot } from './game/Mission19NereidaUnderAttack';
+import { Mission20ArkBattle, type Mission20Snapshot } from './game/Mission20ArkBattle';
+import { Mission21SilenceRupture, type Mission21Snapshot } from './game/Mission21SilenceRupture';
+import { Mission22BrokenFronts, type Mission22Snapshot } from './game/Mission22BrokenFronts';
+import { Mission23Counteroffensive, type Mission23Snapshot } from './game/Mission23Counteroffensive';
+import { Mission24ReturnToOrigin, type Mission24Snapshot } from './game/Mission24ReturnToOrigin';
+import { AtmosphericAscentController } from './game/AtmosphericAscentController';
+import { CoalitionScoutDrone } from './entities/CoalitionScoutDrone';
+import { CoalitionBreachDrone } from './entities/CoalitionBreachDrone';
+import { CoalitionJammer } from './entities/CoalitionJammer';
+import { CoalitionCapitalPresence } from './entities/CoalitionCapitalPresence';
+import { ThreeFrontCommandNetwork } from './entities/ThreeFrontCommandNetwork';
+import { CoalitionLogisticsPlatform, type LogisticsPlatformState } from './entities/CoalitionLogisticsPlatform';
+import { CoalitionJumpBeacon } from './entities/CoalitionJumpBeacon';
+import { ArkFinalPreparationNetwork, type ArkFinalPreparationState } from './entities/ArkFinalPreparationNetwork';
+import { AtmosphericAscentEffect } from './effects/AtmosphericAscentEffect';
+import {
+  auroraSupplyCacheDefinition,
+  mission15Tuning,
+  parasiteNodeDefinitions,
+  sealedModuleDoorDefinition
+} from './assets/mission15Definitions';
+import { AuroraParasiteNodes } from './entities/AuroraParasiteNodes';
+import { PleyadianDefenseNodes, type PleyadianNodeState } from './entities/PleyadianDefenseNodes';
+import { AuroraDefenseNetwork, type DefensePartState } from './entities/AuroraDefenseNetwork';
+import { auroraGreebleField } from './assets/auroraDetailKit';
+import { CoalitionSabotageEffect } from './effects/CoalitionSabotageEffect';
+import { PleyadianProtocolEffect } from './effects/PleyadianProtocolEffect';
+import { AuroraDefenseEffect } from './effects/AuroraDefenseEffect';
+import {
+  mission16Tuning,
+  pleyadianNodeDefinitions,
+  TRIPLE_LINK_ANCHORS
+} from './assets/mission16Definitions';
+import {
+  ALERT_ENCLAVES,
+  defenseSensorDefinitions,
+  ENERGY_CIRCUITS,
+  EVAC_MARKERS,
+  mission17Tuning,
+  shieldEmitterDefinitions
+} from './assets/mission17Definitions';
+import {
+  defenseTurretDefinitions,
+  droneWaveDefinitions,
+  droneWreckageDefinition,
+  mission18Tuning,
+  CRITICAL_SYSTEM,
+  TURRET_COUNT
+} from './assets/mission18Definitions';
+import {
+  mission19Tuning,
+  nereidaAtlasGate,
+  nereidaEmergencyPower,
+  nereidaHeavyBattery,
+  nereidaLandingZone,
+  nereidaWreckage,
+  NEREIDA_DEFENSE_LABELS,
+  NEREIDA_DEFENSE_ORDER
+} from './assets/mission19Definitions';
+import {
+  arkCivilianModules,
+  arkDataCore,
+  arkEngines,
+  arkLinkPoints,
+  arkMainBattery,
+  mission20Tuning,
+  ARK_SYSTEM_LABELS
+} from './assets/mission20Definitions';
+import {
+  ATTACK_ROUTE_LABELS,
+  ATTACK_ROUTE_ORDER,
+  ENCLAVE_CHANNEL_LABELS,
+  ENCLAVE_CHANNEL_ORDER,
+  MISSION21_CHANNEL_LABELS,
+  MISSION21_CHANNEL_ORDER,
+  mission21Tuning,
+  type CoalitionResponseTone
+} from './assets/mission21Definitions';
+import {
+  MISSION22_FRONT_LABELS,
+  MISSION22_NODE_LABELS,
+  MISSION22_NODE_ORDER,
+  MISSION22_RESOURCE_LABELS,
+  mission22Tuning,
+  type Mission22FrontId,
+  type Mission22ResourceId
+} from './assets/mission22Definitions';
+import {
+  MISSION23_PLATFORM_METHOD_LABELS,
+  MISSION23_TARGET_LABELS,
+  mission23Tuning,
+  type Mission23PlatformMethod,
+  type Mission23PrimaryTarget
+} from './assets/mission23Definitions';
+import {
+  MISSION24_ARK_PREPARATION_LABELS,
+  MISSION24_ARK_SYSTEM_LABELS,
+  MISSION24_ENCLAVE_LABELS,
+  MISSION24_STARTING_SECTOR_LABELS,
+  MISSION24_STEP_ORDER,
+  mission24Tuning,
+  type Mission24StepId
+} from './assets/mission24Definitions';
+import {
+  PremiumVisualLayer,
+  type PremiumVisualQuality,
+  type PremiumVisualState
+} from './effects/PremiumVisualLayer';
+import { GpuParticleField } from './effects/GpuParticleField';
+import { AuroraFirstCrew } from './entities/AuroraFirstCrew';
+import { cloakingProjectorPositions, mission06Tuning } from './assets/mission06Definitions';
+import {
+  atlasEchoNodeDefinitions,
+  atlasFractureDefinition,
+  atlasSeedArchiveDefinition,
+  mission07Tuning
+} from './assets/mission07Definitions';
+import {
+  mission08Tuning,
+  signalFractureDefinition,
+  signalFractureFocusDefinitions
+} from './assets/mission08Definitions';
+import {
+  atlasRouteBeaconDefinitions,
+  auroraSectorDefinitions,
+  auroraThresholdDefinition,
+  mission09Tuning
+} from './assets/mission09Definitions';
+import { SignalTranslationSystem } from './game/SignalTranslationSystem';
+import { SurfaceResourceSystem } from './game/SurfaceResourceSystem';
+import { SurfaceMapSystem } from './game/SurfaceMapSystem';
+import { ResourceInventory } from './game/ResourceInventory';
+import { SaveSystem, type SaveGameData } from './game/SaveSystem';
+import { UpgradeSystem } from './game/UpgradeSystem';
+import {
+  getCurrentObjectiveDisplay as resolveObjectiveDisplay,
+  type ObjectiveDisplay
+} from './game/ObjectiveResolver';
+import { TutorialManager } from './game/TutorialManager';
+import { DialogueManager, type DialogueState } from './game/DialogueManager';
+import {
+  InputActionRouter,
+  type GameInputAction,
+  type InputActionState,
+  type InputMode
+} from './game/InputActionRouter';
+import { ColonyPanel } from './ui/ColonyPanel';
+import { SurfaceObjectivePanel } from './ui/SurfaceObjectivePanel';
+import { SurfaceMapPanel } from './ui/SurfaceMapPanel';
+import { PauseMenu } from './ui/PauseMenu';
+import { CommsDialoguePanel } from './ui/CommsDialoguePanel';
+import { Mission21ResponsePanel } from './ui/Mission21ResponsePanel';
+import { Mission22CommandPanel } from './ui/Mission22CommandPanel';
+import { Mission23ChoicePanel } from './ui/Mission23ChoicePanel';
+import { Mission24AscentHud } from './ui/Mission24AscentHud';
+import { AudioManager, type AudioSettings } from './audio/AudioManager';
+import { EngineAudio, type EngineAudioSnapshot } from './audio/EngineAudio';
+import { FootstepAudio } from './audio/FootstepAudio';
+import { MusicManager } from './audio/MusicManager';
+import { SFXManager } from './audio/SFXManager';
+import { VoiceManager } from './audio/VoiceManager';
+import {
+  musicTrackIds,
+  sfxTrackIds,
+  type MusicTrackId,
+  type SfxTrackId
+} from './audio/audioDefinitions';
+import { surfaceLore } from './assets/surfaceLoreEntries';
+import type { SurfaceResourceType } from './assets/surfaceResourceDefinitions';
+import { resonadorAtlasDefinition, type Mission03StepId } from './assets/mission03Definitions';
+import {
+  defenseBeaconSites,
+  mission04Tuning,
+  type Mission04StepId
+} from './assets/mission04Definitions';
+import {
+  mission05EchoPositions,
+  mission05Tuning,
+  silentProbePosition,
+  type Mission05StepId
+} from './assets/mission05Definitions';
+
+type ResourceState = {
+  hull: number;
+  energy: number;
+  oxygen: number;
+  memory: number;
+};
+
+export type Mission03DebugState = Mission03Snapshot & {
+  translationState: string;
+  translationProgress: number;
+  translatedFragments: number;
+};
+
+export type Mission04DebugState = Mission04Snapshot;
+
+export type Mission05DebugState = Mission05Snapshot;
+
+export type Mission07DebugState = Mission07Snapshot;
+
+export type Mission08DebugState = Mission08Snapshot;
+
+export type Mission09DebugState = Mission09Snapshot;
+export type Mission10DebugState = Mission10Snapshot;
+export type Mission11DebugState = Mission11Snapshot;
+export type Mission12DebugState = Mission12Snapshot;
+export type Mission13DebugState = Mission13Snapshot;
+export type Mission14DebugState = Mission14Snapshot;
+export type Mission24DebugState = Mission24Snapshot;
+
+/**
+ * Mission 01 prologue diagnostics: sequence state plus the scene-graph facts
+ * the probe needs to prove the Ark was reused rather than rebuilt and that
+ * nothing was duplicated.
+ */
+export type ArkDepartureDebugState = ArkDepartureSnapshot & {
+  docked: boolean;
+  translationLocked: boolean;
+  weaponsLocked: boolean;
+  thrustLimit: number;
+  preflightProgress: number;
+  clampProgress: number;
+  systemsConfirmed: number;
+  statusLabel: string;
+  anchorDistance: number;
+  shipSpeed: number;
+  shipParentIsArk: boolean;
+  shipCount: number;
+  mothershipCount: number;
+  mothershipUuid: string;
+  mothershipPosition: [number, number, number];
+  mothershipScale: [number, number, number];
+  dockingAssemblyBuilt: boolean;
+  currentDialogue: string;
+};
+export type Mission15DebugState = Mission15Snapshot;
+export type Mission16DebugState = Mission16Snapshot;
+export type Mission17DebugState = Mission17Snapshot;
+export type Mission18DebugState = Mission18Snapshot;
+export type Mission19DebugState = Mission19Snapshot;
+export type Mission20DebugState = Mission20Snapshot;
+export type Mission21DebugState = Mission21Snapshot;
+export type Mission22DebugState = Mission22Snapshot;
+export type Mission23DebugState = Mission23Snapshot;
+
+export type CameraLookAtInput = string | [number, number, number] | { x: number; y: number; z: number };
+
+export type CameraProbeResult = {
+  targetName: string;
+  targetPosition: [number, number, number];
+  cameraPosition: [number, number, number];
+};
+
+export type AudioDebugState = {
+  settings: Readonly<AudioSettings>;
+  currentMusicState: string;
+  currentMusicTrack: string;
+  requestedMusicTrack: string;
+  activeMusicLayers: string[];
+  /** Cue the resolver wants but hysteresis is still holding back, or 'none'. */
+  pendingMusicTrack: string;
+  /** Beds started since boot: a held or unchanged cue must not raise it. */
+  musicBedStartCount: number;
+  musicDucked: boolean;
+  engine: EngineAudioSnapshot;
+  missingAudioAssets: string[];
+  missingMusicAssets: string[];
+};
+
+export type DefenseNetworkVisualState = {
+  defenseLinksActive: boolean;
+  defenseLinksUnstable: boolean;
+  defenseLinksOnline: boolean;
+  defenseNetworkVisible: boolean;
+  threatSignatureWorldVisible: boolean;
+  activeDefenseLinkCount: number;
+  defensiveBeaconVisibility: boolean[];
+};
+
+type InterestPoint = {
+  id: string;
+  name: string;
+  sector: string;
+  scannerLead: string;
+  story: string;
+  reward: Partial<ResourceState>;
+  object: THREE.Object3D;
+  updateVisual: (delta: number, elapsed: number) => void;
+  flashHighlight: () => void;
+  marker: THREE.Mesh;
+  markerMaterial: THREE.MeshBasicMaterial;
+  scanned: boolean;
+  scanRadius: number;
+};
+
+type SentinelThreat = {
+  effect: AnomalyEffect;
+  target: WeaponTarget;
+  alertRadius: number;
+  damageRadius: number;
+  phase: number;
+};
+
+type CorridorPip = {
+  sprite: THREE.Sprite;
+  material: THREE.SpriteMaterial;
+  index: number;
+};
+
+function getElement<T extends HTMLElement>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) {
+    throw new Error(`Missing required UI element: ${selector}`);
+  }
+  return element;
+}
+
+const canvas = getElement<HTMLCanvasElement>('#game-canvas');
+const bootScreen = getElement<HTMLElement>('#boot-screen');
+const launchButton = getElement<HTMLButtonElement>('#launch-button');
+const loadingStatus = getElement<HTMLElement>('#loading-status');
+const hud = getElement<HTMLElement>('#hud');
+const scanButton = getElement<HTMLButtonElement>('#scan-button');
+const sectorName = getElement<HTMLElement>('#sector-name');
+const velocityReadout = getElement<HTMLElement>('#velocity-readout');
+const distanceReadout = getElement<HTMLElement>('#distance-readout');
+const safeZoneReadout = getElement<HTMLElement>('#safezone-readout');
+const threatReadout = getElement<HTMLElement>('#threat-readout');
+const missionText = getElement<HTMLElement>('#mission-text');
+const discoveryList = getElement<HTMLUListElement>('#discovery-list');
+const diagnosticsReadout = getElement<HTMLElement>('#diagnostics-readout');
+const homeMarker = getElement<HTMLElement>('#home-marker');
+const homeDistance = getElement<HTMLElement>('#home-distance');
+const warningOverlay = getElement<HTMLElement>('#warning-overlay');
+const missionNameReadout = getElement<HTMLElement>('#mission-name');
+const objectiveText = getElement<HTMLElement>('#objective-text');
+const nextAction = getElement<HTMLElement>('#next-action');
+const objectiveDistance = getElement<HTMLElement>('#objective-distance');
+const scannerStatus = getElement<HTMLElement>('#scanner-status');
+const signalStrength = getElement<HTMLElement>('#signal-strength');
+const habitabilityProgress = getElement<HTMLProgressElement>('#habitability-progress');
+const missionProgressLabel = getElement<HTMLElement>('#mission-progress-label');
+const missionHint = getElement<HTMLElement>('#mission-hint');
+const habitabilityPanel = getElement<HTMLElement>('#habitability-panel');
+const habitabilityTitle = getElement<HTMLElement>('#habitability-title');
+const habitabilityReport = getElement<HTMLElement>('#habitability-report');
+const descentPanel = getElement<HTMLElement>('#descent-panel');
+const descentTitle = getElement<HTMLElement>('#descent-title');
+const heatMeter = getElement<HTMLProgressElement>('#heat-meter');
+const stabilityMeter = getElement<HTMLProgressElement>('#stability-meter');
+const altitudeReadout = getElement<HTMLElement>('#altitude-readout');
+const landingReadout = getElement<HTMLElement>('#landing-readout');
+const missionCompleteOverlay = getElement<HTMLElement>('#mission-complete-overlay');
+const missionCompleteTitle = getElement<HTMLElement>('#mission-complete-title');
+const missionCompleteText = getElement<HTMLElement>('#mission-complete-text');
+const objectiveMarker = getElement<HTMLElement>('#objective-marker');
+const objectiveMarkerArrow = getElement<HTMLElement>('#objective-marker-arrow');
+const objectiveMarkerLabel = getElement<HTMLElement>('#objective-marker-label');
+const objectiveMarkerDistance = getElement<HTMLElement>('#objective-marker-distance');
+const laserStatus = getElement<HTMLElement>('#laser-status');
+const missileStatus = getElement<HTMLElement>('#missile-status');
+const lockStatus = getElement<HTMLElement>('#lock-status');
+const heatOverlay = getElement<HTMLElement>('#heat-overlay');
+const phaseBanner = getElement<HTMLElement>('#phase-banner');
+const phaseBannerTitle = getElement<HTMLElement>('#phase-banner-title');
+const phaseBannerSubtitle = getElement<HTMLElement>('#phase-banner-subtitle');
+const phaseChip = getElement<HTMLElement>('#phase-chip');
+const nextKey = getElement<HTMLElement>('#next-key');
+const interactPrompt = getElement<HTMLElement>('#interact-prompt');
+const interactKey = getElement<HTMLElement>('#interact-prompt kbd');
+const interactLabel = getElement<HTMLElement>('#interact-label');
+const controlsStrip = getElement<HTMLElement>('#controls-strip');
+
+const meters = {
+  hull: getElement<HTMLProgressElement>('#hull-meter'),
+  shield: getElement<HTMLProgressElement>('#shield-meter'),
+  energy: getElement<HTMLProgressElement>('#energy-meter'),
+  oxygen: getElement<HTMLProgressElement>('#oxygen-meter'),
+  memory: getElement<HTMLProgressElement>('#memory-meter')
+};
+
+const urlParams = new URLSearchParams(window.location.search);
+const diagnosticsMode = urlParams.has('test') || urlParams.has('debug');
+/**
+ * The M01 prologue puts the ship in the Ark's clamps, which is the right first
+ * experience for a player and the wrong starting state for an automated probe
+ * that drives the game through debug hooks and expects to be able to fly from
+ * frame one. Automated runs therefore start past it unless they ask for it
+ * with `?prologue=1`; a real player always gets it.
+ */
+const arkDepartureEnabled = !diagnosticsMode || urlParams.has('prologue');
+
+// ---------------------------------------------------------------------------
+// Renderer + cinematic pipeline
+// ---------------------------------------------------------------------------
+
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  preserveDrawingBuffer: diagnosticsMode,
+  powerPreference: 'high-performance'
+});
+// Test/debug runs render on software GL: drop resolution so automation
+// stays responsive without changing the shipped visual quality.
+renderer.setPixelRatio(diagnosticsMode ? 1 : Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.02;
+// Shadow mapping is enabled globally because it is the only way to get a real
+// cast shadow for the pilot on foot. The cost is kept bounded rather than paid
+// everywhere: exactly ONE light ever casts (the existing key star — no new
+// dynamic light is added), it is switched on only while the character is on the
+// surface, and its shadow camera is a small box that follows the pilot instead
+// of trying to cover the world. In space nothing casts, so the space scene
+// keeps the "no large occluders" behaviour the previous setting gave for free.
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Driven manually: the map is only re-rendered on frames where the pilot is
+// actually visible on foot (see updateCharacterShadow).
+renderer.shadowMap.autoUpdate = false;
+// Manual reset so renderer.info accumulates every composer pass per frame
+// instead of reporting only the final fullscreen quad.
+renderer.info.autoReset = false;
+
+// ---------------------------------------------------------------------------
+// Render profiles. `high` is the default: a clean, stable image on a normal
+// machine. `performance` trades the cheapest-to-lose detail for frame rate,
+// `ultra` keeps everything for machines that can afford it. Only knobs that
+// cost real time are profiled — nothing here changes gameplay.
+// ---------------------------------------------------------------------------
+export type RenderProfile = 'performance' | 'high' | 'ultra';
+
+const RENDER_PROFILES: Record<RenderProfile, {
+  maxPixelRatio: number;
+  maxPointLights: number;
+  premiumQuality: PremiumVisualQuality;
+}> = {
+  performance: { maxPixelRatio: 1, maxPointLights: 6, premiumQuality: 'low' },
+  high: { maxPixelRatio: 1.5, maxPointLights: 10, premiumQuality: 'medium' },
+  ultra: { maxPixelRatio: 2, maxPointLights: 16, premiumQuality: 'high' }
+};
+
+const RENDER_PROFILE_STORAGE_KEY = 'arca-epsilon-render-profile';
+
+function readStoredRenderProfile(): RenderProfile {
+  try {
+    const stored = window.localStorage.getItem(RENDER_PROFILE_STORAGE_KEY);
+    if (stored === 'performance' || stored === 'high' || stored === 'ultra') return stored;
+  } catch {
+    // Blocked storage just means the recommended profile.
+  }
+  return 'high';
+}
+
+let renderProfile: RenderProfile = diagnosticsMode ? 'performance' : readStoredRenderProfile();
+
+/**
+ * Caps how many point lights the renderer shades at once. Most of the world's
+ * lamps have a reach of a few metres, so the ones outside it are dropped
+ * without changing a pixel.
+ */
+const lightPool = new LightPool(RENDER_PROFILES[renderProfile].maxPointLights);
+let lightPoolRescanTimer = 0;
+let auroraGreebleDetailTimer = 0;
+/** Escape hatch so the budget's visual effect can be A/B'd at runtime. */
+let lightPoolEnabled = true;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020409);
+// Gentle exponential haze as a mid-field depth cue; background systems
+// (stars, nebula, planets) opt out of fog so the deep space stays crisp.
+scene.fog = new THREE.FogExp2(0x040810, 0.0012);
+
+const camera = new THREE.PerspectiveCamera(64, window.innerWidth / window.innerHeight, 0.1, 14000);
+camera.name = 'Main Camera';
+camera.position.set(0, 9, 34);
+scene.add(camera);
+
+const post = new PostProcessing(renderer, scene, camera, { samples: diagnosticsMode ? 0 : 4 });
+// UnrealBloomPass is the dominant SwiftShader cost in Playwright and can
+// starve DOM/debug probes after repeated reloads. Diagnostics already use the
+// performance profile; keep the cinematic grade but skip bloom only there.
+post.bloomPass.enabled = !diagnosticsMode;
+
+const clock = new THREE.Clock();
+const ship = new THREE.Group();
+const velocity = new THREE.Vector3();
+const input = new Set<string>();
+let shipAltitudeHoldY: number | undefined;
+let shipPreviousY = ship.position.y;
+let previousVerticalInput = 0;
+let shipTerrainY = 0;
+let shipAltitudeResetForce = 0;
+const resources: ResourceState = { hull: 87, energy: 76, oxygen: 64, memory: 41 };
+const settings = {
+  thrust: 35,
+  boost: 2.35,
+  drag: 0.965,
+  mouseSensitivity: 0.0023,
+  threatDamage: 6.5,
+  scannerRange: 132
+};
+// --- Orbital flight state (Mission 01) --------------------------------------
+// Engine spool, boost ramp and eased attitude live here so the flight model
+// has memory between frames. Scratch vectors are reused every frame so the
+// physics step never allocates.
+let spaceThrustLevel = 0;
+let spaceBoostLevel = 0;
+let spaceThrustPitch = 0;
+const spaceForward = new THREE.Vector3();
+const spaceRight = new THREE.Vector3();
+const spaceUp = new THREE.Vector3();
+const spaceAxial = new THREE.Vector3();
+const spaceLateral = new THREE.Vector3();
+const mission24ApproachDirection = new THREE.Vector3();
+
+const SURFACE_SHIP_TUNING = {
+  CRUISE_SPEED: 24,
+  BOOST_SPEED: 42,
+  ACCELERATION: 48,
+  DECELERATION: 4.8,
+  TURN_SPEED: 1.25,
+  HOVER_HEIGHT: 5.2,
+  // Height the hull rests at once the pilot steps out. The landing gear hangs
+  // 2.86 m below the ship's origin, so this seats it a few centimetres off the
+  // ground instead of leaving it hovering on the 5.2 m flight cushion — the
+  // "parked on a pedestal of air" look. Kept separate from HOVER_HEIGHT so
+  // flight behaviour is untouched; boarding lifts back to the hover height.
+  PARK_HEIGHT: 3.05,
+  MAX_BANK: 0.32,
+  BOOST_FX_INTENSITY: 1.4,
+  TELEMETRY_RADIUS: 880,
+  BASE_ASSIST_RADIUS: 38,
+  BASE_ASSIST_SPEED: 18
+} as const;
+const onFootCameraTuning = {
+  DISTANCE: 6.35,
+  TRANSITION_DISTANCE: 8.4,
+  HEIGHT: 1.05,
+  TARGET_HEIGHT: 1.28,
+  SHOULDER_OFFSET: 0.82,
+  PITCH_MIN: -0.08,
+  PITCH_MAX: 0.62,
+  ORBIT_RESPONSE: 14,
+  FOLLOW_RESPONSE: 10.8,
+  TERRAIN_CLEARANCE: 1.05,
+  MIN_COLLISION_DISTANCE: 0.72
+} as const;
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
+let yaw = -0.08;
+let pitch = 0.02;
+// The hull follows the pilot's aim with inertia: smoothed heading plus a
+// banked roll driven by turn rate and lateral slip, like a real airframe.
+let smoothYaw = yaw;
+let smoothPitch = pitch;
+let bankRoll = 0;
+let launched = false;
+let traveled = 0;
+let lastScan = -10;
+let cameraShake = 0;
+let liftLockTremorRemaining = 0;
+let transientWarning = '';
+let lastDockMessageAt = -20;
+let audioContext: AudioContext | undefined;
+let fallbackAudioGain: GainNode | undefined;
+let activeParticleBudget = 0;
+let habitabilityReportShown = false;
+let missionCompleteShown = false;
+const missionDiscoveries: string[] = [];
+
+function updateLoadingState(state: AssetLoadState): void {
+  if (state.status === 'loading') {
+    const progress = state.progress > 0 ? ` ${Math.round(state.progress * 100)}%` : '';
+    loadingStatus.textContent = `Cargando modelos oficiales${progress}`;
+  }
+
+  if (state.status === 'failed') {
+    loadingStatus.textContent = `Fallo GLB: ${state.error}`;
+  }
+}
+
+const assetLoader = new AssetLoader(updateLoadingState);
+assetLoader.enableKTX2(renderer, '/basis/');
+const diagnostics = new Diagnostics();
+const mothership = new Mothership(assetLoader);
+const scannerPulse = new ScannerPulse();
+const discoveryEffect = new DiscoveryEffect();
+const candidatePlanet = new CandidatePlanet(candidatePlanetE01);
+const orbitalMarkerPosition = new THREE.Vector3(520, -54, -1188);
+const orbitalMarker = new OrbitalMarker(assetLoader, orbitalMarkerPosition);
+const orbitalMarkerSystem = new OrbitalMarkerSystem();
+const descentSystem = new DescentSystem();
+const descentSafetyGate = new DescentSafetyGate();
+const landingZone = new LandingZone(firstLandingZone);
+const surfaceArrivalSystem = new SurfaceArrivalSystem();
+const habitabilitySystem = new HabitabilitySystem(candidatePlanetE01);
+const missionManager = new MissionManager();
+const colonizationPlan = new ColonizationPlan();
+const threatDirector = new ThreatDirector();
+const weaponSystem = new WeaponSystem();
+const starMap = new StarMap();
+const planetaryWorld = new PlanetaryWorld();
+const colonyManager = new ColonyManager();
+const surfaceMission = new FirstFootholdMission();
+const mission03 = new Mission03FirstContact();
+const mission04 = new Mission04OrbitalDefense();
+const mission05 = new Mission05ShadowInOrbit();
+const mission06 = new Mission06NereidaShield();
+const mission07 = new Mission07SubsurfaceEchoes();
+const cloakingProjectors = cloakingProjectorPositions.map((pos, i) => new CloakingProjector(pos, `CloakingProjector_${i}`));
+const cloakingField = new CloakingField([0, 1.5, 0], 'CloakingField');
+// Subtle projector→base links: same visual language as the defense mesh.
+const cloakingLinks = new DefenseNetworkLinks(cloakingProjectorPositions.length);
+const CLOAKING_PROJECTOR_NAMES = ['Proyector Norte', 'Proyector Este', 'Proyector Sur'] as const;
+let mission06SyncEngaged = false;
+const atlasEchoNodes = atlasEchoNodeDefinitions.map((definition) => new AtlasEchoNode(definition));
+const atlasSeedArchive = new AtlasSeedArchive();
+const mission08 = new Mission08SignalFracture();
+const signalFractureNodes = signalFractureFocusDefinitions.map((definition) => new SignalFractureNode(definition));
+const signalFractureEffect = new SignalFractureEffect();
+let mission08PurgeEngaged = false;
+let mission08LastPurgePulseAt = -Infinity;
+const mission09 = new Mission09AuroraExpedition();
+let mission09HadWeakSignalWarning = false;
+const atlasRouteBeacons = atlasRouteBeaconDefinitions.map((definition) => new AtlasRouteBeacon(definition));
+const auroraRevealEffect = new AuroraRevealEffect((x, z) => planetaryWorld.getHeightAt(x, z));
+const auroraSectorRoute = new AuroraSectorRoute((x, z) => planetaryWorld.getHeightAt(x, z));
+
+/**
+ * Single source of ground height in the Aurora valley: the VISIBLE reveal
+ * floor. The valley floor is carved and levelled below the un-shaped analytic
+ * terrain, so seating on planetaryWorld.getHeightAt alone leaves colony
+ * hardware and the character floating up to ~2 m above the ground the player
+ * actually sees. This resolves to the reveal floor inside the valley and falls
+ * back to the analytic height elsewhere (or before the valley is baked), so it
+ * is safe to use for every Aurora placement and for on-foot ground contact.
+ */
+function auroraSurfaceHeight(x: number, z: number): number {
+  const valley = auroraRevealEffect.groundHeightAt(x, z);
+  return Number.isFinite(valley) ? valley : planetaryWorld.getHeightAt(x, z);
+}
+// Stages the expedition: legs, weather ramps and ambience cues. Sound goes
+// through playAmbient so every cue keeps its own cooldown, and missing Aurora
+// assets fall back to existing ones instead of going silent.
+const auroraTravelDirector = new AuroraTravelDirector((cue, volume, cooldown) => {
+  void sfxManager.playAmbient(cue, clock.elapsedTime, cooldown, volume);
+});
+const mission10 = new Mission10AuroraFoothold();
+const auroraSurveyProbes = auroraSamplePointDefinitions.map((definition) => new AuroraSurveyProbe(definition));
+const auroraSettlementBeacon = new AuroraSettlementBeacon();
+const auroraHabitatModule = new AuroraHabitatModule();
+let mission10DeployStartedAt = -Infinity;
+const mission11 = new Mission11AuroraExpansion();
+const auroraSecondModule = new AuroraSecondModule();
+const auroraEnergyLink = new AuroraEnergyLink();
+const auroraWaterFilter = new AuroraWaterFilter();
+const auroraCultivationBed = new AuroraCultivationBed();
+// Purely decorative settlement layer: paths, markers, crates, dust. Reads
+// mission state, never writes it.
+const auroraCoreDressing = new AuroraCoreDressing();
+let mission11DeployStartedAt = -Infinity;
+const mission12 = new Mission12FirstInhabitants();
+const auroraCrewCapsule = new AuroraCrewCapsule();
+const auroraFirstCrew = new AuroraFirstCrew();
+let mission12DescentElapsed = -1;
+const mission13 = new Mission13FirstStorm();
+const auroraStormStations = new AuroraStormStations();
+const auroraStormEffect = new AuroraStormEffect();
+/** Storm-driven fog boost, layered on top of the M12 night blend. */
+let auroraStormFogBoost = 0;
+const mission14 = new Mission14CoalitionTrace();
+const auroraTraceNodes = new AuroraCoalitionTraceNodes();
+const coalitionTraceEffect = new CoalitionTraceEffect();
+/** Set on the frame an extraction attempt is lost, so the warning fires once. */
+let mission14ExtractionLostAt = -Infinity;
+const mission15 = new Mission15AuroraSabotage();
+const MISSION15_SEQUENCE_LABELS = ['ALFA', 'BETA', 'GAMMA', 'DELTA'] as const;
+/** Anchored on sync from the definitions; never rebuilt per frame. */
+const auroraSupplyPosition = new THREE.Vector3();
+const auroraSealedDoorPosition = new THREE.Vector3();
+const auroraParasiteNodes = new AuroraParasiteNodes();
+const coalitionSabotageEffect = new CoalitionSabotageEffect();
+/** Throttles the repeatable overload warning so it never spams the channel. */
+let mission15OverloadWarnedAt = -Infinity;
+const mission16 = new Mission16PleyadianProtocol();
+const pleyadianDefenseNodes = new PleyadianDefenseNodes();
+const pleyadianProtocolEffect = new PleyadianProtocolEffect();
+/** Fires the seed-world revelation exactly once per entry into that step. */
+let mission16SeedWorldAnnounced = false;
+const mission17 = new Mission17DefensePreparations();
+const auroraDefenseNetwork = new AuroraDefenseNetwork();
+const auroraDefenseEffect = new AuroraDefenseEffect();
+/** Fires the incoming-signature beat exactly once per entry into that step. */
+let mission17SignaturesAnnounced = false;
+/** Throttles the repeatable overload warning so it never spams the channel. */
+let mission17OverloadWarnedAt = -Infinity;
+const mission18 = new Mission18FirstFire();
+const coalitionDrones = new CoalitionScoutDrone();
+/** Per-battery cooldown timers. Volatile: never saved. */
+const mission18TurretCooldowns = new Float32Array(TURRET_COUNT);
+/** Fires each M18 beat exactly once per entry into its step. */
+const mission18AnnouncedBeats = new Set<string>();
+/** Throttles the repeatable shield/energy warnings. */
+let mission18WarnedAt = -Infinity;
+/** Reused for the wreckage position; never allocated per frame. */
+const mission18WreckageScratch = new THREE.Vector3();
+const mission19 = new Mission19NereidaUnderAttack();
+const coalitionBreachDrones = new CoalitionBreachDrone();
+/** Fires each M19 beat exactly once per entry into its step. */
+const mission19AnnouncedBeats = new Set<string>();
+/** Per-defence cooldowns for Nereida's remote guns. Volatile: never saved. */
+const mission19DefenseCooldowns = new Float32Array(4);
+/** Reused for M19 station positions; never allocated per frame. */
+const mission19Scratch = new THREE.Vector3();
+let mission19WarnedAt = -Infinity;
+const mission19DefenseScratch = new THREE.Vector3();
+const mission20 = new Mission20ArkBattle();
+const coalitionJammer = new CoalitionJammer();
+const mission20AnnouncedBeats = new Set<string>();
+const mission20Scratch = new THREE.Vector3();
+let mission20WarnedAt = -Infinity;
+const mission20OffsetScratch = new THREE.Vector3();
+const mission21 = new Mission21SilenceRupture();
+const coalitionCapitalPresence = new CoalitionCapitalPresence();
+const mission21AnnouncedBeats = new Set<string>();
+const mission21Scratch = new THREE.Vector3();
+const mission21LinkPositions = arkLinkPoints.map(() => new THREE.Vector3());
+const mission21RoutePositions = mission21Tuning.attackRouteOffsets.map(() => new THREE.Vector3());
+const mission22 = new Mission22BrokenFronts();
+const threeFrontCommandNetwork = new ThreeFrontCommandNetwork();
+const mission22AnnouncedBeats = new Set<string>();
+const mission22Scratch = new THREE.Vector3();
+const mission22DefenseCooldowns = new Float32Array(4);
+const mission22VisualIntegrities: [number, number, number] = [100, 100, 100];
+const mission23 = new Mission23Counteroffensive();
+const coalitionLogisticsPlatform = new CoalitionLogisticsPlatform();
+const coalitionJumpBeacon = new CoalitionJumpBeacon();
+const mission23AnnouncedBeats = new Set<string>();
+const mission23Scratch = new THREE.Vector3();
+const mission23TargetScratch = new THREE.Vector3();
+const mission23PlatformVisualState: LogisticsPlatformState = {
+  visible: false,
+  defensesDisabled: false,
+  energyDisabled: false,
+  destroyed: false,
+  method: 'none'
+};
+const mission23ObjectiveGuidance: Mission03ObjectiveGuidance = {};
+let mission23SupportCooldown = 0;
+// --- Mission 01 prologue: departure from Arca Epsilon ---------------------
+const arkDeparture = new ArkDepartureSequence();
+const arkDockingAssembly = new ArkDockingAssembly();
+/** Reused every frame for the cradle distance: never allocate in the loop. */
+const arkDepartureScratch = new THREE.Vector3();
+const arkDepartureAnchorWorld = new THREE.Vector3();
+/** Latches so each commander beat is spoken exactly once per session. */
+const arkDepartureAnnouncedBeats = new Set<string>();
+let arkDepartureTitleTimer = 0;
+const mission24 = new Mission24ReturnToOrigin();
+const atmosphericAscent = new AtmosphericAscentController();
+const atmosphericAscentEffect = new AtmosphericAscentEffect();
+const arkFinalPreparationNetwork = new ArkFinalPreparationNetwork();
+const mission24AnnouncedBeats = new Set<string>();
+const mission24Scratch = new THREE.Vector3();
+const mission24ObjectiveGuidance: Mission03ObjectiveGuidance = {};
+const mission24AscentInput = { thrustUp: false, thrustForward: false, brake: false, turn: 0, boost: false };
+const mission24VisualState: ArkFinalPreparationState = {
+  visible: false,
+  assessedSystems: mission24.state.arkDamageAssessments,
+  restoredLinks: mission24.state.enclaveLinksRestored,
+  preparedSystems: mission24.state.arkSystemsPrepared,
+  integratedPleyadianNodes: mission24.state.pleyadianNodesIntegrated,
+  sheltersPrepared: false,
+  alliedForcesAssembled: false,
+  visitedSectorPoints: mission24.state.startingSectorPointsVisited,
+  rehearsalActive: false,
+  finalFleetDetected: false,
+  finalFormation: false
+};
+let mission24OrbitalEnvironmentActive = false;
+let mission24RehearsalEngaged = false;
+let mission24LastSequenceElapsed = -1;
+function sleepMission24LegacyVisuals(): void {
+  pleyadanRelayBeacon.group.visible = false;
+  pleyadanHologram.group.visible = false;
+  for (let index = 0; index < defensiveBeacons.length; index += 1) defensiveBeacons[index].group.visible = false;
+  defenseNetworkLinks.group.visible = false;
+  threatSignatureSprite.visible = false;
+  silentProbe.group.visible = false;
+  interferenceField.group.visible = false;
+  cloakingField.group.visible = false;
+  cloakingLinks.group.visible = false;
+  for (let index = 0; index < cloakingProjectors.length; index += 1) cloakingProjectors[index].group.visible = false;
+  atlasSeedArchive.group.visible = false;
+  for (let index = 0; index < atlasEchoNodes.length; index += 1) atlasEchoNodes[index].group.visible = false;
+  signalFractureEffect.group.visible = false;
+  for (let index = 0; index < signalFractureNodes.length; index += 1) signalFractureNodes[index].group.visible = false;
+  auroraSectorRoute.group.visible = false;
+  auroraRevealEffect.group.visible = false;
+  for (let index = 0; index < atlasRouteBeacons.length; index += 1) atlasRouteBeacons[index].group.visible = false;
+  for (let index = 0; index < auroraSurveyProbes.length; index += 1) auroraSurveyProbes[index].group.visible = false;
+  auroraSettlementBeacon.group.visible = false;
+  auroraHabitatModule.group.visible = false;
+  auroraSecondModule.group.visible = false;
+  auroraEnergyLink.group.visible = false;
+  auroraWaterFilter.group.visible = false;
+  auroraCultivationBed.group.visible = false;
+  auroraCoreDressing.group.visible = false;
+  auroraCrewCapsule.group.visible = false;
+  auroraFirstCrew.group.visible = false;
+  auroraStormStations.group.visible = false;
+  auroraStormEffect.group.visible = false;
+  auroraTraceNodes.group.visible = false;
+  coalitionTraceEffect.group.visible = false;
+  auroraParasiteNodes.group.visible = false;
+  coalitionSabotageEffect.group.visible = false;
+  pleyadianDefenseNodes.group.visible = false;
+  pleyadianProtocolEffect.group.visible = false;
+  auroraDefenseNetwork.group.visible = false;
+  auroraDefenseEffect.group.visible = false;
+  coalitionCapitalPresence.group.visible = false;
+  threeFrontCommandNetwork.group.visible = false;
+  coalitionLogisticsPlatform.group.visible = false;
+  coalitionJumpBeacon.group.visible = false;
+  auroraGreebleField.group.visible = false;
+  premiumVisuals.group.visible = false;
+  coalitionDrones.clearAll();
+  coalitionBreachDrones.clearAll();
+  if (coalitionJammer.isActive) coalitionJammer.clear();
+  for (let index = 0; index < threats.length; index += 1) threats[index].effect.group.visible = false;
+}
+
+// ---------------------------------------------------------------------------
+// Premium visual layer: optional GPU-driven particles over the Aurora valley
+// and its settlement. Purely decorative — it reads mission state and never
+// writes it, and the game plays identically with it switched off.
+// ---------------------------------------------------------------------------
+const premiumVisuals = new PremiumVisualLayer();
+
+/**
+ * Apply a render profile. Cheap enough to call at any time: it only resizes the
+ * drawing buffer, retargets the light budget and moves the decorative particle
+ * layer's quality. No mission state, geometry or material is touched.
+ */
+function applyRenderProfile(profile: RenderProfile): void {
+  renderProfile = profile;
+  const settings = RENDER_PROFILES[profile];
+  if (!diagnosticsMode) {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.maxPixelRatio));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    post.setSize(window.innerWidth, window.innerHeight);
+  }
+  lightPool.setSlotCount(settings.maxPointLights);
+  premiumVisuals.setQuality(settings.premiumQuality);
+  try {
+    window.localStorage.setItem(RENDER_PROFILE_STORAGE_KEY, profile);
+  } catch {
+    // A blocked store just means the choice is not remembered.
+  }
+}
+// Valley air: fine dust hugging the ground, drifting on the valley wind.
+const auroraDustField = new GpuParticleField({
+  name: 'Premium // polvo del valle',
+  count: 900,
+  bounds: new THREE.Vector3(320, 26, 300),
+  color: 0xbfb193,
+  size: 0.5,
+  opacity: 0.3,
+  wind: new THREE.Vector3(2.6, 0.05, 1.1),
+  turbulence: 1.5,
+  gravity: 0.35,
+  fadeDistance: 620,
+  groundBias: 2.4
+});
+// Alien pollen: slower, warmer, floating rather than falling.
+const auroraPollenField = new GpuParticleField({
+  name: 'Premium // polen',
+  count: 420,
+  bounds: new THREE.Vector3(260, 34, 260),
+  color: 0xf0e2b4,
+  size: 0.42,
+  opacity: 0.34,
+  wind: new THREE.Vector3(1.3, 0.02, 0.6),
+  turbulence: 2.6,
+  gravity: -0.12,
+  fadeDistance: 480,
+  additive: true,
+  groundBias: 1.2
+});
+// Moisture lifting off the water sheet, pulled back toward the lake.
+const auroraMoistureField = new GpuParticleField({
+  name: 'Premium // humedad del lago',
+  count: 360,
+  bounds: new THREE.Vector3(150, 16, 110),
+  color: 0xc9e2e8,
+  size: 0.6,
+  opacity: 0.26,
+  wind: new THREE.Vector3(0.8, 0.16, 0.3),
+  turbulence: 1.1,
+  gravity: -0.25,
+  fadeDistance: 380,
+  additive: true,
+  groundBias: 3
+});
+// Charge travelling the conduit between the two modules.
+const auroraEnergyField = new GpuParticleField({
+  name: 'Premium // flujo energético',
+  count: 220,
+  bounds: new THREE.Vector3(26, 3, 26),
+  color: 0x8fd4ef,
+  size: 0.3,
+  opacity: 0.5,
+  wind: new THREE.Vector3(3.4, 0.1, 2.2),
+  turbulence: 0.5,
+  gravity: 0,
+  fadeDistance: 220,
+  additive: true,
+  groundBias: 1
+});
+premiumVisuals.addField('aurora-dust', auroraDustField, 3, 900);
+premiumVisuals.addField('aurora-pollen', auroraPollenField, 1.4, 700);
+premiumVisuals.addField('aurora-moisture', auroraMoistureField, 1.2, 520);
+premiumVisuals.addField('aurora-energy', auroraEnergyField, 0.8, 320);
+
+// --- Aurora route (M09): one field per sector's character. Only the sector
+// the pilot is flying through is ever visible (distance-culled), so the
+// route never sums more than one route field at a time.
+// A) Llanuras de Ceniza: low ash dragged hard and flat by a dry wind.
+const routeAshField = new GpuParticleField({
+  name: 'Premium // ceniza',
+  count: 720,
+  bounds: new THREE.Vector3(460, 30, 460),
+  color: 0x8f857a,
+  size: 0.62,
+  opacity: 0.26,
+  wind: new THREE.Vector3(11, 0.1, 3),
+  turbulence: 1.2,
+  gravity: 0.5,
+  fadeDistance: 780,
+  groundBias: 2.8
+});
+// B) Cañones Atlas: mineral motes drifting slowly down between the walls,
+// with a faint Atlas glint (additive, very low).
+const routeCanyonField = new GpuParticleField({
+  name: 'Premium // cañones',
+  count: 520,
+  bounds: new THREE.Vector3(420, 90, 420),
+  color: 0x9fb0a6,
+  size: 0.5,
+  opacity: 0.2,
+  wind: new THREE.Vector3(1.4, -0.35, 0.6),
+  turbulence: 1.6,
+  gravity: 0.2,
+  fadeDistance: 760,
+  additive: true,
+  groundBias: 0.8
+});
+// C) Meseta de Tormentas: fast, gusty grit; wind is scaled by stormIntensity.
+const routeStormField = new GpuParticleField({
+  name: 'Premium // tormenta',
+  count: 640,
+  bounds: new THREE.Vector3(480, 60, 480),
+  color: 0x7c828a,
+  size: 0.56,
+  opacity: 0.24,
+  wind: new THREE.Vector3(16, 0.3, 7),
+  turbulence: 2.4,
+  gravity: 0.3,
+  fadeDistance: 800,
+  groundBias: 1.8
+});
+// D) Umbral / pre-reveal: living mist, suspended moisture and the first warm
+// biological motes — the transition into the valley.
+const routeUmbralField = new GpuParticleField({
+  name: 'Premium // umbral',
+  count: 460,
+  bounds: new THREE.Vector3(360, 40, 360),
+  color: 0xc7d3ae,
+  size: 0.6,
+  opacity: 0.3,
+  wind: new THREE.Vector3(1.8, 0.08, 0.8),
+  turbulence: 2.2,
+  gravity: -0.08,
+  fadeDistance: 640,
+  additive: true,
+  groundBias: 1.4
+});
+premiumVisuals.addField('route-ash', routeAshField, 2.4, 1200);
+premiumVisuals.addField('route-canyon', routeCanyonField, 1.5, 1200);
+premiumVisuals.addField('route-storm', routeStormField, 2, 1200);
+premiumVisuals.addField('route-umbral', routeUmbralField, 1.3, 1000);
+
+// --- Atlas / Pleyadan signals: tight swirling motes around ancient tech.
+// Small volumes with strong turbulence read as a slow orbiting field rather
+// than a spray, and the additive glow stays low so nothing looks arcade.
+const atlasBeaconField = new GpuParticleField({
+  name: 'Premium // señal Atlas',
+  count: 150,
+  bounds: new THREE.Vector3(4, 8, 4),
+  color: 0x7fe0cf,
+  size: 0.34,
+  opacity: 0.42,
+  wind: new THREE.Vector3(0, 0.4, 0),
+  turbulence: 3.4,
+  gravity: -0.1,
+  fadeDistance: 160,
+  additive: true,
+  groundBias: 1
+});
+const atlasArchiveField = new GpuParticleField({
+  name: 'Premium // Archivo Semilla',
+  count: 220,
+  bounds: new THREE.Vector3(7, 12, 7),
+  color: 0x86d8c4,
+  size: 0.38,
+  opacity: 0.4,
+  wind: new THREE.Vector3(0, 0.5, 0),
+  turbulence: 3.8,
+  gravity: -0.12,
+  fadeDistance: 220,
+  additive: true,
+  groundBias: 1
+});
+const pleyadanField = new GpuParticleField({
+  name: 'Premium // señal Pleyadana',
+  count: 200,
+  bounds: new THREE.Vector3(5, 10, 5),
+  color: 0xbfa4ff,
+  size: 0.36,
+  opacity: 0.44,
+  wind: new THREE.Vector3(0, 0.35, 0),
+  turbulence: 3.2,
+  gravity: -0.1,
+  fadeDistance: 200,
+  additive: true,
+  groundBias: 1
+});
+premiumVisuals.addField('atlas-beacon', atlasBeaconField, 0.6, 260);
+premiumVisuals.addField('atlas-archive', atlasArchiveField, 0.7, 320);
+premiumVisuals.addField('pleyadan-signal', pleyadanField, 0.7, 300);
+/** 0 = day, 1 = the first Aurora night. Visual only; never gates anything. */
+let auroraNightBlend = 0;
+let auroraNightApplied = false;
+const AURORA_DAY_KEY_INTENSITY = 3.2;
+const AURORA_DAY_AMBIENT_INTENSITY = 0.55;
+const signalTranslation = new SignalTranslationSystem();
+const pleyadanRelayBeacon = new PleyadanRelayBeacon();
+const pleyadanHologram = new PleyadanHologram();
+const defensiveBeacons = defenseBeaconSites.map((site) => new DefensiveBeacon(site));
+const defenseNetworkLinks = new DefenseNetworkLinks(defenseBeaconSites.length);
+const silentProbe = new SilentProbe();
+const interferenceField = new InterferenceField(mission05EchoPositions);
+
+// Distant Coalición signature: a faint amber mote with an irregular dim
+// flicker at the anomaly bearing — a first footprint, never a ship.
+const threatSignatureMaterial = new THREE.SpriteMaterial({
+  map: createSoftParticleTexture(48),
+  color: 0xd98d5a,
+  transparent: true,
+  opacity: 0,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+});
+const threatSignatureSprite = new THREE.Sprite(threatSignatureMaterial);
+threatSignatureSprite.name = 'Coalition Signature Trace';
+threatSignatureSprite.scale.setScalar(14);
+threatSignatureSprite.visible = false;
+const surfaceResourceSystem = new SurfaceResourceSystem();
+const surfaceMapSystem = new SurfaceMapSystem();
+const resourceInventory = new ResourceInventory();
+const saveSystem = new SaveSystem();
+const tutorialManager = new TutorialManager();
+const dialogueManager = new DialogueManager();
+const commsDialoguePanel = new CommsDialoguePanel(() => dialogueManager.advance());
+const mission21ResponsePanel = new Mission21ResponsePanel((tone) => chooseMission21Response(tone));
+const mission22CommandPanel = new Mission22CommandPanel(
+  (resource, front) => assignMission22InitialResource(resource, front),
+  (front) => chooseMission22Support(front)
+);
+const mission23ChoicePanel = new Mission23ChoicePanel(
+  (target) => chooseMission23TargetOrder(target),
+  (method) => chooseMission23PlatformMethod(method)
+);
+const audioManager = new AudioManager();
+const musicManager = new MusicManager(audioManager);
+const sfxManager = new SFXManager(audioManager);
+const engineAudio = new EngineAudio(audioManager);
+const footstepAudio = new FootstepAudio(audioManager);
+const voiceManager = new VoiceManager(audioManager, sfxManager);
+// Mission 13's storm soundscape. Owns only its own ambience and one-shots —
+// the score itself stays with MusicManager, which already crossfades and ducks.
+const mission13Audio = new Mission13AudioDirector(sfxManager);
+void voiceManager.initialize();
+let dialogueAudioActive = false;
+const upgradeSystem = new UpgradeSystem();
+const colonyPanel = new ColonyPanel();
+const surfaceObjectivePanel = new SurfaceObjectivePanel();
+const surfaceMapPanel = new SurfaceMapPanel();
+const mission24AscentHud = new Mission24AscentHud(hud);
+const cameraModeSystem = new CameraModeSystem();
+const cockpitInterior = new CockpitInterior(assetLoader);
+const playerModeSystem = new PlayerModeSystem();
+const inputActionRouter = new InputActionRouter();
+const surfaceCharacter = new SurfaceCharacter(assetLoader);
+const shipAccessLift = new ShipAccessLift();
+void audioManager.initialize();
+audioManager.onSettingsChanged(() => syncFallbackAudioGain());
+camera.add(cockpitInterior.group);
+let inSurfacePhase = false;
+
+export type RuntimeAssetAuditEntry = ModelAssetAuditEntry & {
+  status: string;
+  active: boolean;
+  lodLevel: string;
+};
+
+function getRuntimeAssetAudit(): RuntimeAssetAuditEntry[] {
+  const runtimeState: Record<string, Pick<RuntimeAssetAuditEntry, 'status' | 'active' | 'lodLevel'>> = {
+    'atlas-marker-original': {
+      status: orbitalMarker.diagnostics.fallbackUsed ? orbitalMarker.diagnostics.status : 'retained-fallback',
+      active: orbitalMarker.group.visible && orbitalMarker.diagnostics.lodLevel === 'original',
+      lodLevel: orbitalMarker.diagnostics.lodLevel
+    },
+    'atlas-marker-medium': {
+      status: orbitalMarker.diagnostics.availableLods.includes('medium') ? 'loaded' : 'idle',
+      active: orbitalMarker.group.visible && orbitalMarker.diagnostics.lodLevel === 'medium',
+      lodLevel: orbitalMarker.diagnostics.lodLevel
+    },
+    'atlas-marker-low': {
+      status: orbitalMarker.diagnostics.availableLods.includes('low') ? 'loaded' : 'idle',
+      active: orbitalMarker.group.visible && orbitalMarker.diagnostics.lodLevel === 'low',
+      lodLevel: orbitalMarker.diagnostics.lodLevel
+    },
+    cockpit: {
+      status: cockpitInterior.glbDiagnostics.status,
+      active: cockpitInterior.active,
+      lodLevel: cockpitInterior.lodLevel
+    },
+    'mothership-original': {
+      status: mothership.diagnostics.fallbackUsed ? mothership.diagnostics.status : 'retained-fallback',
+      active: mothership.group.visible && mothership.diagnostics.lodLevel === 'original',
+      lodLevel: mothership.diagnostics.lodLevel
+    },
+    'mothership-medium': {
+      status: mothership.diagnostics.availableLods.includes('medium') ? 'loaded' : 'idle',
+      active: mothership.group.visible && mothership.diagnostics.lodLevel === 'medium',
+      lodLevel: mothership.diagnostics.lodLevel
+    },
+    'mothership-low': {
+      status: mothership.diagnostics.availableLods.includes('low') ? 'loaded' : 'idle',
+      active: mothership.group.visible && mothership.diagnostics.lodLevel === 'low',
+      lodLevel: mothership.diagnostics.lodLevel
+    },
+    'player-ship-original': {
+      status: playerShip.diagnostics.fallbackUsed ? playerShip.diagnostics.status : 'retained-fallback',
+      active: playerShip.group.visible && playerShip.diagnostics.lodLevel === 'original',
+      lodLevel: playerShip.group.visible ? playerShip.diagnostics.lodLevel : 'hidden'
+    },
+    'player-ship-medium': {
+      status: playerShip.diagnostics.availableLods.includes('medium') ? 'loaded' : 'idle',
+      active: playerShip.group.visible && playerShip.diagnostics.lodLevel === 'medium',
+      lodLevel: playerShip.group.visible ? playerShip.diagnostics.lodLevel : 'hidden'
+    },
+    'player-ship-low': {
+      status: playerShip.diagnostics.availableLods.includes('low') ? 'loaded' : 'idle',
+      active: playerShip.group.visible && playerShip.diagnostics.lodLevel === 'low',
+      lodLevel: playerShip.group.visible ? playerShip.diagnostics.lodLevel : 'hidden'
+    },
+    'pilot-walk': {
+      status: surfaceCharacter.diagnostics.status,
+      active: surfaceCharacter.group.visible,
+      lodLevel: surfaceCharacter.lodLevel
+    },
+    'pilot-run-source': {
+      status: 'retained-original',
+      active: false,
+      lodLevel: 'not-loaded'
+    },
+    'pilot-run-animation': {
+      status: surfaceCharacter.diagnostics.loadedAnimationSources > 0 ? 'loaded' : 'idle',
+      active: false,
+      lodLevel: 'clip-only'
+    }
+  };
+  return MODEL_ASSET_AUDIT.map((asset) => ({ ...asset, ...runtimeState[asset.id] }));
+}
+
+function getActiveHighPolyAssets(): string[] {
+  return getRuntimeAssetAudit()
+    .filter((asset) => asset.active && asset.triangleCount >= 200_000)
+    .map((asset) => asset.id);
+}
+
+/** Reused on frames that skip the heavy diagnostics patch; never mutated. */
+const EMPTY_DIAGNOSTICS_PATCH: Partial<ArcaDiagnostics> = {};
+let cachedPerformanceDiagnosticsPatch: Partial<ArcaDiagnostics> = {};
+let nextPerformanceAuditAt = 0;
+let cachedPlayerShipInstances = 1;
+
+function getPerformanceDiagnosticsPatch(force = false): Partial<ArcaDiagnostics> {
+  const now = performance.now();
+  if (!force && now < nextPerformanceAuditAt) return cachedPerformanceDiagnosticsPatch;
+  nextPerformanceAuditAt = now + 500;
+  const runtimeAssetAudit = getRuntimeAssetAudit();
+  const activeHighPolyAssets = runtimeAssetAudit
+    .filter((asset) => asset.active && asset.triangleCount >= 200_000)
+    .map((asset) => asset.id);
+  const duplicateMeshWarnings: string[] = [];
+  if (surfaceCharacter.visibleMeshCount > 1) duplicateMeshWarnings.push('character-visible-mesh-count');
+  if (cockpitInterior.visibleMeshCount > 1) duplicateMeshWarnings.push('cockpit-visible-glb-mesh-count');
+  const assetLoadState = Object.fromEntries(runtimeAssetAudit.map((asset) => [asset.id, asset.status]));
+  const assetPreloadQueue = runtimeAssetAudit
+    .filter((asset) => asset.loadedAtStartup && asset.status !== 'loaded')
+    .map((asset) => asset.id);
+  cachedPlayerShipInstances = scene.children.filter((child) => child.name === playerShip.group.name).length;
+  cachedPerformanceDiagnosticsPatch = {
+    activeGLBCount: runtimeAssetAudit.filter((asset) => asset.active).length,
+    activeSkinnedMeshCount: surfaceCharacter.activeSkinnedMeshCount,
+    activeAnimationMixerCount: surfaceCharacter.mixerActive ? 1 : 0,
+    activeHighPolyAssets,
+    duplicateMeshWarnings,
+    heavyAssetWarnings: MODEL_ASSET_AUDIT
+      .filter((asset) => asset.loadedAtStartup && asset.triangleCount >= 250_000)
+      .map((asset) => `${asset.id}:${asset.triangleCount}`),
+    bundleWarning: 'Three.js vendor split remains a large required startup dependency.',
+    estimatedDrawCalls: renderer.info.render.calls,
+    inactiveUpdateSkippedCounts: {
+      cockpit: cockpitInterior.updateSkippedWhenInactive,
+      characterMixer: surfaceCharacter.diagnostics.mixerUpdateSkipped,
+      mothership: mothership.diagnostics.skippedVisualUpdates,
+      atlas: orbitalMarker.inactiveUpdateSkipped,
+      playerShip: playerShip.diagnostics.skippedVisualUpdates,
+      resourceSites: surfaceResourceSystem.inactiveUpdateSkipped
+    },
+    lodActive: true,
+    lodLevelCharacter: surfaceCharacter.lodLevel,
+    lodLevelCockpit: cockpitInterior.lodLevel,
+    lodHiddenInactiveAssets: runtimeAssetAudit.filter((asset) => asset.loadedAtStartup && !asset.active).length,
+    atlasLodLevel: orbitalMarker.diagnostics.lodLevel,
+    arcaLodLevel: mothership.diagnostics.lodLevel,
+    shipLodLevel: playerShip.group.visible ? playerShip.diagnostics.lodLevel : 'hidden',
+    cockpitLodLevel: cockpitInterior.lodLevel,
+    pilotLodLevel: surfaceCharacter.lodLevel,
+    activeTriangleEstimate: runtimeAssetAudit
+      .filter((asset) => asset.active)
+      .reduce((total, asset) => total + asset.triangleCount, 0),
+    assetPreloadQueue,
+    assetLoadState,
+    lazyLoadedAssets: [],
+    preloadCompleted: assetPreloadQueue.length === 0,
+    cockpitUpdateSkippedWhenInactive: cockpitInterior.updateSkippedWhenInactive,
+    cockpitTextureUpdateCount: cockpitInterior.textureUpdateCount,
+    visibleCharacterMeshCount: surfaceCharacter.visibleMeshCount,
+    activeCharacterSkinnedMeshCount: surfaceCharacter.activeSkinnedMeshCount,
+    visibleCharacterTriangleCount: surfaceCharacter.visibleTriangleCount,
+    loadedAnimationSources: surfaceCharacter.diagnostics.loadedAnimationSources,
+    discardedDuplicateMeshes: surfaceCharacter.diagnostics.discardedDuplicateMeshes,
+    characterClipCount: surfaceCharacter.diagnostics.animationClips.length,
+    mixerActive: surfaceCharacter.mixerActive,
+    characterPerformanceWarning: surfaceCharacter.performanceWarning
+  };
+  return cachedPerformanceDiagnosticsPatch;
+}
+// True from cloud break onward: the ship is flying inside Cuenca Nereida's
+// local space (terrain clamp, basin fog, surface camera), even before the
+// colony phase officially starts.
+let inBasin = false;
+const surfaceHoverHeight = SURFACE_SHIP_TUNING.HOVER_HEIGHT;
+let baseOperationalShown = false;
+let basinRevealStartedAt = -1;
+let surfacePhaseStartedAt = -1;
+let gamePaused = false;
+let contextualTutorialHint = '';
+let footCameraYaw = 0;
+let footCameraPitch = 0.24;
+let footCameraTargetYaw = footCameraYaw;
+let footCameraTargetPitch = footCameraPitch;
+let snapOnFootCameraNextFrame = false;
+let exitShipStartY = 0;
+let exitShipTargetY = 0;
+let transitionGroundHeight = 0;
+const parkedShipBounds = new THREE.Box3();
+const boardingAnchorScratch = new THREE.Vector3();
+const PARKED_HULL_CLEARANCE = 0.12;
+const PARKED_RESTORE_TOLERANCE = 0.45;
+const BOARDING_HORIZONTAL_RANGE = 4.8;
+const BOARDING_VERTICAL_TOLERANCE = 2.4;
+let parkedShipTerrainHeight = 0;
+let parkedShipHullBottom = 0;
+let parkedShipTerrainSeparation = 0;
+let parkedShipResolved = false;
+let nearestInteractionTarget = '';
+let nearestInteractionDistance = Number.POSITIVE_INFINITY;
+let nearestInteractionAction: GameInputAction | 'none' = 'none';
+let previousShipCameraPreference: CameraMode = 'external';
+let cameraFollowInitialized = false;
+let cameraFollowSnapPending = true;
+let cameraFollowInitializedThisFrame = false;
+const cameraTargetCurrent = new THREE.Vector3();
+const cameraTargetPrevious = new THREE.Vector3();
+const cameraPositionBeforeUpdate = new THREE.Vector3();
+let cameraJumpDistance = 0;
+let shipCameraJumpDistance = 0;
+let lastCameraModeTransition = 'boot';
+type DebugCameraProbe = {
+  targetName: string;
+  getPosition: () => THREE.Vector3;
+  offset: THREE.Vector3;
+  lookHeight: number;
+};
+let debugCameraProbe: DebugCameraProbe | undefined;
+type LiftRideState =
+  | 'idle'
+  | 'waitingOnLift'
+  | 'ridingLiftDown'
+  | 'steppingOffLift'
+  | 'steppingOntoLift'
+  | 'ridingLiftUp'
+  | 'enteringShipComplete'
+  | 'exitingShipComplete';
+let liftRideState: LiftRideState = 'idle';
+let boardingAnimationState = 'idle';
+let characterOnLift = false;
+let characterFootLockActive = false;
+let liftProgress = 0;
+let surfaceBoostIntensity = 0;
+let guideVisible = false;
+let guideOffscreen = false;
+let guideDirection = 0;
+let lastDescentBlockWarningAt = -20;
+const GUIDE_SOURCE = 'ObjectiveResolver';
+const surfaceForward = new THREE.Vector3();
+const surfaceRight = new THREE.Vector3();
+const surfaceUp = new THREE.Vector3(0, 1, 0);
+// The surface phase runs in its own local space centered on the landing
+// pad: terrain, module, resources and the player all share this origin.
+const SURFACE_LANDING_LOCAL = new THREE.Vector3(0, 0, 0);
+const HABITAT_SITE_LOCAL = new THREE.Vector3(0, 0, -72);
+const MISSION03_BASE_RANGE = 52;
+const MISSION03_RESONATOR_REVEAL_RANGE = 58;
+const MISSION03_RELAY_INTERACTION_RANGE = 9;
+const MISSION04_THREAT_SIGNATURE_POSITION = new THREE.Vector3(780, 20, -760);
+threatSignatureSprite.position.copy(MISSION04_THREAT_SIGNATURE_POSITION);
+const MISSION05_PROBE_POSITION = new THREE.Vector3(...silentProbePosition);
+const MISSION05_ECHO_POSITIONS = mission05EchoPositions.map((position) => new THREE.Vector3(...position));
+silentProbe.setPosition(MISSION05_PROBE_POSITION);
+let lastTranslatedFragmentCount = 0;
+// Entry sky transition endpoints: deep space to high-atmosphere haze.
+const SPACE_BACKGROUND = new THREE.Color(0x020409);
+const SPACE_FOG = new THREE.Color(0x040810);
+const ATMO_BACKGROUND = new THREE.Color(0x6d8b7f);
+/** Warm air-glow the shock layer casts into the sky at peak heating. */
+const ENTRY_SKY_GLOW = new THREE.Color(0x351409);
+const BASIN_BACKGROUND = new THREE.Color(0x7f9d8c);
+// Diegetic approach lights along the decoded descent corridor.
+let corridorPips: THREE.Group | undefined;
+const corridorPipSprites: CorridorPip[] = [];
+
+scene.add(
+  mothership.group,
+  scannerPulse.group,
+  discoveryEffect.group,
+  candidatePlanet.group,
+  orbitalMarker.group,
+  landingZone.group,
+  weaponSystem.group,
+  planetaryWorld.group,
+  surfaceResourceSystem.group,
+  surfaceCharacter.group,
+  shipAccessLift.group,
+  pleyadanRelayBeacon.group,
+  pleyadanHologram.group,
+  ...defensiveBeacons.map((beacon) => beacon.group),
+  defenseNetworkLinks.group,
+  threatSignatureSprite,
+  silentProbe.group,
+  interferenceField.group,
+  cloakingField.group,
+  cloakingLinks.group,
+  ...cloakingProjectors.map((p) => p.group),
+  atlasSeedArchive.group,
+  ...atlasEchoNodes.map((node) => node.group),
+  signalFractureEffect.group,
+  ...signalFractureNodes.map((node) => node.group),
+  auroraSectorRoute.group,
+  auroraRevealEffect.group,
+  ...atlasRouteBeacons.map((beacon) => beacon.group),
+  ...auroraSurveyProbes.map((probe) => probe.group),
+  auroraSettlementBeacon.group,
+  auroraHabitatModule.group,
+  auroraSecondModule.group,
+  auroraEnergyLink.group,
+  auroraWaterFilter.group,
+  auroraCultivationBed.group,
+  auroraCoreDressing.group,
+  auroraCrewCapsule.group,
+  auroraFirstCrew.group,
+  auroraStormStations.group,
+  auroraStormEffect.group,
+  auroraTraceNodes.group,
+  coalitionTraceEffect.group,
+  auroraParasiteNodes.group,
+  coalitionSabotageEffect.group,
+  pleyadianDefenseNodes.group,
+  pleyadianProtocolEffect.group,
+  auroraDefenseNetwork.group,
+  auroraDefenseEffect.group,
+  coalitionDrones.group,
+  coalitionBreachDrones.group,
+  coalitionJammer.group,
+  coalitionCapitalPresence.group,
+  threeFrontCommandNetwork.group,
+  coalitionLogisticsPlatform.group,
+  coalitionJumpBeacon.group,
+  atmosphericAscentEffect.group,
+  arkFinalPreparationNetwork.group,
+  auroraGreebleField.group,
+  premiumVisuals.group,
+  lightPool.group
+);
+
+// ---------------------------------------------------------------------------
+// Cinematic lighting rig
+// ---------------------------------------------------------------------------
+
+// Soft image-based lighting: gives every PBR surface (especially the GLB
+// hulls) believable specular response instead of dead flat metal.
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.38;
+pmremGenerator.dispose();
+
+// Cool ambient fill: deep space lit by starlight, never flat black.
+const ambient = new THREE.HemisphereLight(0x4d6f92, 0x0a0a12, 0.55);
+scene.add(ambient);
+
+// Key light: the distant living star that owns the scene's contrast.
+// Near-white with a whisper of blue, like a real F-type star.
+const keyStar = new THREE.DirectionalLight(0xdfeaff, 3.2);
+keyStar.position.set(-260, 180, 120);
+scene.add(keyStar);
+// --- Character shadow rig -------------------------------------------------
+// The space key star deliberately does NOT cast: on the surface the light the
+// eye reads is PlanetaryWorld's own warm sun, so that is the light configured
+// to cast the pilot's shadow (see PlanetaryWorld.addLighting). Casting from
+// this one instead would throw the shadow in a direction that visibly
+// contradicts the lighting on the ground.
+keyStar.castShadow = false;
+/**
+ * Distance the surface sun's shadow camera is pulled back along its own light
+ * direction, so the pilot always sits inside [near, far] of that camera.
+ * Derived from the sun's authored position so the direction is preserved
+ * exactly: only where the camera sits changes, never how the scene is lit.
+ */
+const surfaceSunShadowOffset = new THREE.Vector3(270, 310, -210).normalize().multiplyScalar(55);
+const characterShadowAnchor = new THREE.Vector3();
+/** Shadow-map refresh budget: ~30 Hz is indistinguishable from per-frame here. */
+const CHARACTER_SHADOW_INTERVAL = 1 / 30;
+let characterShadowAccumulator = CHARACTER_SHADOW_INTERVAL;
+/** Frame delta captured for the shadow throttle; set once per frame. */
+let lastFrameDelta = 1 / 60;
+
+// Cold rim kicker so silhouettes separate from the void.
+const coldRim = new THREE.PointLight(0x8fb8e8, 1.9, 950, 1.8);
+coldRim.position.set(-420, 120, -620);
+scene.add(coldRim);
+
+// The dead red star that owns the deep sectors: deep ember orange,
+// the physically plausible color of a dying M-class star.
+const redDeadStar = new THREE.PointLight(0xff5a2e, 5.6, 1100, 1.7);
+redDeadStar.position.set(360, -90, -560);
+scene.add(redDeadStar);
+
+// Visible key-star disc so the key light has a source in frame.
+const keyStarSprite = new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map: createSoftParticleTexture(128),
+    color: 0xe8f3ff,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false
+  })
+);
+keyStarSprite.position.copy(keyStar.position).normalize().multiplyScalar(5200);
+keyStarSprite.scale.setScalar(540);
+scene.add(keyStarSprite);
+
+// ---------------------------------------------------------------------------
+// Player ship
+// ---------------------------------------------------------------------------
+
+const playerShip = new PlayerShip(assetLoader);
+ship.add(playerShip.group);
+scene.add(ship);
+
+const shieldEffect = new ShieldEffect(ship);
+const engineTrail = new EngineTrail(ship);
+const entryEffect = new AtmosphericEntryEffect(ship);
+/**
+ * Staged drivers for the atmospheric entry. Written in place every frame by
+ * `updateEntryProfile`, then read by the plasma sheath, the sky/fog blend, the
+ * camera and the post grade — one curve set, four consumers, zero allocation.
+ */
+const entryProfile = createEntryProfile();
+/**
+ * Seconds the descent stays in `cloudBreak` before handing over to
+ * `landingApproach`. Long enough for the shock layer to fade and the basin to
+ * read, short enough that it never feels like a cutscene.
+ */
+const CLOUD_BREAK_HOLD_SECONDS = 2.6;
+/** Elapsed time at which the cloud-break beat ends; -1 when not pending. */
+let cloudBreakHoldUntil = -1;
+
+// ---------------------------------------------------------------------------
+// Environment: layered starfield, nebula banks, planets, asteroid belt, dust
+// ---------------------------------------------------------------------------
+
+const starfield = new Starfield();
+scene.add(starfield.group);
+activeParticleBudget += starfield.starCount;
+
+const nebula = new NebulaBackdrop();
+scene.add(nebula.group);
+
+const planets = new PlanetGroup();
+scene.add(planets.group);
+
+const asteroidField = new AsteroidField({
+  center: new THREE.Vector3(430, -44, -690),
+  radius: 210,
+  thickness: 78,
+  count: 216,
+  minScale: 1.3,
+  maxScale: 5.8
+});
+scene.add(asteroidField.group);
+activeParticleBudget += 320;
+
+const cinematicDust = createCinematicDustField({ count: 1600, radius: 240, depth: 720, opacity: 0.18 });
+activeParticleBudget += 1600;
+scene.add(cinematicDust.points);
+
+// ---------------------------------------------------------------------------
+// Hazards: one radiation storm, one gravity well. Rare and readable.
+// ---------------------------------------------------------------------------
+
+const radiationStorm = new RadiationStormEffect(new THREE.Vector3(150, 34, -540), 130);
+scene.add(radiationStorm.group);
+activeParticleBudget += 420;
+
+const gravityAnomaly = new GravityAnomalyEffect(new THREE.Vector3(-430, 26, -640), 150);
+scene.add(gravityAnomaly.group);
+activeParticleBudget += 520;
+
+// ---------------------------------------------------------------------------
+// Points of interest
+// ---------------------------------------------------------------------------
+
+function createPointMarker(): { marker: THREE.Mesh; material: THREE.MeshBasicMaterial } {
+  const material = new THREE.MeshBasicMaterial({
+    color: 0x71f3c2,
+    transparent: true,
+    opacity: 0.24,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  // Small diegetic diamond beacon instead of large floating cyan torus ring
+  const marker = new THREE.Mesh(new THREE.OctahedronGeometry(2.8, 0), material);
+  marker.name = 'Scanner Signal Beacon';
+  return { marker, material };
+}
+
+function makePOI(site: ExplorationSite, scanRadius = settings.scannerRange): InterestPoint {
+  const position = new THREE.Vector3(...site.position);
+
+  let object: THREE.Object3D;
+  let updateVisual: InterestPoint['updateVisual'];
+  let flashHighlight: InterestPoint['flashHighlight'];
+
+  if (site.archetype === 'wreck') {
+    const wreck = new DerelictWreck(position, site.scale);
+    object = wreck.group;
+    updateVisual = (delta, elapsed) => wreck.update(delta, elapsed);
+    flashHighlight = () => wreck.flashHighlight();
+  } else {
+    const ruin = new AlienRuin(site.archetype, position, site.scale);
+    object = ruin.group;
+    updateVisual = (delta, elapsed) => ruin.update(delta, elapsed);
+    flashHighlight = () => ruin.flashHighlight();
+  }
+  scene.add(object);
+
+  const markerParts = createPointMarker();
+  markerParts.marker.position.y = 34;
+  object.add(markerParts.marker);
+
+  return {
+    id: site.id,
+    name: site.name,
+    sector: site.sector,
+    scannerLead: site.scannerLead,
+    story: site.discovery,
+    reward: site.reward,
+    object,
+    updateVisual,
+    flashHighlight,
+    marker: markerParts.marker,
+    markerMaterial: markerParts.material,
+    scanned: false,
+    scanRadius
+  };
+}
+
+const disabledProceduralSites = new Set(['dead-star-lighthouse']);
+const pointsOfInterest: InterestPoint[] = explorationSites
+  .filter((site) => !disabledProceduralSites.has(site.id))
+  .map((site) => makePOI(site, site.archetype === 'wreck' ? 150 : settings.scannerRange));
+
+// ---------------------------------------------------------------------------
+// Sentinel threats: territorial anomalies, never waves
+// ---------------------------------------------------------------------------
+
+const sentinelSpawns = [
+  new THREE.Vector3(250, 46, -430),
+  new THREE.Vector3(-190, -64, -500),
+  new THREE.Vector3(80, 96, -660),
+  new THREE.Vector3(440, -30, -540)
+];
+
+const threats: SentinelThreat[] = sentinelSpawns.map((spawn) => {
+  const effect = new AnomalyEffect(spawn);
+  const target: WeaponTarget = {
+    object: effect.group,
+    radius: 14,
+    health: 72,
+    hostile: true
+  };
+  scene.add(effect.group);
+  return { effect, target, alertRadius: 245, damageRadius: 18, phase: Math.random() * Math.PI * 2 };
+});
+
+// ---------------------------------------------------------------------------
+// Resource / discovery helpers
+// ---------------------------------------------------------------------------
+
+function clampResource(value: number): number {
+  return THREE.MathUtils.clamp(value, 0, 100);
+}
+
+/** Distancias legibles: metros hasta 1 km, kilómetros con dos decimales después. */
+function formatDistance(meters: number): string {
+  const safe = Math.max(0, meters);
+  return safe >= 1000 ? `${(safe / 1000).toFixed(2)} km` : `${Math.round(safe)} m`;
+}
+
+/** La franja de controles cambia con el modo de vuelo. */
+function setControlHints(mode: 'space' | 'surface' | 'foot'): void {
+  const chips: [string, string][] =
+    mode === 'foot'
+      ? [
+          ['WASD', 'caminar / girar'],
+          ['Shift', 'correr'],
+          ['Mouse', 'cámara'],
+          ['E', 'escanear / interactuar'],
+          ['F', 'volver a la nave'],
+          ['ESC', 'pausa']
+        ]
+      : mode === 'surface'
+      ? [
+          ['WASD', 'desplazarse / girar'],
+          ['Space', 'ascender'],
+          ['Q', 'descender'],
+          ['Shift', 'impulso'],
+          ['E', 'escanear / interactuar'],
+          ['F', 'descender de la nave'],
+          ['V', 'cambiar cámara']
+        ]
+      : [
+          ['WASD', 'pilotar'],
+          ['Mouse', 'mirar'],
+          ['Shift', 'impulso'],
+          ['E', 'escanear'],
+          ['Space', 'láser'],
+          ['R', 'misil'],
+          ['V', 'cambiar cámara']
+        ];
+  controlsStrip.innerHTML =
+    chips.map(([key, label]) => `<span><kbd>${key}</kbd> ${label}</span>`).join('') +
+    `<span class="map-hint" id="map-hint-chip"><kbd>M</kbd> ${mode === 'space' ? 'mapa estelar' : 'mapa local'}</span>`;
+  controlsStrip
+    .querySelector('#map-hint-chip')
+    ?.addEventListener('click', () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM' })));
+}
+
+type OnFootInteraction = {
+  id: string;
+  label: string;
+  kind: 'ship' | 'landing' | 'habitat' | 'resource' | 'relay' | 'defense' | 'atlas' | 'aurora';
+  distance: number;
+  resourceType?: SurfaceResourceType;
+};
+
+function getActivePlayerPosition(): THREE.Vector3 {
+  return playerModeSystem.onFootActive || (playerModeSystem.transitionActive && surfaceCharacter.group.visible)
+    ? surfaceCharacter.group.position
+    : ship.position;
+}
+
+/**
+ * Keep the key star's shadow camera centred on the pilot, and only pay for a
+ * shadow pass while the pilot is actually on foot.
+ *
+ * The light is directional, so only `position - target` matters for lighting.
+ * Both are moved by the same offset every frame, which keeps the light's
+ * direction — and therefore the whole scene's lighting — exactly as it was
+ * before, while re-centring the small shadow box on the character.
+ *
+ * Cost control: `renderer.shadowMap.autoUpdate` is off, so the map is only
+ * re-rendered on frames where the pilot is visible on foot. Flying, in space or
+ * inside the ship, nothing casts and no shadow pass runs at all.
+ */
+/**
+ * Restrict shadow casting to the pilot, once.
+ *
+ * Dozens of meshes across the project already carried `castShadow = true`, but
+ * they were inert: the renderer's shadow map was disabled, so nothing was ever
+ * rendered from them. Turning the shadow map on to give the pilot a real shadow
+ * silently activated all of them at once, which measured as +128 draw calls
+ * standing next to Base Nereida — cost this task explicitly must not add.
+ *
+ * The pilot is the one thing that has to cast here, so everything else is put
+ * back to not casting. That leaves the scene rendering exactly as it did
+ * before, plus the character's shadow.
+ */
+let shadowCastersRestricted = false;
+function restrictShadowCastersToPilot(): void {
+  if (shadowCastersRestricted) return;
+  shadowCastersRestricted = true;
+  const pilotRoot = surfaceCharacter.group;
+  scene.traverse((object) => {
+    const mesh = object as unknown as { isMesh?: boolean; castShadow?: boolean };
+    if (!mesh.isMesh || !mesh.castShadow) return;
+    let node: THREE.Object3D | null = object;
+    while (node) {
+      if (node === pilotRoot) return;
+      node = node.parent;
+    }
+    (object as THREE.Mesh).castShadow = false;
+  });
+}
+
+function updateCharacterShadow(): void {
+  const sun = planetaryWorld.surfaceSun;
+  if (!sun) return;
+  const pilotVisible =
+    surfaceCharacter.group.visible &&
+    (playerModeSystem.onFootActive || playerModeSystem.transitionActive);
+
+  if (!pilotVisible) {
+    if (sun.castShadow) {
+      sun.castShadow = false;
+      // One final pass so the stale shadow does not linger on the ground.
+      renderer.shadowMap.needsUpdate = true;
+    }
+    return;
+  }
+
+  restrictShadowCastersToPilot();
+  sun.castShadow = true;
+  characterShadowAnchor.copy(surfaceCharacter.group.position);
+  // Aim a little above the feet so the box covers the whole standing figure
+  // rather than clipping the helmet on a slope.
+  characterShadowAnchor.y += 0.9;
+  // The light lives inside PlanetaryWorld's group, so convert the pilot's world
+  // position into that group's local space before moving light and target.
+  planetaryWorld.group.worldToLocal(characterShadowAnchor);
+  sun.target.position.copy(characterShadowAnchor);
+  sun.position.copy(characterShadowAnchor).add(surfaceSunShadowOffset);
+  sun.updateMatrix();
+  sun.target.updateMatrix();
+  sun.target.updateMatrixWorld();
+  sun.updateMatrixWorld();
+
+  // The shadow map is refreshed on a fixed ~30 Hz budget rather than every
+  // frame. The pilot's silhouette changes slowly compared to the render rate,
+  // so a re-render every frame is work nobody can see; capping it roughly
+  // halves the shadow cost at 60 FPS and keeps the pass affordable on weak
+  // GPUs. The camera itself still follows the pilot every frame, so the shadow
+  // never lags behind the character's position.
+  characterShadowAccumulator += lastFrameDelta;
+  if (characterShadowAccumulator >= CHARACTER_SHADOW_INTERVAL) {
+    characterShadowAccumulator = 0;
+    renderer.shadowMap.needsUpdate = true;
+  }
+}
+
+function anchorMission03SurfaceObjects(): void {
+  const [resonatorX, resonatorZ] = resonadorAtlasDefinition.position;
+  pleyadanRelayBeacon.setPosition(
+    resonatorX,
+    planetaryWorld.getHeightAt(resonatorX, resonatorZ),
+    resonatorZ
+  );
+  const basePosition = planetaryWorld.colonyModule.group.visible
+    ? planetaryWorld.colonyModule.group.position.clone()
+    : HABITAT_SITE_LOCAL.clone();
+  basePosition.x += 9;
+  basePosition.z += 4;
+  basePosition.y = planetaryWorld.getHeightAt(basePosition.x, basePosition.z) + 0.08;
+  pleyadanHologram.setPosition(basePosition);
+}
+
+function syncMission03Visuals(): void {
+  anchorMission03SurfaceObjects();
+  pleyadanRelayBeacon.restore(
+    mission03.state.communicationCalibrated,
+    mission03.state.relayBeaconPlaced
+  );
+  pleyadanHologram.setActive(
+    mission03.state.pleyadanContactEstablished ||
+      mission03.step === 'warning' ||
+      mission03.step === 'prepare' ||
+      mission03.step === 'completed',
+    mission03.step === 'warning'
+  );
+}
+
+function getMission03Progress(): number {
+  if (!mission03.started) return 0;
+  if (mission03.step === 'calibrateCommunications') return mission03.state.communicationCalibrationProgress;
+  if (mission03.step === 'synchronization') return mission03.state.signalStability;
+  if (mission03.step === 'atlasTranslation') return signalTranslation.progress;
+  const completedSteps: Mission03StepId[] = [
+    'returnToBase',
+    'firstContact',
+    'warning',
+    'prepare',
+    'completed'
+  ];
+  return completedSteps.includes(mission03.step) ? 100 : mission03.state.relayBeaconPlaced ? 35 : 0;
+}
+
+function startMission03IfReady(): boolean {
+  if (!inSurfacePhase || !mission03.start(colonyManager.state)) return false;
+  triggerDialogue('m03_signal_detected', 'mission03-start');
+  showPhaseBanner('MISION 03: PRIMER CONTACTO', 'Una senal profunda atraviesa la Red Atlas');
+  missionText.textContent = 'Base Nereida detecta una portadora estructurada. Regresa al modulo de comunicaciones.';
+  playTone(410, 0.2);
+  window.setTimeout(() => playTone(760, 0.24), 160);
+  saveProgress();
+  return true;
+}
+
+function anchorMission04SurfaceObjects(): void {
+  defensiveBeacons.forEach((beacon, index) => {
+    const [x, z] = defenseBeaconSites[index].position;
+    beacon.setPosition(x, planetaryWorld.getHeightAt(x, z), z);
+  });
+}
+
+function syncMission04Visuals(): void {
+  anchorMission04SurfaceObjects();
+  defensiveBeacons.forEach((beacon, index) => {
+    beacon.setMissionVisible(mission04.started);
+    beacon.restore(
+      mission04.state.defensiveBeaconsPlaced[index],
+      mission04.state.defenseNetworkSynchronized
+    );
+  });
+  defenseNetworkLinks.sync(
+    defensiveBeacons.map((beacon) => beacon.group.position),
+    planetaryWorld.colonyModule.group.position,
+    mission04.state.defensiveBeaconsPlaced,
+    mission04.started && inSurfacePhase
+  );
+}
+
+function getActiveDefenseBeacon(): DefensiveBeacon {
+  return defensiveBeacons[mission04.state.activeDefenseBeaconTarget] ?? defensiveBeacons[0];
+}
+
+function getMission04Progress(): number {
+  if (!mission04.started) return 0;
+  if (mission04.step === 'calibrateDefenseLink') return mission04.state.defenseLinkCalibrationProgress * 0.15;
+  const placedCount = mission04.state.defensiveBeaconsPlaced.filter(Boolean).length;
+  if (mission04.step === 'synchronizeNetwork') {
+    return 25 + placedCount * 15 + mission04.state.defenseSyncProgress * 0.25;
+  }
+  if (mission04.completed) return 100;
+  if (mission04.state.threatSignatureDetected) return 92;
+  if (mission04.state.defenseNetworkSynchronized) return 80;
+  if (mission04.state.orbitalSensorActivated) return 25 + placedCount * 15;
+  if (mission04.state.defenseLinkCalibrated) return 18;
+  return 5;
+}
+
+function startMission04IfReady(): boolean {
+  if (!inSurfacePhase || !mission04.start(mission03.snapshot())) return false;
+  syncMission04Visuals();
+  triggerDialogue('m04_protocol_start', 'mission04-start');
+  triggerDialogue('m04_defense_context', 'mission04-context', 1.3);
+  showPhaseBanner('MISION 04: DEFENSA ORBITAL', 'Alerta temprana // no hay ataque en curso');
+  missionText.textContent = 'Comando Arca activa el protocolo defensivo. Regresa a Base Nereida.';
+  playTone(430, 0.18);
+  window.setTimeout(() => playTone(620, 0.2), 150);
+  saveProgress();
+  return true;
+}
+
+function syncMission05Visuals(): void {
+  silentProbe.setState(mission05.state.probeState);
+  interferenceField.sync(
+    mission05.state.activeEchoIndex,
+    mission05.state.echoesResolved,
+    mission05.started && mission05.step === 'trackEcho'
+  );
+  hud.classList.toggle('is-interference', mission05.state.interferenceActive);
+}
+
+function getActiveMission05EchoPosition(): THREE.Vector3 {
+  return MISSION05_ECHO_POSITIONS[mission05.state.activeEchoIndex] ?? MISSION05_PROBE_POSITION;
+}
+
+function getMission05Progress(): number {
+  if (!mission05.started) return 0;
+  if (mission05.completed) return 100;
+  if (mission05.step === 'gainScanAltitude') {
+    return Math.min(18, (getMission04OrbitalScanClearance() / mission05Tuning.minimumScanAltitude) * 18);
+  }
+  if (mission05.step === 'orbitalScan') return 22;
+  if (mission05.step === 'approachProbe') return 34;
+  if (mission05.step === 'atlasRecalibration') return 46;
+  if (mission05.step === 'trackEcho') return 46 + mission05.state.echoesResolved * 12;
+  if (mission05.step === 'counterSignal') return 82 + mission05.state.counterSignalProgress * 0.12;
+  if (mission05.step === 'returnToBase') return 96;
+  return 5;
+}
+
+function startMission05IfReady(): boolean {
+  if (!inSurfacePhase || !mission05.start(mission04.snapshot())) return false;
+  syncMission05Visuals();
+  triggerDialogue('m05_signature_moving', 'mission05-start');
+  triggerDialogue('m05_observer_confirmed', 'mission05-observer', 1.2);
+  showPhaseBanner('MISION 05: SOMBRA EN LA ORBITA', 'La firma anomala esta en movimiento');
+  missionText.textContent = 'La red defensiva detecta una firma movil. Entra en la nave y prepara el barrido orbital.';
+  playTone(210, 0.22);
+  window.setTimeout(() => playTone(430, 0.18), 180);
+  saveProgress();
+  return true;
+}
+
+function syncMission06Visuals(): void {
+  const active = mission06.started;
+  cloakingProjectors.forEach((projector, index) => {
+    projector.group.visible = active;
+    projector.group.position.y = planetaryWorld.getHeightAt(projector.group.position.x, projector.group.position.z);
+    projector.restoreState(mission06.state.cloakingProjectorsCalibrated[index]);
+  });
+  const basePosition = planetaryWorld.colonyModule.group.position;
+  cloakingField.group.position.set(basePosition.x, basePosition.y + 1.5, basePosition.z);
+  if (mission06.state.cloakingFieldOnline && !cloakingField.online) cloakingField.activate();
+  cloakingLinks.sync(
+    cloakingProjectors.map((projector) => projector.group.position),
+    basePosition,
+    mission06.state.cloakingProjectorsCalibrated,
+    mission06.started && inSurfacePhase
+  );
+}
+
+function getActiveCloakingProjectorIndex(): number {
+  if (mission06.step === 'deployNorth') return 0;
+  if (mission06.step === 'deployEast') return 1;
+  if (mission06.step === 'deploySouth') return 2;
+  return -1;
+}
+
+function getMission06Progress(): number {
+  if (!mission06.started) return 0;
+  if (mission06.completed) return 100;
+  if (mission06.step === 'returnToBase') return 8;
+  if (mission06.step === 'analyzeResidue') return 18;
+  if (mission06.step === 'calibrateMatrix') return 24;
+  if (mission06.step === 'deployNorth') return 34;
+  if (mission06.step === 'deployEast') return 48;
+  if (mission06.step === 'deploySouth') return 66;
+  if (mission06.step === 'syncMatrix') {
+    return 80 + Math.min(18, (mission06.state.cloakingSyncProgress / mission06Tuning.syncSeconds) * 18);
+  }
+  return 5;
+}
+
+function startMission06IfReady(): boolean {
+  if (!inSurfacePhase || !mission06.checkStartCondition(mission05.snapshot())) return false;
+  syncMission06Visuals();
+  triggerDialogue('m06_start', 'mission06-start');
+  showPhaseBanner('MISION 06: BLINDAJE DE NEREIDA', 'Rastros de escaneo detectados sobre E-01');
+  missionText.textContent = 'La sonda dejó rastros de escaneo. Regresa a Base Nereida y analiza los residuos.';
+  playTone(230, 0.2);
+  window.setTimeout(() => playTone(430, 0.16), 170);
+  saveProgress();
+  return true;
+}
+
+function performMission06Interaction(position: THREE.Vector3): boolean {
+  if (!mission06.started || mission06.completed) return false;
+  const baseDistance = position.distanceTo(planetaryWorld.colonyModule.group.position);
+
+  if (mission06.step === 'analyzeResidue') {
+    if (baseDistance > mission06Tuning.baseInteractionRange) {
+      missionText.textContent = `Consola de Base Nereida a ${Math.round(baseDistance)} m. Acércate para analizar los residuos.`;
+      return true;
+    }
+    if (mission06.analyzeResidues()) {
+      missionText.textContent = 'Residuos de interferencia analizados. Calibra la Matriz de Ocultamiento con E.';
+      showPhaseBanner('RESIDUOS ANALIZADOS', 'Firma de Nereida comprometida // calibrar matriz');
+      playTone(440, 0.12);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission06.step === 'calibrateMatrix') {
+    if (baseDistance > mission06Tuning.baseInteractionRange) {
+      missionText.textContent = `Consola de Base Nereida a ${Math.round(baseDistance)} m. Acércate para calibrar la matriz.`;
+      return true;
+    }
+    if (mission06.calibrateMatrix()) {
+      musicManager.playSting('discovery', clock.elapsedTime);
+      triggerDialogue('m06_pleyadan_warning', 'mission06-pleyadan-warning');
+      triggerDialogue('m06_commander_reaction', 'mission06-commander-reaction', 1.6);
+      triggerDialogue('m06_deploy_hint', 'mission06-deploy-hint', 3.4);
+      showPhaseBanner('MATRIZ CALIBRADA', 'Despliegue de proyectores de ocultamiento autorizado');
+      missionText.textContent = 'Matriz de ocultamiento calibrada. Despliega el Proyector Norte.';
+      syncMission06Visuals();
+      playTone(560, 0.16);
+      saveProgress();
+    }
+    return true;
+  }
+
+  const projectorIndex = getActiveCloakingProjectorIndex();
+  if (projectorIndex >= 0) {
+    const projector = cloakingProjectors[projectorIndex];
+    const projectorName = CLOAKING_PROJECTOR_NAMES[projectorIndex];
+    const distance = position.distanceTo(projector.group.position);
+    if (distance > mission06Tuning.projectorInteractionRange) {
+      missionText.textContent = `${projectorName} a ${Math.round(distance)} m. Llega a la coordenada y calibra con E.`;
+      return true;
+    }
+    if (mission06.deployProjector(projectorIndex)) {
+      projector.calibrate();
+      void sfxManager.play('defenseBeacon', 0.78);
+      syncMission06Visuals();
+      const nextIndex = getActiveCloakingProjectorIndex();
+      if (nextIndex >= 0) {
+        showPhaseBanner(`${projectorName.toUpperCase()} CALIBRADO`, `Siguiente vértice: ${CLOAKING_PROJECTOR_NAMES[nextIndex]}`);
+        missionText.textContent = `${projectorName} activo. Despliega el ${CLOAKING_PROJECTOR_NAMES[nextIndex]}.`;
+      } else {
+        showPhaseBanner('TRIÁNGULO DE OCULTAMIENTO COMPLETO', 'Vuelve a Base Nereida para sincronizar el campo');
+        missionText.textContent = 'Los tres proyectores están calibrados. Sincroniza el campo desde Base Nereida con E.';
+      }
+      playTone(620, 0.15);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission06.step === 'syncMatrix') {
+    if (baseDistance > mission06Tuning.baseInteractionRange) {
+      missionText.textContent = `Base Nereida a ${Math.round(baseDistance)} m. La sincronización se controla desde la base.`;
+      return true;
+    }
+    if (!mission06SyncEngaged) {
+      mission06SyncEngaged = true;
+      triggerDialogue('m06_syncing', 'mission06-sync-started');
+      void sfxManager.play('defenseNetwork', 0.7);
+      showPhaseBanner('SINCRONIZANDO CAMPO', 'Mantente en Base Nereida hasta completar el blindaje');
+      missionText.textContent = 'Campo de ocultamiento en sincronización. Permanece en el perímetro de la base.';
+      playTone(480, 0.14);
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission06Systems(delta: number): void {
+  startMission06IfReady();
+  if (!mission06.started) return;
+
+  syncMission06Visuals();
+  cloakingField.update(delta);
+  cloakingLinks.update(
+    clock.elapsedTime,
+    mission06.step === 'syncMatrix' && mission06SyncEngaged,
+    mission06.state.cloakingFieldOnline,
+    mission06SyncEngaged && mission06.step === 'syncMatrix' &&
+      getActivePlayerPosition().distanceTo(planetaryWorld.colonyModule.group.position) > mission06Tuning.baseInteractionRange
+  );
+
+  const baseDistance = getActivePlayerPosition().distanceTo(planetaryWorld.colonyModule.group.position);
+
+  if (mission06.step === 'returnToBase' && baseDistance <= mission06Tuning.baseInteractionRange) {
+    if (mission06.reachBase()) {
+      triggerDialogue('m06_analyze', 'mission06-analyze');
+      missionText.textContent = 'Consola de Base Nereida lista. Analiza los residuos de interferencia con E.';
+      playTone(520, 0.14);
+      saveProgress();
+    }
+  }
+
+  if (mission06.step === 'syncMatrix' && mission06SyncEngaged) {
+    const inRange = baseDistance <= mission06Tuning.baseInteractionRange;
+    if (!inRange) transientWarning = 'SINCRONIZACIÓN PAUSADA // REGRESA A BASE NEREIDA';
+    if (mission06.updateSync(delta, inRange)) {
+      mission06SyncEngaged = false;
+      syncMission06Visuals();
+      musicManager.playSting('complete', clock.elapsedTime);
+      void sfxManager.play('missionComplete', 0.8);
+      triggerDialogue('m06_complete', 'mission06-complete');
+      showPhaseBanner('MISION 06 COMPLETADA', 'Firma de Base Nereida reducida // Mision 07 preparada');
+      missionText.textContent = 'Campo de ocultamiento online. Nereida dejó de brillar en la oscuridad.';
+      playTone(700, 0.2);
+      window.setTimeout(() => playTone(980, 0.22), 170);
+      saveProgress();
+    } else if (inRange) {
+      missionText.textContent = `Sincronización del campo: ${Math.round(
+        (mission06.state.cloakingSyncProgress / mission06Tuning.syncSeconds) * 100
+      )}%.`;
+    }
+  }
+}
+
+function syncMission07Visuals(): void {
+  const fractureVisible = mission07.state.atlasFractureRevealed || mission07.started;
+  const fractureY = planetaryWorld.getHeightAt(atlasFractureDefinition.position[0], atlasFractureDefinition.position[1]);
+  atlasSeedArchive.setPosition(atlasFractureDefinition.position[0], fractureY + 0.02, atlasFractureDefinition.position[1]);
+  atlasSeedArchive.restore(
+    fractureVisible,
+    mission07.state.atlasSeedArchiveUnlocked,
+    mission07.state.atlasSeedArchiveActivated
+  );
+  atlasEchoNodes.forEach((node, index) => {
+    const [x, z] = node.definition.position;
+    node.setPosition(x, planetaryWorld.getHeightAt(x, z), z);
+    node.restore(fractureVisible, mission07.state.atlasEchoNodesScanned[index]);
+  });
+}
+
+function getActiveAtlasEchoNodeIndex(): number {
+  return mission07.activeNodeIndex;
+}
+
+function getMission07Progress(): number {
+  if (!mission07.started) return 0;
+  if (mission07.completed) return 100;
+  if (mission07.step === 'analyzeSignal') return 10;
+  if (mission07.step === 'travelToFracture') return 24;
+  if (mission07.step === 'scanNorth') return 42;
+  if (mission07.step === 'scanCentral') return 58;
+  if (mission07.step === 'scanSouth') return 74;
+  if (mission07.step === 'activateArchive') return 88;
+  return 0;
+}
+
+function startMission07IfReady(): boolean {
+  if (!inSurfacePhase || !mission07.start(mission06.snapshot())) return false;
+  syncMission07Visuals();
+  triggerDialogue('m07_start', 'mission07-start');
+  triggerDialogue('m07_signal_unknown', 'mission07-not-coalition', 1.5);
+  triggerDialogue('m07_analyze_base', 'mission07-analyze-base', 3);
+  showPhaseBanner('MISION 07: ECOS BAJO LA CORTEZA', 'La Matriz de Ocultamiento detecta una señal profunda');
+  missionText.textContent = 'Base Nereida detecta una señal subterránea. Analízala desde la consola con E.';
+  void sfxManager.play('atlas', 0.58);
+  saveProgress();
+  return true;
+}
+
+function performMission07Interaction(position: THREE.Vector3): boolean {
+  if (!mission07.started || mission07.completed) return false;
+  const baseDistance = position.distanceTo(planetaryWorld.colonyModule.group.position);
+
+  if (mission07.step === 'analyzeSignal') {
+    if (baseDistance > mission07Tuning.baseInteractionRange) {
+      missionText.textContent = `Base Nereida a ${Math.round(baseDistance)} m. Acércate para analizar la señal subterránea.`;
+      return true;
+    }
+    if (mission07.analyzeSubsurfaceSignal()) {
+      syncMission07Visuals();
+      triggerDialogue('m07_atlas_below', 'mission07-atlas-below');
+      triggerDialogue('m07_travel_fracture', 'mission07-travel-fracture', 1.8);
+      showPhaseBanner('FRACTURA ATLAS REVELADA', 'Anomalía antigua bajo la corteza // sin firma de Coalición');
+      missionText.textContent = 'Fractura Atlas marcada en el mapa. Viaja a la zona y mantén baja emisión.';
+      void sfxManager.play('atlas', 0.76);
+      musicManager.playSting('discovery', clock.elapsedTime);
+      saveProgress();
+    }
+    return true;
+  }
+
+  const activeNodeIndex = getActiveAtlasEchoNodeIndex();
+  if (activeNodeIndex >= 0) {
+    const node = atlasEchoNodes[activeNodeIndex];
+    const nodeDistance = position.distanceTo(node.interactionPosition);
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = `Desciende con F cerca de ${node.definition.name}. El escaneo debe hacerse a pie.`;
+      return true;
+    }
+    if (nodeDistance > mission07Tuning.nodeScanRange) {
+      missionText.textContent = `${node.definition.name} a ${Math.round(nodeDistance)} m. Acércate a pie y usa E.`;
+      return true;
+    }
+    if (mission07.scanEchoNode(activeNodeIndex)) {
+      node.markScanned();
+      scannerPulse.trigger(node.interactionPosition, true);
+      void sfxManager.play('scanner', 0.72);
+      void sfxManager.play('atlas', 0.48);
+      if (mission07.state.atlasSeedArchiveUnlocked) {
+        atlasSeedArchive.unlock();
+        triggerDialogue('m07_nodes_awake', 'mission07-nodes-awake');
+        showPhaseBanner('ARCHIVO SEMILLA DESBLOQUEADO', 'Los tres ecos reconstruyen un núcleo Atlas enterrado');
+        missionText.textContent = 'Archivo Semilla Atlas desbloqueado. Actívalo con E.';
+      } else {
+        const nextNode = atlasEchoNodes[getActiveAtlasEchoNodeIndex()];
+        missionText.textContent = `${node.definition.name} escaneado. Siguiente eco: ${nextNode.definition.name}.`;
+      }
+      syncMission07Visuals();
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission07.step === 'activateArchive') {
+    const archiveDistance = position.distanceTo(atlasSeedArchive.interactionPosition);
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = 'Desciende con F junto al Archivo Semilla Atlas para activarlo.';
+      return true;
+    }
+    if (archiveDistance > mission07Tuning.archiveActivationRange) {
+      missionText.textContent = `Archivo Semilla Atlas a ${Math.round(archiveDistance)} m. Acércate y usa E.`;
+      return true;
+    }
+    if (mission07.activateSeedArchive()) {
+      atlasSeedArchive.activate();
+      syncMission07Visuals();
+      triggerDialogue('m07_archive_active', 'mission07-archive-active');
+      triggerDialogue('m07_pleyadan_guarded', 'mission07-pleyadan-guarded', 1.6);
+      triggerDialogue('m07_seed_worlds', 'mission07-seed-worlds', 3.2);
+      triggerDialogue('m07_silent_fear', 'mission07-silent-fear', 4.8);
+      triggerDialogue('m07_complete', 'mission07-complete', 6.2);
+      showPhaseBanner('MISION 07 COMPLETADA', 'E-01 confirmado como mundo semilla Atlas // Mision 08 preparada');
+      missionText.textContent = 'Archivo Semilla activo. E-01 fue preparado para preservar vida emergente.';
+      void sfxManager.play('atlas', 0.88);
+      void sfxManager.play('missionComplete', 0.72);
+      musicManager.playSting('discovery', clock.elapsedTime);
+      window.setTimeout(() => musicManager.playSting('complete', clock.elapsedTime), 300);
+      saveProgress();
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission07Systems(delta: number, elapsed: number): void {
+  startMission07IfReady();
+  if (!mission07.started) return;
+
+  syncMission07Visuals();
+  atlasSeedArchive.update(elapsed);
+  atlasEchoNodes.forEach((node, index) => node.update(elapsed, index === getActiveAtlasEchoNodeIndex()));
+
+  if (mission07.step === 'travelToFracture') {
+    const distance = getActivePlayerPosition().distanceTo(atlasSeedArchive.interactionPosition);
+    if (distance <= mission07Tuning.fractureArrivalRange) {
+      if (mission07.reachFracture()) {
+        triggerDialogue('m07_three_echoes', 'mission07-three-echoes');
+        showPhaseBanner('ECOS ATLAS DETECTADOS', 'Tres nodos semienterrados responden en la Fractura Atlas');
+        missionText.textContent = 'Estoy recibiendo tres ecos. Desciende con F y escanea los nodos a pie con E.';
+        void sfxManager.play('atlas', 0.62);
+        saveProgress();
+      }
+    }
+  }
+}
+
+function syncMission08Visuals(): void {
+  const fractureVisible = mission08.state.signalFractureRevealed || mission08.started;
+  const [fx, fz] = signalFractureDefinition.position;
+  const fractureY = planetaryWorld.getHeightAt(fx, fz);
+  signalFractureEffect.setPosition(fx, fractureY + 0.02, fz);
+  signalFractureEffect.restore(fractureVisible, mission08.state.signalFractureContained);
+  signalFractureNodes.forEach((node, index) => {
+    const [x, z] = node.definition.position;
+    node.setPosition(x, planetaryWorld.getHeightAt(x, z), z);
+    node.restore(fractureVisible, mission08.state.fractureNodesStabilized[index]);
+  });
+}
+
+function getActiveFractureFocusIndex(): number {
+  return mission08.activeFocusIndex;
+}
+
+function getSignalFractureCenter(): THREE.Vector3 {
+  const [fx, fz] = signalFractureDefinition.position;
+  return new THREE.Vector3(fx, planetaryWorld.getHeightAt(fx, fz) + 0.25, fz);
+}
+
+function getMission08Progress(): number {
+  if (!mission08.started) return 0;
+  if (mission08.completed) return 100;
+  if (mission08.step === 'analyzeTrace') return 8;
+  if (mission08.step === 'travelToFracture') return 20;
+  if (mission08.step === 'stabilizeNorth') return 34;
+  if (mission08.step === 'stabilizeCentral') return 48;
+  if (mission08.step === 'stabilizeSouth') return 62;
+  if (mission08.step === 'returnToBase') return 76;
+  if (mission08.step === 'signalPurge') return 80 + mission08.purgeFraction * 18;
+  return 5;
+}
+
+function startMission08IfReady(): boolean {
+  if (!inSurfacePhase || !mission08.start(mission07.snapshot())) return false;
+  syncMission08Visuals();
+  triggerDialogue('m08_start', 'mission08-start');
+  triggerDialogue('m08_analyze', 'mission08-analyze', 1.8);
+  showPhaseBanner('MISION 08: LA PRIMERA GRIETA', 'El rastro de la Sonda abrió una grieta de señal');
+  missionText.textContent = 'La Sonda dejó un rastro de escaneo. Analízalo desde la consola de Base Nereida con E.';
+  void sfxManager.play('warning', 0.6);
+  saveProgress();
+  return true;
+}
+
+function performMission08Interaction(position: THREE.Vector3): boolean {
+  if (!mission08.started || mission08.completed) return false;
+  const baseDistance = position.distanceTo(planetaryWorld.colonyModule.group.position);
+
+  if (mission08.step === 'analyzeTrace') {
+    if (baseDistance > mission08Tuning.baseInteractionRange) {
+      missionText.textContent = `Base Nereida a ${Math.round(baseDistance)} m. Acércate para analizar el rastro de escaneo.`;
+      return true;
+    }
+    if (mission08.analyzeTrace()) {
+      syncMission08Visuals();
+      triggerDialogue('m08_fracture_revealed', 'mission08-fracture-revealed');
+      triggerDialogue('m08_pleyadan_warning', 'mission08-pleyadan-warning', 1.8);
+      showPhaseBanner('GRIETA DE SEÑAL REVELADA', 'Fractura fuera del perímetro // tres focos inestables');
+      missionText.textContent = 'Grieta de Señal marcada en el mapa. Viaja a la zona y desciende con F.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      void sfxManager.play('warning', 0.72);
+      saveProgress();
+    }
+    return true;
+  }
+
+  const activeFocusIndex = getActiveFractureFocusIndex();
+  if (activeFocusIndex >= 0) {
+    const node = signalFractureNodes[activeFocusIndex];
+    const nodeDistance = position.distanceTo(node.interactionPosition);
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = `Desciende con F cerca del ${node.definition.name}. La estabilización se hace a pie.`;
+      return true;
+    }
+    if (nodeDistance > mission08Tuning.focusStabilizeRange) {
+      missionText.textContent = `${node.definition.name} a ${Math.round(nodeDistance)} m. Acércate a pie y usa E.`;
+      return true;
+    }
+    if (mission08.stabilizeFocus(activeFocusIndex)) {
+      node.markStabilized();
+      scannerPulse.trigger(node.interactionPosition, true);
+      void sfxManager.play('scanner', 0.72);
+      void sfxManager.play('counterSignal', 0.5);
+      syncMission08Visuals();
+      if (mission08.step === 'returnToBase') {
+        triggerDialogue('m08_return_base', 'mission08-return-base');
+        showPhaseBanner('FOCOS ESTABILIZADOS', 'Vuelve a Base Nereida para ejecutar la purga de señal');
+        missionText.textContent = 'Los tres focos están estables. Vuelve a Base Nereida y ejecuta la purga con E.';
+      } else {
+        const nextNode = signalFractureNodes[getActiveFractureFocusIndex()];
+        missionText.textContent = `${node.definition.name} estabilizado. Siguiente: ${nextNode.definition.name}.`;
+      }
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission08.step === 'returnToBase' || mission08.step === 'signalPurge') {
+    if (baseDistance > mission08Tuning.baseInteractionRange) {
+      missionText.textContent = `Base Nereida a ${Math.round(baseDistance)} m. La purga solo puede ejecutarse desde el núcleo.`;
+      return true;
+    }
+    if (mission08.step === 'returnToBase') {
+      if (mission08.beginPurge()) {
+        mission08PurgeEngaged = true;
+        triggerDialogue('m08_purging', 'mission08-purge-started');
+        void sfxManager.play('counterSignal', 0.72);
+        showPhaseBanner('PURGA DE SEÑAL', 'Mantente en Base Nereida hasta contener la grieta');
+        missionText.textContent = 'Purga de señal en progreso. Permanece en el perímetro de la base.';
+      }
+    } else {
+      mission08PurgeEngaged = true;
+      missionText.textContent = `Purga de señal en progreso: ${Math.round(mission08.purgeFraction * 100)}%.`;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission08Systems(delta: number, elapsed: number): void {
+  startMission08IfReady();
+  if (!mission08.started) return;
+
+  syncMission08Visuals();
+  // The fracture's visual disturbance dies down as the live purge advances.
+  signalFractureEffect.setPurgeProgress(mission08.step === 'signalPurge' ? mission08.purgeFraction : mission08.completed ? 1 : 0);
+  signalFractureEffect.update(elapsed);
+  signalFractureNodes.forEach((node, index) => node.update(elapsed, index === getActiveFractureFocusIndex()));
+
+  // Sober purge feedback at the base: a slow scanner ring every ~1.6s while
+  // the purge is running — technical, no flashes.
+  if (mission08.step === 'signalPurge' && mission08PurgeEngaged && elapsed - mission08LastPurgePulseAt > 1.6) {
+    mission08LastPurgePulseAt = elapsed;
+    scannerPulse.trigger(planetaryWorld.colonyModule.group.position, false);
+  }
+
+  if (mission08.step === 'travelToFracture') {
+    const distance = getActivePlayerPosition().distanceTo(getSignalFractureCenter());
+    if (distance <= mission08Tuning.fractureArrivalRange) {
+      if (mission08.reachFracture()) {
+        showPhaseBanner('GRIETA DE SEÑAL ALCANZADA', 'Tres focos inestables sostienen la fractura');
+        missionText.textContent = 'Estás en la grieta. Desciende con F y estabiliza los focos a pie con E.';
+        void sfxManager.play('warning', 0.55);
+        saveProgress();
+      }
+    }
+  }
+
+  if (mission08.step === 'signalPurge' && mission08PurgeEngaged) {
+    const inRange = getActivePlayerPosition().distanceTo(planetaryWorld.colonyModule.group.position) <=
+      mission08Tuning.baseInteractionRange;
+    if (!inRange) transientWarning = 'PURGA PAUSADA // REGRESA A BASE NEREIDA';
+    if (mission08.updatePurge(delta, inRange)) {
+      mission08PurgeEngaged = false;
+      syncMission08Visuals();
+      musicManager.playSting('resolution', clock.elapsedTime);
+      void sfxManager.play('missionComplete', 0.8);
+      triggerDialogue('m08_complete', 'mission08-complete');
+      showPhaseBanner('MISION 08 COMPLETADA', 'Grieta contenida // firma residual // Mision 09 preparada');
+      missionText.textContent = 'Grieta de señal contenida. Nereida sigue oculta, pero quedó una firma residual.';
+      playTone(680, 0.2);
+      window.setTimeout(() => playTone(940, 0.22), 170);
+      saveProgress();
+    } else if (inRange && mission08.step === 'signalPurge') {
+      missionText.textContent = `Purga de señal: ${Math.round(mission08.purgeFraction * 100)}%.`;
+    }
+  }
+}
+
+function getAuroraThresholdCenter(): THREE.Vector3 {
+  const [tx, tz] = auroraThresholdDefinition.position;
+  return new THREE.Vector3(tx, planetaryWorld.getHeightAt(tx, tz) + 0.25, tz);
+}
+
+function syncMission09Visuals(): void {
+  const routeVisible = mission09.state.auroraRouteDecoded || (mission09.started && mission09.step !== 'analyzeResidual');
+  auroraSectorRoute.setMissionActive(routeVisible);
+  atlasRouteBeacons.forEach((beacon, index) => {
+    const [x, z] = beacon.definition.position;
+    beacon.setPosition(x, planetaryWorld.getHeightAt(x, z), z);
+    beacon.restore(routeVisible, mission09.state.auroraRouteBeaconsScanned[index]);
+  });
+  const threshold = getAuroraThresholdCenter();
+  auroraRevealEffect.setPosition(threshold.x, planetaryWorld.getHeightAt(threshold.x, threshold.z), threshold.z);
+  auroraRevealEffect.restore(mission09.state.auroraSectorDiscovered);
+}
+
+function getActiveRouteBeaconIndex(): number {
+  return mission09.activeBeaconIndex;
+}
+
+function getMission09Progress(): number {
+  if (!mission09.started) return 0;
+  if (mission09.completed) return 100;
+  if (mission09.step === 'analyzeResidual') return 6;
+  if (mission09.step === 'followRoute') return 12 + mission09.beaconsScannedCount * 15;
+  if (mission09.step === 'reachThreshold') return 90;
+  return 4;
+}
+
+function startMission09IfReady(): boolean {
+  if (!inSurfacePhase || !mission09.start(mission08.snapshot())) return false;
+  syncMission09Visuals();
+  triggerDialogue('m09_start', 'mission09-start');
+  triggerDialogue('m09_route_rebuilding', 'mission09-route-rebuilding', 1.8);
+  triggerDialogue('m09_analyze_base', 'mission09-analyze-base', 3.6);
+  showPhaseBanner('MISION 09: EXPEDICION AURORA', 'La firma residual señala un sector lejano de E-01');
+  missionText.textContent = 'La firma residual no apunta a Nereida. Analízala desde la consola de Base Nereida con E.';
+  void sfxManager.play('atlas', 0.58);
+  saveProgress();
+  return true;
+}
+
+function performMission09Interaction(position: THREE.Vector3): boolean {
+  if (!mission09.started || mission09.completed) return false;
+  const baseDistance = position.distanceTo(planetaryWorld.colonyModule.group.position);
+
+  if (mission09.step === 'analyzeResidual') {
+    if (baseDistance > mission09Tuning.baseInteractionRange) {
+      missionText.textContent = `Base Nereida a ${Math.round(baseDistance)} m. Acércate para analizar la firma residual.`;
+      return true;
+    }
+    if (mission09.analyzeResidual()) {
+      syncMission09Visuals();
+      triggerDialogue('m09_route_decoded', 'mission09-route-decoded');
+      triggerDialogue('m09_pleyadan_seed', 'mission09-pleyadan-seed', 2);
+      showPhaseBanner('RUTA AURORA DESBLOQUEADA', 'Ruta Atlas incompleta hacia el Sector Aurora');
+      missionText.textContent = 'Ruta Aurora trazada. Despega y sigue las balizas Atlas hacia el sur.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      void sfxManager.play('atlas', 0.74);
+      saveProgress();
+    }
+    return true;
+  }
+
+  const activeBeaconIndex = getActiveRouteBeaconIndex();
+  if (activeBeaconIndex >= 0) {
+    const beacon = atlasRouteBeacons[activeBeaconIndex];
+    const beaconDistance = position.distanceTo(beacon.interactionPosition);
+    if (beaconDistance > mission09Tuning.beaconScanRange) {
+      missionText.textContent = `${beacon.definition.name} a ${Math.round(beaconDistance)} m. Acércate y escanéala con E.`;
+      return true;
+    }
+    if (mission09.scanBeacon(activeBeaconIndex)) {
+      beacon.markScanned();
+      scannerPulse.trigger(beacon.interactionPosition, true);
+      void sfxManager.play('routeBeaconScan', 0.72);
+      void sfxManager.play('routeBeaconConfirm', 0.5);
+      syncMission09Visuals();
+      if (mission09.step === 'reachThreshold') {
+        triggerDialogue('m09_water_question', 'mission09-water-question');
+        showPhaseBanner('RUTA CONFIRMADA', 'Continúa hacia el Umbral Aurora y escanea el horizonte');
+        missionText.textContent = 'Última baliza confirmada. Continúa hacia el Umbral Aurora y escanea el horizonte con E.';
+      } else {
+        const nextBeacon = atlasRouteBeacons[getActiveRouteBeaconIndex()];
+        missionText.textContent = `${beacon.definition.name} confirmada. Continúa hacia ${nextBeacon.definition.name}.`;
+      }
+      playTone(560, 0.14);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission09.step === 'reachThreshold') {
+    const thresholdDistance = position.distanceTo(getAuroraThresholdCenter());
+    if (thresholdDistance > mission09Tuning.horizonScanRange) {
+      missionText.textContent = `Umbral Aurora a ${Math.round(thresholdDistance)} m. Acércate para escanear el horizonte.`;
+      return true;
+    }
+    if (mission09.scanHorizon()) {
+      auroraRevealEffect.reveal();
+      syncMission09Visuals();
+      scannerPulse.trigger(getAuroraThresholdCenter(), true);
+      // The low cloud deck opens over the Aurora valley.
+      planetaryWorld.setRevealProgress(1);
+      triggerDialogue('m09_aurora_reveal', 'mission09-aurora-reveal');
+      triggerDialogue('m09_pleyadan_route', 'mission09-pleyadan-route', 2.2);
+      triggerDialogue('m09_complete', 'mission09-complete', 4.2);
+      showPhaseBanner('SECTOR AURORA DESCUBIERTO', 'Región más habitable // Mision 10 preparada');
+      missionText.textContent = 'Sector Aurora descubierto: agua superficial, menor radiación, suelo fértil.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      window.setTimeout(() => musicManager.playSting('complete', clock.elapsedTime), 320);
+      void sfxManager.play('auroraFogOpen', 0.7);
+      void sfxManager.play('auroraRevealSwell', 0.86);
+      void sfxManager.play('missionComplete', 0.72);
+      playTone(680, 0.2);
+      window.setTimeout(() => playTone(960, 0.24), 180);
+      saveProgress();
+    }
+    return true;
+  }
+
+  return false;
+}
+
+const SURFACE_FOG_DENSITY = 0.00255;
+let auroraTravelFovOffset = 0;
+const announcedAuroraLegs = new Set<string>();
+
+/**
+ * Cinematic staging of the journey that never takes the stick away: the
+ * atmosphere thickens with the weather, thins on the reveal, and the lens
+ * opens a couple of degrees on the exposed legs. Controls, speed and camera
+ * mode are untouched.
+ */
+function applyAuroraTravelAtmosphere(fogIntensity: number, cinematic: boolean, delta: number): void {
+  const settled = mission09.completed && auroraTravelDirector.state.segment === 'completion';
+  // The storm's visibility loss folds into the same target the travel
+  // director drives, so the lerp converges instead of accumulating.
+  const stormFog = auroraStormFogBoost * 0.0042;
+  const targetDensity =
+    (settled
+      ? SURFACE_FOG_DENSITY
+      : mission09.state.auroraSectorDiscovered
+        ? 0.0019
+        : SURFACE_FOG_DENSITY + fogIntensity * 0.0034) + stormFog;
+  if (scene.fog instanceof THREE.FogExp2 && !inBasin) {
+    scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, targetDensity, 1 - Math.pow(0.12, delta));
+  }
+  const targetOffset = settled ? 0 : cinematic ? 2.5 : mission09.state.auroraSectorDiscovered ? 3.5 : 0;
+  auroraTravelFovOffset = THREE.MathUtils.lerp(auroraTravelFovOffset, targetOffset, 1 - Math.pow(0.25, delta));
+}
+
+/** One commander line per leg, the first time the pilot reaches it. */
+function announceAuroraLeg(segment: string): void {
+  if (mission09.completed || announcedAuroraLegs.has(segment)) return;
+  // The departure line belongs to the moment the pilot actually leaves the
+  // perimeter, not to the briefing at the console.
+  if (segment === 'departure' && mission09.step !== 'followRoute') return;
+  announcedAuroraLegs.add(segment);
+  const line: Record<string, [string, string] | undefined> = {
+    departure: ['m09_leg_departure', 'mission09-leg-departure'],
+    ashPlains: ['m09_leg_ash_plains', 'mission09-leg-ash-plains'],
+    atlasCanyons: ['m09_leg_canyons', 'mission09-leg-canyons'],
+    stormPlateau: ['m09_leg_storm', 'mission09-leg-storm'],
+    preReveal: ['m09_leg_pre_reveal', 'mission09-leg-pre-reveal']
+  };
+  const entry = line[segment];
+  if (!entry) return;
+  triggerDialogue(entry[0], entry[1]);
+  if (segment === 'atlasCanyons') triggerDialogue('m09_pleyadan_trial', 'mission09-pleyadan-trial', 3.4);
+  if (segment === 'preReveal') triggerDialogue('m09_pleyadan_gardens', 'mission09-pleyadan-gardens', 3.6);
+}
+
+function updateMission09Systems(delta: number, elapsed: number): void {
+  startMission09IfReady();
+  if (!mission09.started) return;
+
+  syncMission09Visuals();
+  const activePlayer = getActivePlayerPosition();
+  // Pre-reveal drama: the mist veils are already there on the approach, so the
+  // valley reads as hidden behind weather before the horizon scan parts it.
+  // Must run after syncMission09Visuals(), which restores the hidden state.
+  auroraRevealEffect.setApproachMist(
+    mission09.step === 'reachThreshold' && !mission09.state.auroraSectorDiscovered
+  );
+
+  // The travel director stages the leg: weather ramps, ambience cues and the
+  // music segment. It only reads state — nothing here is authoritative, so a
+  // reload rebuilds the same staging from the pilot's position.
+  const travel = auroraTravelDirector.update({
+    started: mission09.started,
+    step: mission09.step,
+    discovered: mission09.state.auroraSectorDiscovered,
+    completed: mission09.completed,
+    position: activePlayer,
+    elapsed
+  });
+  auroraSectorRoute.setEnvironment(travel.windIntensity, travel.stormIntensity);
+  applyAuroraTravelAtmosphere(travel.fogIntensity, travel.cinematicActive, delta);
+  announceAuroraLeg(travel.segment);
+
+  auroraSectorRoute.update(activePlayer, elapsed);
+  atlasRouteBeacons.forEach((beacon, index) => beacon.update(elapsed, index === getActiveRouteBeaconIndex()));
+  auroraRevealEffect.update(elapsed, delta);
+  mission09.setCurrentSector(auroraSectorRoute.currentSectorIndex);
+
+  // Base Nereida signal degrades with distance; the Atlas compass takes over.
+  const baseDistance = activePlayer.distanceTo(planetaryWorld.colonyModule.group.position);
+  mission09.setSignalStrength(THREE.MathUtils.clamp(1 - baseDistance / mission09Tuning.baseSignalRange, 0, 1));
+
+  // Keep the horizon dome around the pilot during the long southbound flight.
+  planetaryWorld.followHorizon(activePlayer.x, activePlayer.z);
+
+  if (
+    mission09.step === 'followRoute' &&
+    !mission09.completed &&
+    mission09.state.auroraSignalStrength < 0.35 &&
+    !mission09HadWeakSignalWarning
+  ) {
+    mission09HadWeakSignalWarning = true;
+    triggerDialogue('m09_signal_weak', 'mission09-signal-weak');
+    transientWarning = 'SEÑAL DE BASE NEREIDA DEBIL // MANTEN LA RUTA AURORA';
+  }
+  if (mission09.step === 'followRoute' && mission09.state.auroraSignalStrength < 0.35) {
+    transientWarning = 'SEÑAL DE BASE NEREIDA DEBIL // BRUJULA ATLAS ACTIVA';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mission 10: Primer Módulo Aurora
+// ---------------------------------------------------------------------------
+
+const surfaceBoundaryAnchor = new THREE.Vector3();
+
+/**
+ * Where the walkable/flyable disc is anchored on the surface.
+ *
+ * Until the Aurora sector exists there is exactly one anchor — Base Nereida
+ * at the origin — so behaviour through M01–M08 is unchanged. While the
+ * expedition is under way the boundary is lifted entirely (the route runs
+ * 4 km south of the base, well outside it), and once Aurora is discovered
+ * the valley becomes a second anchor: whichever is nearer holds the pilot,
+ * so both settled areas are walkable and the space between them is not.
+ */
+function getSurfaceBoundaryAnchorFor(x: number, z: number): THREE.Vector3 {
+  if (!mission09.state.auroraSectorDiscovered) return surfaceBoundaryAnchor.set(0, 0, 0);
+  const valley = getAuroraSettlementSite();
+  const toBase = Math.hypot(x, z);
+  const toValley = Math.hypot(x - valley.x, z - valley.z);
+  return toValley < toBase ? surfaceBoundaryAnchor.set(valley.x, 0, valley.z) : surfaceBoundaryAnchor.set(0, 0, 0);
+}
+
+function getSurfaceBoundaryAnchor(): THREE.Vector3 {
+  const player = getActivePlayerPosition();
+  return getSurfaceBoundaryAnchorFor(player.x, player.z);
+}
+
+/** True while the expedition is in transit and no boundary should apply. */
+function isSurfaceBoundarySuspended(): boolean {
+  return mission09.started && !mission09.state.auroraSectorDiscovered;
+}
+
+function getAuroraSettlementSite(): THREE.Vector3 {
+  const [sx, sz] = auroraSettlementSiteDefinition.position;
+  return new THREE.Vector3(sx, auroraSurfaceHeight(sx, sz), sz);
+}
+
+function getAuroraSamplePosition(index: number): THREE.Vector3 {
+  const [px, pz] = auroraSamplePointDefinitions[index].position;
+  return new THREE.Vector3(px, auroraSurfaceHeight(px, pz), pz);
+}
+
+function getActiveAuroraSampleIndex(): number {
+  const kind = mission10.activeSampleKind;
+  if (!kind) return -1;
+  return auroraSamplePointDefinitions.findIndex((definition) => definition.kind === kind);
+}
+
+function isAuroraSampleAnalyzed(kind: AuroraSampleKind): boolean {
+  if (kind === 'water') return mission10.state.auroraWaterAnalyzed;
+  if (kind === 'soil') return mission10.state.auroraSoilAnalyzed;
+  if (kind === 'atmosphere') return mission10.state.auroraAtmosphereAnalyzed;
+  return mission10.state.auroraBioSafetyChecked;
+}
+
+function syncMission10Visuals(): void {
+  // The survey stakes only exist once the valley survey is under way; they
+  // are part of the expedition's own kit, not of the landscape.
+  const probesVisible = mission10.started && mission10.state.auroraInitialSurveyComplete;
+  auroraSurveyProbes.forEach((probe, index) => {
+    const position = getAuroraSamplePosition(index);
+    probe.setPosition(position.x, position.y, position.z);
+    probe.restore(probesVisible, isAuroraSampleAnalyzed(probe.definition.kind));
+  });
+
+  const site = getAuroraSettlementSite();
+  auroraSettlementBeacon.setPosition(site.x, site.y, site.z);
+  auroraSettlementBeacon.restore(mission10.state.auroraSettlementSiteMarked);
+  auroraHabitatModule.setPosition(site.x, site.y, site.z);
+  auroraHabitatModule.restore(
+    mission10.state.auroraModuleDeployed,
+    mission10.state.auroraModuleOperational,
+    mission10.state.auroraStabilizationProgress
+  );
+  syncAuroraCoreDressing();
+}
+
+function getMission10Progress(): number {
+  if (!mission10.started) return 0;
+  if (mission10.completed) return 100;
+  if (mission10.step === 'initialSurvey') return 4;
+  if (mission10.step === 'descendToClearing') return 10;
+  if (mission10.activeSampleKind) return 16 + mission10.analyzedSampleCount * 13;
+  if (mission10.step === 'returnToClearing') return 70;
+  if (mission10.step === 'markSite') return 76;
+  if (mission10.step === 'deployModule') return 84;
+  if (mission10.step === 'stabilizeModule') return 88 + mission10.state.auroraStabilizationProgress * 0.12;
+  return 4;
+}
+
+function startMission10IfReady(): boolean {
+  if (!inSurfacePhase || !mission10.start(mission09.snapshot())) return false;
+  syncMission10Visuals();
+  triggerDialogue('m10_start', 'mission10-start');
+  triggerDialogue('m10_measure_first', 'mission10-measure-first', 2.2);
+  triggerDialogue('m10_pleyadan_listen', 'mission10-pleyadan-listen', 4.4);
+  showPhaseBanner('MISION 10: PRIMER MODULO AURORA', 'Medir el valle antes de habitarlo');
+  missionText.textContent = 'Analiza el Valle Aurora desde la nave con E.';
+  void sfxManager.play('atlas', 0.55);
+  saveProgress();
+  return true;
+}
+
+function performMission10Interaction(position: THREE.Vector3): boolean {
+  if (!mission10.started || mission10.completed) return false;
+  const site = getAuroraSettlementSite();
+
+  if (mission10.step === 'initialSurvey') {
+    const valleyDistance = position.distanceTo(site);
+    if (valleyDistance > mission10Tuning.surveyRange) {
+      missionText.textContent = `Valle Aurora a ${Math.round(valleyDistance)} m. Acércate para el barrido inicial.`;
+      return true;
+    }
+    if (mission10.completeInitialSurvey()) {
+      syncMission10Visuals();
+      scannerPulse.trigger(site, true);
+      void sfxManager.play('scanner', 0.7);
+      triggerDialogue('m10_survey_positive', 'mission10-survey-positive');
+      showPhaseBanner('RECONOCIMIENTO COMPLETO', 'Lecturas superiores a Nereida // Verificar en superficie');
+      missionText.textContent = 'Lecturas favorables. Aterriza y baja de la nave con F para tomar muestras.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission10.step === 'descendToClearing') {
+    missionText.textContent = playerModeSystem.onFootActive
+      ? 'Camina hasta el claro de asentamiento.'
+      : 'Aterriza junto al claro y baja de la nave con F.';
+    return true;
+  }
+
+  const activeSampleIndex = getActiveAuroraSampleIndex();
+  if (activeSampleIndex >= 0) {
+    const probe = auroraSurveyProbes[activeSampleIndex];
+    const definition = probe.definition;
+    const sampleDistance = position.distanceTo(probe.interactionPosition);
+    if (sampleDistance > mission10Tuning.sampleScanRange) {
+      missionText.textContent = `${definition.name} a ${Math.round(sampleDistance)} m. Acércate y escanea con E.`;
+      return true;
+    }
+    if (mission10.analyzeSample(definition.kind)) {
+      probe.markAnalyzed();
+      scannerPulse.trigger(probe.interactionPosition, true);
+      void sfxManager.play('scanner', 0.72);
+      if (definition.kind === 'water') auroraRevealEffect.triggerWaterScan();
+      if (definition.kind === 'biosafety') void sfxManager.play('atlas', 0.42);
+      syncMission10Visuals();
+      missionText.textContent = definition.reading;
+      triggerDialogue(`m10_reading_${definition.kind}`, `mission10-reading-${definition.kind}`);
+      if (mission10.step === 'returnToClearing') {
+        showPhaseBanner('ANALISIS COMPLETO', 'Cuatro lecturas confirmadas // Regresa al claro');
+        triggerDialogue('m10_pleyadan_shelter', 'mission10-pleyadan-shelter', 2.4);
+      }
+      playTone(600, 0.12);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission10.step === 'returnToClearing') {
+    const siteDistance = position.distanceTo(site);
+    missionText.textContent =
+      siteDistance <= mission10Tuning.clearingRange
+        ? 'Estás en el claro. Marca el sitio de Aurora-01 con E.'
+        : `Claro de asentamiento a ${Math.round(siteDistance)} m.`;
+    return true;
+  }
+
+  if (mission10.step === 'markSite') {
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = 'La baliza de asentamiento se coloca a pie. Baja de la nave con F.';
+      return true;
+    }
+    const siteDistance = position.distanceTo(site);
+    if (siteDistance > mission10Tuning.clearingRange) {
+      missionText.textContent = `Claro de asentamiento a ${Math.round(siteDistance)} m. Acércate para marcar el sitio.`;
+      return true;
+    }
+    if (mission10.markSettlementSite()) {
+      syncMission10Visuals();
+      scannerPulse.trigger(site, true);
+      void sfxManager.play('liftLock', 0.6);
+      triggerDialogue('m10_site_marked', 'mission10-site-marked');
+      showPhaseBanner('SITIO MARCADO', 'Aurora-01 // Listo para desplegar');
+      missionText.textContent = 'Sitio marcado. Despliega el Módulo Aurora-01 con E.';
+      playTone(520, 0.14);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission10.step === 'deployModule') {
+    const siteDistance = position.distanceTo(site);
+    if (siteDistance > mission10Tuning.clearingRange) {
+      missionText.textContent = `Baliza Aurora-01 a ${Math.round(siteDistance)} m. Acércate para desplegar el módulo.`;
+      return true;
+    }
+    if (mission10.deployModule()) {
+      auroraHabitatModule.beginDeploy();
+      mission10DeployStartedAt = clock.elapsedTime;
+      syncMission10Visuals();
+      void sfxManager.play('liftServo', 0.7);
+      void sfxManager.play('liftLock', 0.5);
+      triggerDialogue('m10_module_deployed', 'mission10-module-deployed');
+      showPhaseBanner('MODULO AURORA-01 DESPLEGADO', 'Estabilizando soporte vital');
+      missionText.textContent = 'Módulo desplegado. Mantente junto a él mientras estabiliza el soporte vital.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission10.step === 'stabilizeModule') {
+    missionText.textContent = `Estabilizando soporte vital: ${Math.round(mission10.state.auroraStabilizationProgress)}%.`;
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission10Systems(delta: number, elapsed: number): void {
+  startMission10IfReady();
+  if (!mission10.started) return;
+
+  const activePlayer = getActivePlayerPosition();
+  const site = getAuroraSettlementSite();
+  const activeSampleIndex = getActiveAuroraSampleIndex();
+  auroraSurveyProbes.forEach((probe, index) => probe.update(elapsed, index === activeSampleIndex));
+  auroraSettlementBeacon.update(elapsed);
+  auroraHabitatModule.update(delta, elapsed, mission10.state.auroraStabilizationProgress);
+  auroraCoreDressing.update(elapsed);
+
+  // Stepping out of the ship inside the valley is what confirms the descent.
+  if (mission10.step === 'descendToClearing' && playerModeSystem.onFootActive) {
+    if (mission10.confirmDescent()) {
+      syncMission10Visuals();
+      triggerDialogue('m10_on_foot', 'mission10-on-foot');
+      missionText.textContent = 'Suelo de Aurora bajo los pies. Escanea la orilla del agua con E.';
+      saveProgress();
+    }
+  }
+
+  // Coming back to the clearing after the four readings needs no keypress.
+  if (mission10.step === 'returnToClearing' && activePlayer.distanceTo(site) <= mission10Tuning.clearingRange) {
+    if (mission10.confirmReturnToClearing()) {
+      syncMission10Visuals();
+      triggerDialogue('m10_mark_clearing', 'mission10-mark-clearing');
+      missionText.textContent = 'Marca el sitio para Aurora-01 con E.';
+      saveProgress();
+    }
+  }
+
+  // Life support comes up only while the pilot stays with the module, and
+  // only once it has finished unfolding.
+  if (mission10.step === 'stabilizeModule') {
+    const nearModule = activePlayer.distanceTo(auroraHabitatModule.interactionPosition) <= mission10Tuning.clearingRange;
+    const unfolded = elapsed - mission10DeployStartedAt >= mission10Tuning.deploySeconds || auroraHabitatModule.deployed;
+    if (nearModule && unfolded) {
+      if (mission10.advanceStabilization(delta)) {
+        syncMission10Visuals();
+        triggerDialogue('m10_module_online', 'mission10-module-online');
+        triggerDialogue('m10_complete', 'mission10-complete', 2.6);
+        showPhaseBanner('AURORA-01 OPERATIVO', 'Primer punto humano fuera de Nereida // Mision 11 preparada');
+        missionText.textContent = 'Módulo Aurora-01 operativo. Energía mínima estable.';
+        musicManager.playSting('complete', clock.elapsedTime);
+        void sfxManager.play('missionComplete', 0.72);
+        playTone(700, 0.2);
+        window.setTimeout(() => playTone(980, 0.24), 180);
+        saveProgress();
+      } else {
+        transientWarning = `SOPORTE VITAL ${Math.round(mission10.state.auroraStabilizationProgress)}%`;
+      }
+    } else if (!nearModule) {
+      transientWarning = 'ACERCATE AL MODULO AURORA-01 PARA ESTABILIZAR';
+    }
+  }
+}
+
+function getMission10ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission10.started || mission10.completed) return {};
+  const activePosition = getActivePlayerPosition();
+  const site = getAuroraSettlementSite();
+
+  if (mission10.step === 'initialSurvey') {
+    return activePosition.distanceTo(site) <= mission10Tuning.surveyRange
+      ? { nextAction: 'Analiza el Valle Aurora con E.', key: 'E' }
+      : { nextAction: 'Sobrevuela el Valle Aurora.', key: 'WASD' };
+  }
+  if (mission10.step === 'descendToClearing') {
+    return playerModeSystem.onFootActive
+      ? { nextAction: 'Camina hasta el claro de asentamiento.', key: 'WASD' }
+      : { nextAction: 'Aterriza y baja de la nave con F.', key: 'F' };
+  }
+  const activeSampleIndex = getActiveAuroraSampleIndex();
+  if (activeSampleIndex >= 0) {
+    const probe = auroraSurveyProbes[activeSampleIndex];
+    return activePosition.distanceTo(probe.interactionPosition) <= mission10Tuning.sampleScanRange
+      ? { nextAction: `Escanea ${probe.definition.name} con E.`, key: 'E' }
+      : { nextAction: `Dirígete a ${probe.definition.name}.`, key: 'WASD' };
+  }
+  if (mission10.step === 'returnToClearing') {
+    return { nextAction: 'Regresa al claro de asentamiento.', key: 'WASD' };
+  }
+  if (mission10.step === 'markSite') {
+    return activePosition.distanceTo(site) <= mission10Tuning.clearingRange
+      ? { nextAction: 'Marca el sitio de Aurora-01 con E.', key: 'E' }
+      : { nextAction: 'Vuelve al claro de asentamiento.', key: 'WASD' };
+  }
+  if (mission10.step === 'deployModule') {
+    return activePosition.distanceTo(site) <= mission10Tuning.clearingRange
+      ? { nextAction: 'Despliega el Módulo Aurora-01 con E.', key: 'E' }
+      : { nextAction: 'Acércate a la baliza de asentamiento.', key: 'WASD' };
+  }
+  if (mission10.step === 'stabilizeModule') {
+    return {
+      nextAction: `Mantente junto al módulo: ${Math.round(mission10.state.auroraStabilizationProgress)}%.`,
+      key: ''
+    };
+  }
+  return { key: '' };
+}
+
+function getMission10ObjectivePosition(): THREE.Vector3 {
+  const activeSampleIndex = getActiveAuroraSampleIndex();
+  if (activeSampleIndex >= 0) return auroraSurveyProbes[activeSampleIndex].interactionPosition;
+  return getAuroraSettlementSite();
+}
+
+function getMission10ObjectiveLabel(): string {
+  if (mission10.completed) return 'AURORA-01 OPERATIVO';
+  const activeSampleIndex = getActiveAuroraSampleIndex();
+  if (activeSampleIndex >= 0) return auroraSurveyProbes[activeSampleIndex].definition.name.toUpperCase();
+  if (mission10.step === 'initialSurvey') return 'VALLE AURORA';
+  return 'CLARO AURORA-01';
+}
+
+// ---------------------------------------------------------------------------
+// Mission 11: Expansión Aurora
+// ---------------------------------------------------------------------------
+
+function auroraStationPosition(position: readonly [number, number]): THREE.Vector3 {
+  return new THREE.Vector3(position[0], auroraSurfaceHeight(position[0], position[1]), position[1]);
+}
+
+/** The station the current step is waiting at, for guidance/map/interaction. */
+function getMission11StationPosition(): THREE.Vector3 {
+  switch (mission11.step) {
+    case 'markSecondSite':
+    case 'deploySecondModule':
+      return auroraStationPosition(auroraSecondModuleSiteDefinition.position);
+    case 'connectEnergyLink':
+      return auroraEnergyLink.interactionPosition;
+    case 'installWaterFilter':
+    case 'calibrateWaterFlow':
+      return auroraStationPosition(auroraWaterFilterDefinition.position);
+    case 'prepareCultivationBed':
+    case 'startBioTrial':
+      return auroraStationPosition(auroraCultivationBedDefinition.position);
+    default:
+      return auroraHabitatModule.interactionPosition;
+  }
+}
+
+function getMission11StationLabel(): string {
+  switch (mission11.step) {
+    case 'markSecondSite':
+    case 'deploySecondModule':
+      return 'SITIO AURORA-02';
+    case 'connectEnergyLink':
+      return 'ENLACE ENERGETICO';
+    case 'installWaterFilter':
+    case 'calibrateWaterFlow':
+      return 'MICROFILTRO AURORA';
+    case 'prepareCultivationBed':
+    case 'startBioTrial':
+      return 'CAMA DE CULTIVO';
+    case 'completed':
+      return 'NUCLEO AURORA';
+    default:
+      return 'AURORA-01';
+  }
+}
+
+function syncMission11Visuals(): void {
+  const state = mission11.state;
+  const secondSite = auroraStationPosition(auroraSecondModuleSiteDefinition.position);
+  auroraSecondModule.setPosition(secondSite.x, secondSite.y, secondSite.z);
+  // The link carries the module's power level, so Aurora-02 lights up as the
+  // conduit comes online rather than the moment it lands.
+  auroraSecondModule.restore(state.auroraSecondModuleDeployed, state.auroraEnergyLinkProgress / 100);
+
+  auroraEnergyLink.setEndpoints(
+    auroraHabitatModule.interactionPosition,
+    secondSite,
+    (x, z) => auroraSurfaceHeight(x, z)
+  );
+  auroraEnergyLink.restore(state.auroraSecondModuleDeployed, state.auroraEnergyLinkProgress);
+
+  const filterSite = auroraStationPosition(auroraWaterFilterDefinition.position);
+  auroraWaterFilter.setPosition(filterSite.x, filterSite.y, filterSite.z);
+  auroraWaterFilter.restore(state.auroraWaterFilterInstalled, state.auroraWaterFlowProgress);
+
+  const bedSite = auroraStationPosition(auroraCultivationBedDefinition.position);
+  auroraCultivationBed.setPosition(bedSite.x, bedSite.y, bedSite.z);
+  auroraCultivationBed.restore(state.auroraCultivationBedPrepared, state.auroraBioTrialStarted);
+
+  syncAuroraCoreDressing();
+}
+
+/**
+ * Settlement dressing: appears with Aurora-01 in M10, and the outlying paths
+ * and perimeter open up once the M11 expansion is under way. Purely visual —
+ * it reads mission state and never writes it. Driven from both Aurora sync
+ * points so it is correct whether or not M11 has started.
+ */
+function syncAuroraCoreDressing(): void {
+  auroraCoreDressing.restore(mission10.state.auroraModuleDeployed, mission11.started);
+  if (!mission10.state.auroraModuleDeployed) return;
+  auroraCoreDressing.setLayout(
+    auroraHabitatModule.interactionPosition,
+    auroraStationPosition(auroraSecondModuleSiteDefinition.position),
+    auroraStationPosition(auroraWaterFilterDefinition.position),
+    auroraStationPosition(auroraCultivationBedDefinition.position),
+    (x, z) => auroraSurfaceHeight(x, z)
+  );
+}
+
+function getMission11Progress(): number {
+  if (!mission11.started) return 0;
+  if (mission11.completed) return 100;
+  const milestones = mission11.milestoneCount * 11;
+  if (mission11.step === 'connectEnergyLink') return milestones + mission11.state.auroraEnergyLinkProgress * 0.08;
+  if (mission11.step === 'calibrateWaterFlow') return milestones + mission11.state.auroraWaterFlowProgress * 0.08;
+  if (mission11.step === 'assessImpact') return milestones + mission11.state.auroraImpactAssessmentProgress * 0.08;
+  return Math.max(4, milestones);
+}
+
+function startMission11IfReady(): boolean {
+  if (!inSurfacePhase || !mission11.start(mission10.snapshot())) return false;
+  syncMission11Visuals();
+  triggerDialogue('m11_start', 'mission11-start');
+  triggerDialogue('m11_measured_growth', 'mission11-measured-growth', 2.4);
+  triggerDialogue('m11_pleyadan_garden', 'mission11-pleyadan-garden', 4.6);
+  showPhaseBanner('MISION 11: EXPANSION AURORA', 'De un refugio aislado a un nucleo minimo');
+  missionText.textContent = 'Ejecuta el diagnóstico de Aurora-01 con E.';
+  void sfxManager.play('atlas', 0.52);
+  saveProgress();
+  return true;
+}
+
+function performMission11Interaction(position: THREE.Vector3): boolean {
+  if (!mission11.started || mission11.completed) return false;
+  const station = getMission11StationPosition();
+  const stationDistance = position.distanceTo(station);
+  const inRange = stationDistance <= mission11Tuning.stationRange;
+
+  if (mission11.step === 'diagnoseCore') {
+    if (!inRange) {
+      missionText.textContent = `Aurora-01 a ${Math.round(stationDistance)} m. Acércate para el diagnóstico.`;
+      return true;
+    }
+    if (mission11.runCoreDiagnostic()) {
+      syncMission11Visuals();
+      scannerPulse.trigger(auroraHabitatModule.interactionPosition, true);
+      void sfxManager.play('scanner', 0.7);
+      triggerDialogue('m11_diagnostic_ok', 'mission11-diagnostic-ok');
+      showPhaseBanner('AURORA-01 ESTABLE', 'Energia, soporte vital y sensores nominales');
+      missionText.textContent = 'Aurora-01 estable. Marca el sitio de Aurora-02 con E.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission11.step === 'markSecondSite') {
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = 'El sitio de Aurora-02 se marca a pie. Baja de la nave con F.';
+      return true;
+    }
+    if (!inRange) {
+      missionText.textContent = `Sitio Aurora-02 a ${Math.round(stationDistance)} m. Acércate para confirmarlo.`;
+      return true;
+    }
+    // The site is pre-vetted: inside the clearing, clear of the water line
+    // and of the protoflora band, and within reach of Aurora-01.
+    const distanceToCore = station.distanceTo(auroraHabitatModule.interactionPosition);
+    if (distanceToCore > mission11Tuning.maxSecondModuleDistance) {
+      missionText.textContent = 'Sitio demasiado lejos de Aurora-01 para compartir enlace.';
+      return true;
+    }
+    if (mission11.markSecondModuleSite()) {
+      syncMission11Visuals();
+      scannerPulse.trigger(station, true);
+      void sfxManager.play('liftLock', 0.55);
+      triggerDialogue('m11_site_selected', 'mission11-site-selected');
+      missionText.textContent = 'Sitio Aurora-02 confirmado. Despliega el módulo con E.';
+      playTone(540, 0.13);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission11.step === 'deploySecondModule') {
+    if (!inRange) {
+      missionText.textContent = `Sitio Aurora-02 a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission11.deploySecondModule()) {
+      auroraSecondModule.beginDeploy();
+      mission11DeployStartedAt = clock.elapsedTime;
+      syncMission11Visuals();
+      void sfxManager.play('liftServo', 0.68);
+      void sfxManager.play('liftLock', 0.5);
+      triggerDialogue('m11_module_deployed', 'mission11-module-deployed');
+      showPhaseBanner('AURORA-02 DESPLEGADO', 'Energia, almacenamiento y control ambiental');
+      missionText.textContent = 'Aurora-02 desplegado. Conecta el enlace energético con E.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission11.step === 'connectEnergyLink') {
+    missionText.textContent = inRange
+      ? `Acoplando enlace energético: ${Math.round(mission11.state.auroraEnergyLinkProgress)}%.`
+      : `Punto de acople a ${Math.round(stationDistance)} m. Acércate al conducto.`;
+    return true;
+  }
+
+  if (mission11.step === 'installWaterFilter') {
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = 'El microfiltro se instala a pie. Baja de la nave con F.';
+      return true;
+    }
+    if (!inRange) {
+      missionText.textContent = `Orilla de instalación a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission11.installWaterFilter()) {
+      syncMission11Visuals();
+      scannerPulse.trigger(station, true);
+      auroraRevealEffect.triggerWaterScan();
+      void sfxManager.play('liftLock', 0.55);
+      void sfxManager.play('scanner', 0.5);
+      triggerDialogue('m11_filter_installed', 'mission11-filter-installed');
+      missionText.textContent = 'Microfiltro instalado. Mantente en rango mientras calibra el flujo.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission11.step === 'calibrateWaterFlow') {
+    missionText.textContent = inRange
+      ? `Calibrando flujo de agua: ${Math.round(mission11.state.auroraWaterFlowProgress)}%.`
+      : `Microfiltro a ${Math.round(stationDistance)} m. Acércate para calibrar.`;
+    return true;
+  }
+
+  if (mission11.step === 'prepareCultivationBed') {
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = 'La cama de cultivo se prepara a pie. Baja de la nave con F.';
+      return true;
+    }
+    if (!inRange) {
+      missionText.textContent = `Zona de cultivo a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission11.prepareCultivationBed()) {
+      syncMission11Visuals();
+      void sfxManager.play('liftServo', 0.55);
+      triggerDialogue('m11_bed_ready', 'mission11-bed-ready');
+      missionText.textContent = 'Cama de cultivo preparada. Activa el bioensayo con E.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission11.step === 'startBioTrial') {
+    if (!inRange) {
+      missionText.textContent = `Cama de cultivo a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission11.startBioTrial()) {
+      auroraCultivationBed.startTrial();
+      syncMission11Visuals();
+      scannerPulse.trigger(station, true);
+      void sfxManager.play('scanner', 0.6);
+      triggerDialogue('m11_bio_trial', 'mission11-bio-trial');
+      triggerDialogue('m11_pleyadan_care', 'mission11-pleyadan-care', 2.6);
+      showPhaseBanner('BIOENSAYO ACTIVO', 'Primera prueba de crecimiento en E-01');
+      missionText.textContent = 'Bioensayo activo. Regresa a Aurora-01 y evalúa el impacto con E.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission11.step === 'assessImpact') {
+    missionText.textContent = inRange
+      ? `Evaluando impacto ambiental: ${Math.round(mission11.state.auroraImpactAssessmentProgress)}%.`
+      : `Aurora-01 a ${Math.round(stationDistance)} m. Vuelve para la evaluación.`;
+    return true;
+  }
+
+  if (mission11.step === 'confirmCore') {
+    if (!inRange) {
+      missionText.textContent = `Aurora-01 a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission11.confirmCore()) {
+      syncMission11Visuals();
+      scannerPulse.trigger(auroraHabitatModule.interactionPosition, true);
+      triggerDialogue('m11_core_online', 'mission11-core-online');
+      triggerDialogue('m11_pleyadan_limits', 'mission11-pleyadan-limits', 2.8);
+      triggerDialogue('m11_complete', 'mission11-complete', 5);
+      showPhaseBanner('NUCLEO AURORA OPERATIVO', 'Dos modulos enlazados // Mision 12 preparada');
+      missionText.textContent = 'Núcleo Aurora operativo. No estamos tomando este valle: estamos aprendiendo a vivir dentro de él.';
+      musicManager.playSting('complete', clock.elapsedTime);
+      void sfxManager.play('missionComplete', 0.72);
+      playTone(700, 0.2);
+      window.setTimeout(() => playTone(1020, 0.24), 180);
+      saveProgress();
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission11Systems(delta: number, elapsed: number): void {
+  startMission11IfReady();
+  if (!mission11.started) return;
+
+  const activePlayer = getActivePlayerPosition();
+  const state = mission11.state;
+  auroraSecondModule.update(delta, elapsed, state.auroraEnergyLinkProgress);
+  auroraEnergyLink.update(elapsed, state.auroraEnergyLinkProgress);
+  auroraWaterFilter.update(elapsed, state.auroraWaterFlowProgress);
+  auroraCultivationBed.update(delta, elapsed);
+
+  const station = getMission11StationPosition();
+  const inRange = activePlayer.distanceTo(station) <= mission11Tuning.stationRange;
+
+  // The three timed steps advance only while the pilot stays on station, so
+  // none of them can be started and walked away from.
+  if (mission11.step === 'connectEnergyLink') {
+    const unfolded = elapsed - mission11DeployStartedAt >= mission11Tuning.deploySeconds || auroraSecondModule.deployed;
+    if (inRange && unfolded) {
+      if (mission11.advanceEnergyLink(delta)) {
+        syncMission11Visuals();
+        void sfxManager.play('defenseNetwork', 0.5);
+        triggerDialogue('m11_link_online', 'mission11-link-online');
+        showPhaseBanner('ENLACE ENERGETICO ONLINE', 'Aurora tiene mas de un punto vivo');
+        missionText.textContent = 'Enlace energético estable. Instala el microfiltro junto al agua con E.';
+        saveProgress();
+      } else {
+        transientWarning = `ENLACE ENERGETICO ${Math.round(state.auroraEnergyLinkProgress)}%`;
+      }
+    } else if (!inRange) {
+      transientWarning = 'ACERCATE AL PUNTO DE ACOPLE';
+    }
+  }
+
+  if (mission11.step === 'calibrateWaterFlow') {
+    if (inRange) {
+      if (mission11.advanceWaterFlow(delta)) {
+        syncMission11Visuals();
+        void sfxManager.play('scanner', 0.55);
+        triggerDialogue('m11_flow_calibrated', 'mission11-flow-calibrated');
+        showPhaseBanner('FLUJO CALIBRADO', 'Caudal minimo verificado // sin explotacion');
+        missionText.textContent = 'Flujo mínimo calibrado. Vuelve al claro y prepara la cama de cultivo con E.';
+        saveProgress();
+      } else {
+        transientWarning = `CALIBRANDO FLUJO ${Math.round(state.auroraWaterFlowProgress)}%`;
+      }
+    } else {
+      transientWarning = 'ACERCATE AL MICROFILTRO PARA CALIBRAR';
+    }
+  }
+
+  if (mission11.step === 'assessImpact') {
+    if (inRange) {
+      if (mission11.advanceImpactAssessment(delta)) {
+        syncMission11Visuals();
+        void sfxManager.play('atlas', 0.5);
+        triggerDialogue('m11_impact_ok', 'mission11-impact-ok');
+        showPhaseBanner('IMPACTO EVALUADO', 'Huella inicial dentro de limites aceptables');
+        missionText.textContent = 'Impacto dentro de límites. Confirma el Núcleo Aurora con E.';
+        saveProgress();
+      } else {
+        transientWarning = `EVALUANDO IMPACTO ${Math.round(state.auroraImpactAssessmentProgress)}%`;
+      }
+    } else {
+      transientWarning = 'VUELVE A AURORA-01 PARA EVALUAR EL IMPACTO';
+    }
+  }
+}
+
+function getMission11ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission11.started || mission11.completed) return {};
+  const activePosition = getActivePlayerPosition();
+  const station = getMission11StationPosition();
+  const inRange = activePosition.distanceTo(station) <= mission11Tuning.stationRange;
+
+  switch (mission11.step) {
+    case 'diagnoseCore':
+      return inRange
+        ? { nextAction: 'Ejecuta el diagnóstico de Aurora-01 con E.', key: 'E' }
+        : { nextAction: 'Acércate a Aurora-01.', key: 'WASD' };
+    case 'markSecondSite':
+      return inRange
+        ? { nextAction: 'Marca el sitio de Aurora-02 con E.', key: 'E' }
+        : { nextAction: 'Ve al sitio propuesto para Aurora-02.', key: 'WASD' };
+    case 'deploySecondModule':
+      return inRange
+        ? { nextAction: 'Despliega el Módulo Aurora-02 con E.', key: 'E' }
+        : { nextAction: 'Vuelve al sitio de Aurora-02.', key: 'WASD' };
+    case 'connectEnergyLink':
+      return {
+        nextAction: inRange
+          ? `Conectando enlace: ${Math.round(mission11.state.auroraEnergyLinkProgress)}%.`
+          : 'Acércate al punto de acople del conducto.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'installWaterFilter':
+      return inRange
+        ? { nextAction: 'Instala el microfiltro con E.', key: 'E' }
+        : { nextAction: 'Ve a la orilla del agua.', key: 'WASD' };
+    case 'calibrateWaterFlow':
+      return {
+        nextAction: inRange
+          ? `Calibrando flujo: ${Math.round(mission11.state.auroraWaterFlowProgress)}%.`
+          : 'Acércate al microfiltro.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'prepareCultivationBed':
+      return inRange
+        ? { nextAction: 'Prepara la cama de cultivo con E.', key: 'E' }
+        : { nextAction: 'Vuelve al claro, zona de suelo analizado.', key: 'WASD' };
+    case 'startBioTrial':
+      return inRange
+        ? { nextAction: 'Activa el bioensayo con E.', key: 'E' }
+        : { nextAction: 'Acércate a la cama de cultivo.', key: 'WASD' };
+    case 'assessImpact':
+      return {
+        nextAction: inRange
+          ? `Evaluando impacto: ${Math.round(mission11.state.auroraImpactAssessmentProgress)}%.`
+          : 'Vuelve a Aurora-01 para la evaluación.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'confirmCore':
+      return inRange
+        ? { nextAction: 'Confirma el Núcleo Aurora con E.', key: 'E' }
+        : { nextAction: 'Vuelve a Aurora-01.', key: 'WASD' };
+    default:
+      return { key: '' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mission 12: Primeros Habitantes
+// ---------------------------------------------------------------------------
+
+function getAuroraLandingZone(): THREE.Vector3 {
+  return auroraStationPosition(auroraLandingZoneDefinition.position);
+}
+
+/** The station the current M12 step is waiting at. */
+function getMission12StationPosition(): THREE.Vector3 {
+  switch (mission12.step) {
+    case 'markLandingZone':
+    case 'guideCapsuleDescent':
+      return getAuroraLandingZone();
+    case 'confirmDisembark':
+      return auroraCrewCapsule.interactionPosition;
+    case 'recalibrate':
+      return auroraSecondModule.interactionPosition;
+    default:
+      return auroraHabitatModule.interactionPosition;
+  }
+}
+
+function getMission12StationLabel(): string {
+  switch (mission12.step) {
+    case 'markLandingZone':
+    case 'guideCapsuleDescent':
+      return 'ZONA DE ATERRIZAJE';
+    case 'confirmDisembark':
+      return 'CAPSULA AURORA';
+    case 'recalibrate':
+      return 'AURORA-02';
+    case 'completed':
+      return 'NUCLEO HABITADO';
+    default:
+      return 'AURORA-01';
+  }
+}
+
+function syncMission12Visuals(): void {
+  const state = mission12.state;
+  const pad = getAuroraLandingZone();
+  auroraCrewCapsule.setPosition(pad.x, pad.y, pad.z);
+  // The capsule exists from the moment the descent begins, so the pilot can
+  // watch it come down; it only counts as landed once the descent finishes.
+  const capsuleVisible = state.auroraCrewCapsuleLanded || mission12.step === 'guideCapsuleDescent';
+  auroraCrewCapsule.restore(capsuleVisible, state.auroraCrewCapsuleLanded);
+
+  auroraFirstCrew.setLayout(auroraCrewCapsule.interactionPosition, (x, z) => auroraSurfaceHeight(x, z));
+  auroraFirstCrew.restore(state.auroraFirstCrewDisembarked, state.auroraFirstCrewDisembarked);
+
+  // The core reads as inhabited once people live in it: the habitat module
+  // and Aurora-02 both hold their warm lights up rather than idling.
+  auroraHabitatModule.setInhabited(state.auroraFirstCrewDisembarked);
+}
+
+function getMission12Progress(): number {
+  if (!mission12.started) return 0;
+  if (mission12.completed) return 100;
+  const milestones = mission12.milestoneCount * 11;
+  if (mission12.step === 'prepareLifeSupport') return milestones + mission12.lifeSupportPercent * 0.08;
+  if (mission12.step === 'startLoadCycle') return milestones + mission12.state.auroraHumanLoadProgress * 0.08;
+  if (mission12.step === 'recalibrate') return milestones + mission12.state.auroraRecalibrationProgress * 0.08;
+  if (mission12.step === 'recordFirstNight') return milestones + mission12.firstNightPercent * 0.08;
+  return Math.max(4, milestones);
+}
+
+function startMission12IfReady(): boolean {
+  if (!inSurfacePhase || !mission12.start(mission11.snapshot())) return false;
+  syncMission12Visuals();
+  triggerDialogue('m12_start', 'mission12-start');
+  triggerDialogue('m12_empty_vs_lives', 'mission12-empty-vs-lives', 2.6);
+  triggerDialogue('m12_pleyadan_first_step', 'mission12-pleyadan-first-step', 5);
+  showPhaseBanner('MISION 12: PRIMEROS HABITANTES', 'Tres personas // el nucleo tiene que sostener vidas');
+  missionText.textContent = 'Solicita la autorización del primer descenso humano desde Aurora-01 con E.';
+  void sfxManager.play('commStart', 0.55);
+  saveProgress();
+  return true;
+}
+
+function performMission12Interaction(position: THREE.Vector3): boolean {
+  if (!mission12.started || mission12.completed) return false;
+  const station = getMission12StationPosition();
+  const stationDistance = position.distanceTo(station);
+  const range = mission12.step === 'markLandingZone' || mission12.step === 'guideCapsuleDescent'
+    ? mission12Tuning.landingZoneRange
+    : mission12Tuning.stationRange;
+  const inRange = stationDistance <= range;
+
+  if (mission12.step === 'requestAuthorization') {
+    if (!inRange) {
+      missionText.textContent = `Aurora-01 a ${Math.round(stationDistance)} m. Acércate para solicitar autorización.`;
+      return true;
+    }
+    if (mission12.requestAuthorization()) {
+      syncMission12Visuals();
+      void sfxManager.play('commStart', 0.6);
+      void sfxManager.play('atlas', 0.4);
+      triggerDialogue('m12_authorized', 'mission12-authorized');
+      showPhaseBanner('DESCENSO AUTORIZADO', 'Tripulacion minima // tres personas');
+      missionText.textContent = 'Autorización recibida. Mantente junto a Aurora-01 mientras sube el soporte vital.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission12.step === 'prepareLifeSupport') {
+    missionText.textContent = inRange
+      ? `Preparando soporte vital para tripulación: ${Math.round(mission12.lifeSupportPercent)}%.`
+      : `Aurora-01 a ${Math.round(stationDistance)} m. Acércate para preparar el soporte vital.`;
+    return true;
+  }
+
+  if (mission12.step === 'configureHabitation') {
+    if (!inRange) {
+      missionText.textContent = `Aurora-01 a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission12.configureHabitation()) {
+      syncMission12Visuals();
+      void sfxManager.play('liftServo', 0.55);
+      void sfxManager.play('liftLock', 0.45);
+      triggerDialogue('m12_habitation_ready', 'mission12-habitation-ready');
+      showPhaseBanner('REFUGIO CONFIGURADO', 'Tres literas compactas // nada mas');
+      missionText.textContent = 'Refugio listo. Marca una zona de aterrizaje despejada con E.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission12.step === 'markLandingZone') {
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = 'La zona de aterrizaje se marca a pie. Baja de la nave con F.';
+      return true;
+    }
+    if (!inRange) {
+      missionText.textContent = `Zona de aterrizaje a ${Math.round(stationDistance)} m. Acércate para marcarla.`;
+      return true;
+    }
+    if (mission12.markLandingZone()) {
+      auroraCrewCapsule.beginDescent();
+      mission12DescentElapsed = 0;
+      syncMission12Visuals();
+      scannerPulse.trigger(station, true);
+      void sfxManager.play('liftLock', 0.6);
+      triggerDialogue('m12_zone_marked', 'mission12-zone-marked');
+      triggerDialogue('m12_capsule_descending', 'mission12-capsule-descending', 2.2);
+      showPhaseBanner('ZONA MARCADA', 'Capsula en descenso');
+      missionText.textContent = 'Zona marcada. Mantente en el área mientras la cápsula desciende.';
+      playTone(540, 0.14);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission12.step === 'guideCapsuleDescent') {
+    missionText.textContent = inRange
+      ? 'Cápsula en descenso. Mantén el área despejada.'
+      : `Zona de aterrizaje a ${Math.round(stationDistance)} m.`;
+    return true;
+  }
+
+  if (mission12.step === 'confirmDisembark') {
+    if (!inRange) {
+      missionText.textContent = `Cápsula a ${Math.round(stationDistance)} m. Acércate para confirmar el desembarco.`;
+      return true;
+    }
+    if (mission12.disembarkCrew()) {
+      auroraFirstCrew.beginDisembark();
+      syncMission12Visuals();
+      void sfxManager.play('hatch', 0.65);
+      triggerDialogue('m12_visual_contact', 'mission12-visual-contact');
+      triggerDialogue('m12_crew_tech', 'mission12-crew-tech', 3);
+      triggerDialogue('m12_crew_biologist', 'mission12-crew-biologist', 5.4);
+      showPhaseBanner('TRIPULACION EN SUPERFICIE', 'Tres habitantes // primer contacto con el suelo');
+      missionText.textContent = 'Tripulación en superficie. Inicia el primer ciclo de soporte vital desde Aurora-01 con E.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission12.step === 'startLoadCycle') {
+    if (!inRange) {
+      missionText.textContent = `Aurora-01 a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission12.beginLoadCycle()) {
+      syncMission12Visuals();
+      void sfxManager.play('scanner', 0.6);
+      triggerDialogue('m12_crew_engineer', 'mission12-crew-engineer');
+      missionText.textContent = 'Primer ciclo con carga humana en curso. Midiendo consumo real.';
+      saveProgress();
+    } else {
+      missionText.textContent = `Ciclo de soporte vital: ${Math.round(mission12.state.auroraHumanLoadProgress)}%.`;
+    }
+    return true;
+  }
+
+  if (mission12.step === 'recalibrate') {
+    missionText.textContent = inRange
+      ? `Recalibrando soporte vital: ${Math.round(mission12.state.auroraRecalibrationProgress)}%.`
+      : `Aurora-02 a ${Math.round(stationDistance)} m. Acércate para recalibrar.`;
+    return true;
+  }
+
+  if (mission12.step === 'verifyStability') {
+    if (!inRange) {
+      missionText.textContent = `Aurora-01 a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission12.verifyStability()) {
+      syncMission12Visuals();
+      scannerPulse.trigger(auroraHabitatModule.interactionPosition, true);
+      void sfxManager.play('scanner', 0.68);
+      triggerDialogue('m12_stability_recovered', 'mission12-stability-recovered');
+      triggerDialogue('m12_pleyadan_inhabit', 'mission12-pleyadan-inhabit', 2.6);
+      showPhaseBanner('NUCLEO HABITADO ESTABLE', 'Oxigeno, agua, energia, cultivo y protoflora sin alteracion');
+      missionText.textContent = 'Núcleo habitado estable. Registra la primera noche humana con E.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission12.step === 'recordFirstNight') {
+    if (!inRange) {
+      missionText.textContent = `Aurora-01 a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission12.beginFirstNight()) {
+      syncMission12Visuals();
+      void sfxManager.play('commStart', 0.5);
+      triggerDialogue('m12_pleyadan_home', 'mission12-pleyadan-home');
+      missionText.textContent = 'Registrando la primera noche humana en Aurora…';
+      saveProgress();
+    } else {
+      missionText.textContent = `Registrando primera noche: ${Math.round(mission12.firstNightPercent)}%.`;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission12Systems(delta: number, elapsed: number): void {
+  startMission12IfReady();
+  if (!mission12.started) return;
+
+  const activePlayer = getActivePlayerPosition();
+  auroraCrewCapsule.update(delta, elapsed);
+  auroraFirstCrew.update(delta, elapsed);
+
+  const station = getMission12StationPosition();
+  const range = mission12.step === 'markLandingZone' || mission12.step === 'guideCapsuleDescent'
+    ? mission12Tuning.landingZoneRange
+    : mission12Tuning.stationRange;
+  const inRange = activePlayer.distanceTo(station) <= range;
+
+  // Life support ramps only while the pilot stays at the module.
+  if (mission12.step === 'prepareLifeSupport') {
+    if (inRange) {
+      if (mission12.advanceLifeSupport(delta)) {
+        syncMission12Visuals();
+        void sfxManager.play('defenseNetwork', 0.5);
+        triggerDialogue('m12_life_support_ready', 'mission12-life-support-ready');
+        showPhaseBanner('SOPORTE VITAL LISTO', 'Capacidad para tres personas');
+        missionText.textContent = 'Soporte vital listo. Configura el refugio con E.';
+        saveProgress();
+      } else {
+        transientWarning = `SOPORTE VITAL ${Math.round(mission12.lifeSupportPercent)}%`;
+      }
+    } else {
+      transientWarning = 'ACERCATE A AURORA-01 PARA PREPARAR EL SOPORTE VITAL';
+    }
+  }
+
+  // The capsule descends on its own clock once the pad is marked; the pilot
+  // is never locked out, they just have to stay in the area.
+  if (mission12.step === 'guideCapsuleDescent') {
+    if (mission12DescentElapsed < 0) {
+      // Restored mid-descent from a save: resume from the top.
+      auroraCrewCapsule.beginDescent();
+      mission12DescentElapsed = 0;
+    }
+    mission12DescentElapsed += delta;
+    const progress = THREE.MathUtils.clamp(
+      mission12DescentElapsed / mission12Tuning.capsuleDescentSeconds,
+      0,
+      1
+    );
+    auroraCrewCapsule.setDescentProgress(progress);
+    if (progress >= 1 && mission12.confirmCapsuleLanded()) {
+      syncMission12Visuals();
+      void sfxManager.play('liftLock', 0.72);
+      showPhaseBanner('CAPSULA EN SUPERFICIE', 'Confirma el desembarco');
+      missionText.textContent = 'Cápsula asentada. Confirma el desembarco de la tripulación con E.';
+      playTone(420, 0.2);
+      saveProgress();
+    } else if (progress < 1) {
+      transientWarning = `CAPSULA EN DESCENSO ${Math.round(progress * 100)}%`;
+    }
+  }
+
+  // First crewed cycle: the consumption overshoot fires at the end of it.
+  if (mission12.step === 'startLoadCycle' && mission12.state.auroraHumanLoadCycleStarted) {
+    if (inRange) {
+      if (mission12.advanceLoadCycle(delta)) {
+        syncMission12Visuals();
+        void sfxManager.play('warning', 0.5);
+        triggerDialogue('m12_consumption_alert', 'mission12-consumption-alert');
+        showPhaseBanner('CONSUMO POR ENCIMA DE LA SIMULACION', 'Recalibra en Aurora-02 antes del ciclo nocturno');
+        missionText.textContent = 'Consumo por encima de la simulación. Ve a Aurora-02 y recalibra el soporte vital.';
+        saveProgress();
+      } else {
+        transientWarning = `CICLO DE CARGA HUMANA ${Math.round(mission12.state.auroraHumanLoadProgress)}%`;
+      }
+    } else {
+      transientWarning = 'ACERCATE A AURORA-01 PARA SUPERVISAR EL CICLO';
+    }
+  }
+
+  if (mission12.step === 'recalibrate') {
+    if (inRange) {
+      if (mission12.advanceRecalibration(delta)) {
+        syncMission12Visuals();
+        void sfxManager.play('defenseNetwork', 0.55);
+        triggerDialogue('m12_recalibrated', 'mission12-recalibrated');
+        showPhaseBanner('ESTABILIDAD RECUPERADA', 'Aurora aprende a respirar con nosotros adentro');
+        missionText.textContent = 'Estabilidad recuperada. Verifica el núcleo habitado desde Aurora-01 con E.';
+        saveProgress();
+      } else {
+        transientWarning = `RECALIBRANDO ${Math.round(mission12.state.auroraRecalibrationProgress)}%`;
+      }
+    } else {
+      transientWarning = 'ACERCATE A AURORA-02 PARA RECALIBRAR';
+    }
+  }
+
+  // First night: a short, non-invasive transition. Controls stay live.
+  if (mission12.step === 'recordFirstNight' && mission12.firstNightRunning) {
+    const done = mission12.advanceFirstNight(delta);
+    const night = mission12.firstNightPercent / 100;
+    applyAuroraFirstNight(night);
+    if (done) {
+      syncMission12Visuals();
+      triggerDialogue('m12_first_night', 'mission12-first-night');
+      triggerDialogue('m12_complete', 'mission12-complete', 3);
+      showPhaseBanner('PRIMERA NOCHE HUMANA EN AURORA', 'Nucleo habitado // Mision 13 preparada');
+      missionText.textContent = 'Primera noche humana en Aurora confirmada.';
+      musicManager.playSting('complete', clock.elapsedTime);
+      void sfxManager.play('missionComplete', 0.72);
+      playTone(660, 0.22);
+      window.setTimeout(() => playTone(980, 0.26), 200);
+      saveProgress();
+    }
+  }
+}
+
+/**
+ * Drives the premium particle layer from the state the valley is already in:
+ * the fields sit where the reveal put them, the wind is the same gust
+ * envelope the protoflora leans on, and each field only exists once the
+ * feature it belongs to does. Read-only on mission state.
+ */
+function updatePremiumVisuals(delta: number, elapsed: number, fps: number): void {
+  if (!premiumVisuals.isEnabled) return;
+  const valleyDiscovered = mission09.state.auroraSectorDiscovered;
+  const threshold = getAuroraThresholdCenter();
+  // Valley floor sits south of the threshold; the water sheet further still.
+  const valleyX = threshold.x;
+  const valleyZ = threshold.z - 260;
+  const valleyY = planetaryWorld.getHeightAt(valleyX, valleyZ);
+  const waterX = threshold.x - 40;
+  const waterZ = threshold.z - 320;
+  const waterY = planetaryWorld.getHeightAt(waterX, waterZ);
+
+  premiumVisuals.configureField('aurora-dust', valleyX, valleyY + 9, valleyZ, valleyDiscovered);
+  premiumVisuals.configureField('aurora-pollen', valleyX, valleyY + 13, valleyZ, valleyDiscovered);
+  premiumVisuals.configureField('aurora-moisture', waterX, waterY + 5, waterZ, valleyDiscovered);
+  // Moisture drifts back toward the middle of the sheet rather than away.
+  premiumVisuals.setFieldAttractor('aurora-moisture', waterX, waterY + 2, waterZ, 0.35);
+
+  // The conduit only carries charge once the link is actually online.
+  const linkOnline = mission11.state.auroraEnergyLinkOnline;
+  const link = auroraEnergyLink.interactionPosition;
+  premiumVisuals.configureField('aurora-energy', link.x, link.y + 1.2, link.z, linkOnline);
+
+  // --- Aurora route: fields ride their sector centres, enabled only while
+  // the route is decoded. The layer distance-culls, so only the sector the
+  // pilot is inside actually draws.
+  const routeActive = mission09.state.auroraRouteDecoded && !valleyDiscovered;
+  const storm = auroraTravelDirector.state.stormIntensity;
+  const routeSectors: [string, number, number][] = [
+    ['route-ash', 1, 22],
+    ['route-canyon', 2, 45],
+    ['route-storm', 3, 26],
+    ['route-umbral', 4, 18]
+  ];
+  for (const [id, sectorIndex, height] of routeSectors) {
+    const def = auroraSectorDefinitions[sectorIndex];
+    const [cx, cz] = def.center;
+    const cy = planetaryWorld.getHeightAt(cx, cz) + height;
+    premiumVisuals.configureField(id, cx, cy, cz, routeActive);
+  }
+  // The storm grit accelerates with the storm the route director already
+  // drives, so the visual weather matches the mechanical weather.
+  premiumVisuals.setFieldWind('route-storm', 16 * (0.4 + storm), 0.3, 7 * (0.4 + storm));
+
+  // --- Atlas / Pleyadan signals: motes swirl around whatever ancient tech
+  // is currently present. Each is gated on its own object being visible.
+  const activeBeaconIndex = getActiveRouteBeaconIndex();
+  if (activeBeaconIndex >= 0) {
+    const beacon = atlasRouteBeacons[activeBeaconIndex];
+    premiumVisuals.configureField(
+      'atlas-beacon',
+      beacon.interactionPosition.x,
+      beacon.interactionPosition.y + 5,
+      beacon.interactionPosition.z,
+      beacon.group.visible
+    );
+  } else {
+    premiumVisuals.configureField('atlas-beacon', 0, 0, 0, false);
+  }
+  const archive = atlasSeedArchive.interactionPosition;
+  premiumVisuals.configureField('atlas-archive', archive.x, archive.y + 4, archive.z, atlasSeedArchive.group.visible);
+  const holo = pleyadanHologram.group.position;
+  premiumVisuals.configureField('pleyadan-signal', holo.x, holo.y + 3, holo.z, pleyadanHologram.group.visible);
+
+  // Share the valley's own gust envelope so dust, pollen and protoflora all
+  // move on the same weather instead of each inventing its own.
+  const gust = 0.55 + Math.sin(elapsed * 0.31) * 0.3 + Math.sin(elapsed * 0.13 + 1.1) * 0.15;
+  premiumVisuals.update(getActivePlayerPosition(), elapsed, gust, delta, fps);
+}
+
+/**
+ * The first-night transition: the valley dims a little and the settlement's
+ * own lights carry the scene. Deliberately shallow and short — it never takes
+ * the camera or the controls, it just changes the light around the player.
+ */
+function applyAuroraFirstNight(night: number): void {
+  auroraNightBlend = night * night * (3 - 2 * night);
+}
+
+/**
+ * Holds the first-night look once it has been recorded: the key star drops
+ * toward dusk and the ambient cools, so the settlement's own warm lights
+ * carry the valley. Applied every frame after the mission systems so a
+ * reload restores the same night rather than snapping back to noon.
+ */
+function applyAuroraNightLighting(): void {
+  const night = mission12.state.auroraFirstNightRecorded ? 1 : auroraNightBlend;
+  if (night <= 0.001) {
+    if (auroraNightApplied) {
+      keyStar.intensity = AURORA_DAY_KEY_INTENSITY;
+      ambient.intensity = AURORA_DAY_AMBIENT_INTENSITY;
+      auroraNightApplied = false;
+    }
+    return;
+  }
+  // Never fully dark: the pilot has to keep being able to walk the valley.
+  keyStar.intensity = THREE.MathUtils.lerp(AURORA_DAY_KEY_INTENSITY, AURORA_DAY_KEY_INTENSITY * 0.28, night);
+  ambient.intensity = THREE.MathUtils.lerp(AURORA_DAY_AMBIENT_INTENSITY, AURORA_DAY_AMBIENT_INTENSITY * 0.62, night);
+  auroraNightApplied = true;
+}
+
+function getMission12ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission12.started || mission12.completed) return {};
+  const activePosition = getActivePlayerPosition();
+  const station = getMission12StationPosition();
+  const range = mission12.step === 'markLandingZone' || mission12.step === 'guideCapsuleDescent'
+    ? mission12Tuning.landingZoneRange
+    : mission12Tuning.stationRange;
+  const inRange = activePosition.distanceTo(station) <= range;
+
+  switch (mission12.step) {
+    case 'requestAuthorization':
+      return inRange
+        ? { nextAction: 'Solicita la autorización con E.', key: 'E' }
+        : { nextAction: 'Acércate a Aurora-01.', key: 'WASD' };
+    case 'prepareLifeSupport':
+      return {
+        nextAction: inRange
+          ? `Preparando soporte vital: ${Math.round(mission12.lifeSupportPercent)}%.`
+          : 'Acércate a Aurora-01.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'configureHabitation':
+      return inRange
+        ? { nextAction: 'Configura el refugio humano con E.', key: 'E' }
+        : { nextAction: 'Vuelve a Aurora-01.', key: 'WASD' };
+    case 'markLandingZone':
+      return inRange
+        ? { nextAction: 'Marca la zona de aterrizaje con E.', key: 'E' }
+        : { nextAction: 'Ve a la zona despejada al sureste del núcleo.', key: 'WASD' };
+    case 'guideCapsuleDescent':
+      return {
+        nextAction: inRange
+          ? 'Cápsula en descenso. Mantén el área despejada.'
+          : 'Vuelve a la zona de aterrizaje.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'confirmDisembark':
+      return inRange
+        ? { nextAction: 'Confirma el desembarco con E.', key: 'E' }
+        : { nextAction: 'Acércate a la cápsula.', key: 'WASD' };
+    case 'startLoadCycle':
+      return mission12.state.auroraHumanLoadCycleStarted
+        ? {
+            nextAction: inRange
+              ? `Ciclo de soporte vital: ${Math.round(mission12.state.auroraHumanLoadProgress)}%.`
+              : 'Acércate a Aurora-01.',
+            key: inRange ? '' : 'WASD'
+          }
+        : inRange
+          ? { nextAction: 'Inicia el ciclo de soporte vital con E.', key: 'E' }
+          : { nextAction: 'Vuelve a Aurora-01.', key: 'WASD' };
+    case 'recalibrate':
+      return {
+        nextAction: inRange
+          ? `Recalibrando: ${Math.round(mission12.state.auroraRecalibrationProgress)}%.`
+          : 'Ve a Aurora-02 para recalibrar.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'verifyStability':
+      return inRange
+        ? { nextAction: 'Verifica la estabilidad con E.', key: 'E' }
+        : { nextAction: 'Vuelve a Aurora-01.', key: 'WASD' };
+    case 'recordFirstNight':
+      return mission12.firstNightRunning
+        ? { nextAction: `Registrando primera noche: ${Math.round(mission12.firstNightPercent)}%.`, key: '' }
+        : inRange
+          ? { nextAction: 'Registra la primera noche con E.', key: 'E' }
+          : { nextAction: 'Vuelve a Aurora-01.', key: 'WASD' };
+    default:
+      return { key: '' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mission 13: La Primera Tormenta
+// ---------------------------------------------------------------------------
+
+/** The station the current M13 step is fought at. */
+function getMission13StationPosition(): THREE.Vector3 {
+  switch (mission13.step) {
+    case 'secureGenerator':
+      return auroraStormStations.generatorPosition;
+    case 'anchorAntennaFirst':
+      return auroraStormStations.anchorPositions[0] ?? auroraStormStations.antennaPosition;
+    case 'anchorAntennaSecond':
+      return auroraStormStations.anchorPositions[1] ?? auroraStormStations.antennaPosition;
+    case 'activateAntenna':
+      return auroraStormStations.antennaPosition;
+    default:
+      return auroraStormStations.shieldPosition;
+  }
+}
+
+function getMission13StationLabel(): string {
+  switch (mission13.step) {
+    case 'secureGenerator':
+      return 'NODO ENERGETICO';
+    case 'anchorAntennaFirst':
+      return 'ANCLAJE 1';
+    case 'anchorAntennaSecond':
+      return 'ANCLAJE 2';
+    case 'activateAntenna':
+      return 'ANTENA AURORA';
+    case 'completed':
+      return 'COLONIA INTACTA';
+    default:
+      return 'HABITAT AURORA';
+  }
+}
+
+function syncMission13Visuals(): void {
+  const state = mission13.state;
+  // Stations only exist once the storm mission is under way; before that the
+  // clearing is exactly as M12 left it.
+  auroraStormStations.setLayout(
+    (x, z) => auroraSurfaceHeight(x, z),
+    auroraHabitatModule.interactionPosition
+  );
+  auroraStormStations.restore(
+    mission13.started,
+    state.auroraGeneratorSecured,
+    state.auroraAntennaAnchorsSecured,
+    state.auroraAntennaOnline,
+    state.auroraShieldCharge,
+    state.auroraShieldOnline
+  );
+  const habitat = auroraHabitatModule.interactionPosition;
+  auroraStormEffect.setOrigin(habitat.x, auroraSurfaceHeight(habitat.x, habitat.z), habitat.z);
+}
+
+function getMission13Progress(): number {
+  if (!mission13.started) return 0;
+  if (mission13.completed) return 100;
+  const milestones = mission13.milestoneCount * 14;
+  if (mission13.step === 'secureGenerator') return milestones + mission13.state.auroraGeneratorProgress * 0.1;
+  if (mission13.activeAnchorIndex >= 0) return milestones + mission13.anchorPercent * 0.1;
+  if (mission13.step === 'chargeShield') return milestones + mission13.state.auroraShieldCharge * 0.1;
+  return Math.max(4, milestones);
+}
+
+function startMission13IfReady(): boolean {
+  if (!inSurfacePhase || !mission13.start(mission12.snapshot())) return false;
+  syncMission13Visuals();
+  triggerDialogue('m13_alert', 'mission13-alert');
+  triggerDialogue('m13_pressure_drop', 'mission13-pressure-drop', 2.6);
+  triggerDialogue('m13_crew_worried', 'mission13-crew-worried', 5.2);
+  showPhaseBanner('MISION 13: LA PRIMERA TORMENTA', 'Frente electromagnetico sobre el Valle Aurora');
+  missionText.textContent = 'Frente detectado. Sal del hábitat y confirma la alerta con E.';
+  void sfxManager.play('warning', 0.6);
+  saveProgress();
+  return true;
+}
+
+function performMission13Interaction(position: THREE.Vector3): boolean {
+  if (!mission13.started || mission13.completed) return false;
+  const station = getMission13StationPosition();
+  const stationDistance = position.distanceTo(station);
+  const inRange = stationDistance <= mission13Tuning.stationRange;
+
+  if (mission13.step === 'stormAlert') {
+    if (!inRange) {
+      missionText.textContent = `Panel del hábitat a ${Math.round(stationDistance)} m. Acércate para confirmar la alerta.`;
+      return true;
+    }
+    if (mission13.acknowledgeAlert()) {
+      syncMission13Visuals();
+      mission13Audio.announceObjective('stormAlert');
+      triggerDialogue('m13_inspect_grid', 'mission13-inspect-grid');
+      showPhaseBanner('ALERTA CONFIRMADA', 'Asegura el nodo energetico antes del pico');
+      missionText.textContent = 'Alerta confirmada. Ve al nodo energético y estabiliza la energía.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission13.step === 'secureGenerator') {
+    missionText.textContent = inRange
+      ? `Estabilizando el nodo energético: ${Math.round(mission13.state.auroraGeneratorProgress)}%.`
+      : `Nodo energético a ${Math.round(stationDistance)} m. Acércate para trabajar el panel.`;
+    return true;
+  }
+
+  if (mission13.activeAnchorIndex >= 0) {
+    const which = mission13.activeAnchorIndex + 1;
+    missionText.textContent = inRange
+      ? `Sujetando anclaje ${which}: ${Math.round(mission13.anchorPercent)}%.`
+      : `Anclaje ${which} a ${Math.round(stationDistance)} m. Acércate para sujetarlo.`;
+    return true;
+  }
+
+  if (mission13.step === 'activateAntenna') {
+    if (!inRange) {
+      missionText.textContent = `Torre de comunicaciones a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    if (mission13.activateAntenna()) {
+      syncMission13Visuals();
+      scannerPulse.trigger(auroraStormStations.antennaPosition, true);
+      mission13Audio.playAntennaOnline();
+      mission13Audio.announceObjective('activateAntenna');
+      void sfxManager.play('commStart', 0.5);
+      triggerDialogue('m13_comms_back', 'mission13-comms-back');
+      triggerDialogue('m13_crew_relief', 'mission13-crew-relief', 2.4);
+      showPhaseBanner('ENLACE PARCIAL RESTAURADO', 'Vuelve al habitat // el frente sigue subiendo');
+      missionText.textContent = 'Comunicaciones parcialmente restauradas. Regresa al módulo principal.';
+      playTone(560, 0.16);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission13.step === 'returnToHabitat') {
+    missionText.textContent = inRange
+      ? 'En el panel del hábitat. Activa el campo protector con E.'
+      : `Módulo principal a ${Math.round(stationDistance)} m. La tripulación está adentro.`;
+    return true;
+  }
+
+  if (mission13.step === 'chargeShield') {
+    missionText.textContent = inRange
+      ? `Cargando campo protector: ${Math.round(mission13.state.auroraShieldCharge)}%.`
+      : `Vuelve al panel: la carga se pierde. ${Math.round(mission13.state.auroraShieldCharge)}%.`;
+    return true;
+  }
+
+  if (mission13.step === 'stormSubsiding') {
+    missionText.textContent = 'El campo aguanta. El frente empieza a pasar.';
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission13Systems(delta: number, elapsed: number): void {
+  startMission13IfReady();
+  if (!mission13.started || mission13.completed) {
+    // Outside the mission's context the storm layer must be silent: this
+    // releases every loop it owns, including once the mission has completed.
+    // Safe to call repeatedly — it no-ops when nothing is running.
+    mission13Audio.stop();
+    if (mission13.completed) {
+      auroraStormEffect.setIntensity(0);
+      auroraStormFogBoost = 0;
+    }
+    return;
+  }
+
+  const activePlayer = getActivePlayerPosition();
+  const station = getMission13StationPosition();
+  const inRange = activePlayer.distanceTo(station) <= mission13Tuning.stationRange;
+
+  // The front keeps building regardless of which phase the pilot is in.
+  mission13.advanceStorm(delta);
+  const readout = mission13.readout;
+  auroraStormEffect.setIntensity(readout.stormIntensity);
+  auroraStormEffect.update(delta, elapsed);
+  auroraStormFogBoost = auroraStormEffect.visibilityLoss;
+
+  const working =
+    inRange && (mission13.step === 'secureGenerator' || mission13.activeAnchorIndex >= 0);
+
+  // --- Storm soundscape. Driven entirely by state the mission already owns.
+  const shieldInRange =
+    activePlayer.distanceTo(auroraStormStations.shieldPosition) <= mission13Tuning.shieldHoldRange;
+  mission13Audio.update(
+    {
+      active: true,
+      step: mission13.step,
+      stormIntensity: readout.stormIntensity,
+      working,
+      shieldHolding: mission13.step === 'chargeShield' && shieldInRange,
+      shieldLosing: mission13.step === 'chargeShield' && !shieldInRange && mission13.state.auroraShieldCharge > 0,
+      shieldOnline: mission13.state.auroraShieldOnline,
+      dialogueActive: Boolean(dialogueManager.current),
+      elapsed
+    },
+    delta
+  );
+  // Thunder is only ever played for a discharge the player can actually see:
+  // the effect publishes the flash, we answer it.
+  const strike = auroraStormEffect.consumeStrike();
+  if (strike) {
+    mission13Audio.reportStrike(strike, elapsed, readout.stormIntensity);
+    // With the dome up, a near strike also lands on the shield.
+    if (mission13.state.auroraShieldOnline && strike.near) {
+      mission13Audio.reportShieldImpact(elapsed, readout.stormIntensity);
+    }
+  }
+
+  auroraStormStations.update(
+    delta,
+    elapsed,
+    working,
+    mission13.state.auroraShieldCharge,
+    mission13.state.auroraShieldOnline,
+    mission13.state.auroraAntennaAnchorsSecured
+  );
+
+  // Generator: hands-on work that only advances while the pilot stays put.
+  if (mission13.step === 'secureGenerator') {
+    if (inRange) {
+      if (mission13.advanceGenerator(delta)) {
+        auroraStormStations.triggerSparks();
+        syncMission13Visuals();
+        mission13Audio.playGeneratorStabilized();
+        mission13Audio.announceObjective('secureGenerator');
+        triggerDialogue('m13_generator_stable', 'mission13-generator-stable');
+        showPhaseBanner('ENERGIA PARCIALMENTE ESTABLE', 'Refuerza la antena antes de que suba el viento');
+        missionText.textContent = 'Energía parcialmente estabilizada. Refuerza la antena: dos anclajes.';
+        saveProgress();
+      } else {
+        transientWarning = `ESTABILIZANDO ENERGIA ${Math.round(mission13.state.auroraGeneratorProgress)}%`;
+      }
+    } else {
+      transientWarning = 'ACERCATE AL NODO ENERGETICO';
+    }
+  }
+
+  // Antenna anchors: two separate holds, and walking away loses the banked
+  // seconds on the one in progress.
+  if (mission13.activeAnchorIndex >= 0) {
+    if (inRange) {
+      if (mission13.advanceAnchor(delta)) {
+        auroraStormStations.triggerSparks();
+        syncMission13Visuals();
+        const secured = mission13.anchorsSecuredCount;
+        // Each anchor gets its own variant so the two never sound identical.
+        mission13Audio.playAnchorLock(secured - 1);
+        mission13Audio.announceObjective(secured === 1 ? 'anchorAntennaFirst' : 'anchorAntennaSecond');
+        triggerDialogue(secured === 1 ? 'm13_anchor_first' : 'm13_anchor_second', `mission13-anchor-${secured}`);
+        missionText.textContent =
+          secured === 1
+            ? 'Primer anclaje sujeto. Ve al segundo.'
+            : 'Ambos anclajes sujetos. Activa la antena con E.';
+        playTone(500, 0.14);
+        saveProgress();
+      } else {
+        transientWarning = `SUJETANDO ANCLAJE ${Math.round(mission13.anchorPercent)}%`;
+      }
+    } else {
+      mission13.resetAnchorProgress();
+      transientWarning = 'ACERCATE AL ANCLAJE DE LA ANTENA';
+    }
+  }
+
+  // Reaching the habitat panel is what opens the shield phase.
+  if (mission13.step === 'returnToHabitat' && inRange) {
+    if (mission13.confirmReturn()) {
+      syncMission13Visuals();
+      triggerDialogue('m13_shield_prompt', 'mission13-shield-prompt');
+      missionText.textContent = 'Panel de emergencia listo. Mantente junto a él mientras carga el escudo.';
+      saveProgress();
+    }
+  }
+
+  // Shield charge: the one real pressure. Straying bleeds it back down.
+  if (mission13.step === 'chargeShield') {
+    const holding = activePlayer.distanceTo(auroraStormStations.shieldPosition) <= mission13Tuning.shieldHoldRange;
+    if (mission13.advanceShield(delta, holding)) {
+      syncMission13Visuals();
+      mission13Audio.playShieldActivated();
+      mission13Audio.announceObjective('chargeShield');
+      triggerDialogue('m13_shield_online', 'mission13-shield-online');
+      showPhaseBanner('CAMPO PROTECTOR ACTIVO', 'La colonia aguanta el pico de la tormenta');
+      missionText.textContent = 'Campo protector activo. Resiste hasta que el frente pase.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      saveProgress();
+    } else if (!holding) {
+      transientWarning = `CARGA PERDIENDOSE // VUELVE AL PANEL ${Math.round(mission13.state.auroraShieldCharge)}%`;
+    } else {
+      transientWarning = `CARGANDO ESCUDO ${Math.round(mission13.state.auroraShieldCharge)}%`;
+    }
+  }
+
+  // The front blows itself out; the colony's lights come back up.
+  if (mission13.step === 'stormSubsiding') {
+    if (mission13.advanceSubside(delta)) {
+      syncMission13Visuals();
+      triggerDialogue('m13_crew_safe', 'mission13-crew-safe');
+      triggerDialogue('m13_pleyadan_night', 'mission13-pleyadan-night', 2.8);
+      triggerDialogue('m13_complete', 'mission13-complete', 5.4);
+      showPhaseBanner('LA COLONIA SOBREVIVIO', 'Primera noche hostil superada // Mision 14 preparada');
+      missionText.textContent = 'La colonia sobrevivió a su primera noche hostil.';
+      musicManager.playSting('complete', clock.elapsedTime);
+      // Mission close only — the per-objective stinger is deliberately not
+      // fired here, so the two never sound at once.
+      mission13Audio.announceMissionComplete();
+      playTone(640, 0.22);
+      window.setTimeout(() => playTone(960, 0.26), 200);
+      saveProgress();
+    } else {
+      transientWarning = 'FRENTE DISIPANDOSE';
+    }
+  }
+}
+
+function getMission13ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission13.started || mission13.completed) return {};
+  const activePosition = getActivePlayerPosition();
+  const station = getMission13StationPosition();
+  const inRange = activePosition.distanceTo(station) <= mission13Tuning.stationRange;
+
+  switch (mission13.step) {
+    case 'stormAlert':
+      return inRange
+        ? { nextAction: 'Confirma la alerta con E.', key: 'E' }
+        : { nextAction: 'Sal del hábitat e inspecciona la red.', key: 'WASD' };
+    case 'secureGenerator':
+      return {
+        nextAction: inRange
+          ? `Estabilizando energía: ${Math.round(mission13.state.auroraGeneratorProgress)}%.`
+          : 'Ve al nodo energético.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'anchorAntennaFirst':
+    case 'anchorAntennaSecond':
+      return {
+        nextAction: inRange
+          ? `Sujetando anclaje: ${Math.round(mission13.anchorPercent)}%.`
+          : `Ve al anclaje ${mission13.activeAnchorIndex + 1} de la antena.`,
+        key: inRange ? '' : 'WASD'
+      };
+    case 'activateAntenna':
+      return inRange
+        ? { nextAction: 'Activa la antena con E.', key: 'E' }
+        : { nextAction: 'Vuelve a la torre de comunicaciones.', key: 'WASD' };
+    case 'returnToHabitat':
+      return { nextAction: 'Regresa al módulo principal.', key: 'WASD' };
+    case 'chargeShield':
+      return {
+        nextAction: `Carga del escudo: ${Math.round(mission13.state.auroraShieldCharge)}%.`,
+        key: '',
+        blockedReason:
+          activePosition.distanceTo(auroraStormStations.shieldPosition) > mission13Tuning.shieldHoldRange
+            ? 'Fuera de rango del panel: la carga se está perdiendo.'
+            : ''
+      };
+    case 'stormSubsiding':
+      return { nextAction: 'El campo aguanta. Espera a que pase el frente.', key: '' };
+    default:
+      return { key: '' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mission 14: La Marca que Quedó
+// ---------------------------------------------------------------------------
+
+/**
+ * The station the current M14 step is fought at. Two of the three contaminated
+ * nodes are hardware M13 already built, so they are read straight off the storm
+ * stations rather than duplicated.
+ */
+function getMission14StationPosition(): THREE.Vector3 {
+  switch (mission14.stepDefinition.target) {
+    case 'power':
+      return auroraStormStations.generatorPosition;
+    case 'comms':
+      return auroraStormStations.antennaPosition;
+    case 'habitat':
+      return auroraHabitatModule.interactionPosition;
+    case 'terminal':
+      return auroraTraceNodes.terminalPosition;
+    case 'hidden':
+      return auroraTraceNodes.hiddenNodePosition;
+    default:
+      return auroraTraceNodes.terminalPosition;
+  }
+}
+
+function getMission14StationLabel(): string {
+  switch (mission14.step) {
+    case 'inspectPower':
+    case 'purgePowerNode':
+      return 'NODO ENERGETICO';
+    case 'inspectComms':
+    case 'purgeCommsNode':
+    case 'reverseTriangulate':
+      return 'REPETIDOR AURORA';
+    case 'inspectHabitat':
+      return 'HABITAT AURORA';
+    case 'analyzeSignature':
+      return 'TERMINAL PRINCIPAL';
+    case 'locateHiddenNode':
+      // Never name the target before it has been found: the label is the
+      // search readout, not the answer.
+      return mission14.isHiddenNodeRevealed() ? 'SENSOR PERIMETRAL 04' : 'FUENTE DESCONOCIDA';
+    case 'extractSample':
+      return 'SENSOR PERIMETRAL 04';
+    case 'completed':
+      return 'RED LIMPIA';
+    default:
+      return 'AURORA';
+  }
+}
+
+/** Coarse compass bearing, the only directional aid during the search. */
+function getBearingLabel(from: THREE.Vector3, to: THREE.Vector3): string {
+  const angle = Math.atan2(to.x - from.x, -(to.z - from.z));
+  const sectors = ['NORTE', 'NORESTE', 'ESTE', 'SURESTE', 'SUR', 'SUROESTE', 'OESTE', 'NOROESTE'];
+  const index = Math.round(((angle + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8;
+  return sectors[index];
+}
+
+function syncMission14Visuals(): void {
+  const state = mission14.state;
+  // The trace layer only exists once M14 is under way; before that the
+  // clearing is exactly as M13 left it.
+  auroraTraceNodes.setLayout(
+    (x, z) => auroraSurfaceHeight(x, z),
+    auroraStormStations.generatorPosition,
+    auroraStormStations.antennaPosition
+  );
+  auroraTraceNodes.restore(
+    mission14.started,
+    state.coalitionPowerNodePurged,
+    state.coalitionCommsNodePurged,
+    state.coalitionTraceSampleRecovered,
+    state.coalitionHiddenNodeLocated || mission14.isHiddenNodeRevealed(),
+    state.coalitionSignatureAnalyzed,
+    mission14.readout.contamination
+  );
+}
+
+function getMission14Progress(): number {
+  if (!mission14.started) return 0;
+  if (mission14.completed) return 100;
+  // Nine milestones carry the mission; the live phase adds the last slice.
+  const milestones = mission14.milestoneCount * 10;
+  return Math.min(99, Math.max(3, milestones + mission14.phaseProgress * 0.1));
+}
+
+function startMission14IfReady(): boolean {
+  if (!inSurfacePhase || !mission14.start(mission13.snapshot())) return false;
+  syncMission14Visuals();
+  triggerDialogue('m14_start', 'mission14-start');
+  triggerDialogue('m14_crew_uneasy', 'mission14-crew-uneasy', 3.4);
+  showPhaseBanner('MISION 14: LA MARCA QUE QUEDO', 'Revision de la red tras la tormenta');
+  missionText.textContent = 'Inspecciona el nodo energético con E.';
+  void sfxManager.play('warning', 0.5);
+  saveProgress();
+  return true;
+}
+
+function performMission14Interaction(position: THREE.Vector3): boolean {
+  if (!mission14.started || mission14.completed) return false;
+  const station = getMission14StationPosition();
+  const stationDistance = position.distanceTo(station);
+  const inRange = stationDistance <= mission14Tuning.stationRange;
+
+  if (mission14.activeInspectionIndex >= 0) {
+    missionText.textContent = inRange
+      ? `Inspeccionando: ${Math.round(mission14.phaseProgress)}%.`
+      : `${getMission14StationLabel()} a ${Math.round(stationDistance)} m.`;
+    return true;
+  }
+
+  if (mission14.step === 'analyzeSignature') {
+    missionText.textContent = inRange
+      ? `Analizando la firma residual: ${Math.round(mission14.phaseProgress)}%.`
+      : `Terminal principal a ${Math.round(stationDistance)} m.`;
+    return true;
+  }
+
+  // Phase 3: E steps the dial. The carrier drifts on its own, so this is a
+  // calibration the pilot has to keep chasing rather than a hold.
+  if (mission14.step === 'purgePowerNode') {
+    if (!inRange) {
+      missionText.textContent = `Nodo energético a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    mission14.stepTuner();
+    const deviation = mission14.tunerDeviation(clock.elapsedTime);
+    void sfxManager.play('confirm', 0.25);
+    missionText.textContent = mission14.isTuned(clock.elapsedTime)
+      ? `Sintonía en rango (${deviation >= 0 ? '+' : ''}${deviation.toFixed(1)}). Mantenla ahí.`
+      : `Desvío ${deviation >= 0 ? '+' : ''}${deviation.toFixed(1)}. Sigue ajustando con E.`;
+    return true;
+  }
+
+  // Phase 4: E blocks the packet currently leaving the relay. A miss costs the
+  // cycle, never the packets already caught.
+  if (mission14.step === 'purgeCommsNode') {
+    if (!inRange) {
+      missionText.textContent = `Repetidor a ${Math.round(stationDistance)} m.`;
+      return true;
+    }
+    const result = mission14.attemptPulseBlock(clock.elapsedTime, true);
+    if (result === 'blocked') {
+      const blocked = mission14.pulsesBlocked;
+      void sfxManager.play('confirm', 0.45);
+      playTone(520, 0.1);
+      if (mission14.state.coalitionCommsNodePurged) {
+        syncMission14Visuals();
+        triggerDialogue('m14_comms_clean', 'mission14-comms-clean');
+        triggerDialogue('m14_search_hint', 'mission14-search-hint', 3);
+        showPhaseBanner('REPETIDOR LIMPIO', 'Queda un tercer nodo fuera del asentamiento');
+        missionText.textContent = 'Repetidor limpio. Busca el tercer nodo por intensidad de señal.';
+        saveProgress();
+      } else {
+        missionText.textContent = `Paquete bloqueado ${blocked}/${mission14Tuning.pulseCount}.`;
+        saveProgress();
+      }
+    } else if (result === 'missed') {
+      void sfxManager.play('warning', 0.35);
+      missionText.textContent = `Fuera de ventana. Espera el próximo pulso (${mission14.pulsesBlocked}/${mission14Tuning.pulseCount} intactos).`;
+    }
+    return true;
+  }
+
+  // Phase 5: the marker is never handed over; E only works once genuinely close.
+  if (mission14.step === 'locateHiddenNode') {
+    if (stationDistance <= mission14Tuning.lockRange) {
+      if (mission14.lockHiddenNode(stationDistance)) {
+        syncMission14Visuals();
+        scannerPulse.trigger(auroraTraceNodes.hiddenNodePosition, true);
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m14_crew_sensor', 'mission14-crew-sensor');
+        showPhaseBanner('NODO OCULTO LOCALIZADO', 'Sensor perimetral propio, contaminado');
+        missionText.textContent = 'Sensor aislado. Mantente junto a él y extrae la muestra.';
+        saveProgress();
+      }
+      return true;
+    }
+    const intensity = mission14.readout.signalIntensity;
+    missionText.textContent = intensity > 0
+      ? `Intensidad ${intensity}% hacia el ${getBearingLabel(position, auroraTraceNodes.hiddenNodePosition)}.`
+      : 'Sin señal desde aquí. Barre el valle.';
+    return true;
+  }
+
+  if (mission14.step === 'extractSample') {
+    missionText.textContent = inRange
+      ? `Extrayendo muestra: ${Math.round(mission14.extractionPercent)}% // transmisión ${Math.round(mission14.transmissionPercent)}%.`
+      : `Vuelve al sensor: está terminando de transmitir (${Math.round(mission14.transmissionPercent)}%).`;
+    return true;
+  }
+
+  if (mission14.step === 'reverseTriangulate') {
+    missionText.textContent = inRange
+      ? `Reconstruyendo destino: ${Math.round(mission14.triangulationPercent)}%.`
+      : `Repetidor a ${Math.round(stationDistance)} m.`;
+    return true;
+  }
+
+  if (mission14.step === 'traceClosure') {
+    missionText.textContent = 'Purga completa. La interferencia se está disipando.';
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission14Systems(delta: number, elapsed: number): void {
+  startMission14IfReady();
+  if (!mission14.started || mission14.completed) {
+    // Outside the mission's context the contamination layer must be silent —
+    // safe to call repeatedly, it no-ops when already parked.
+    if (coalitionTraceEffect.traceIntensity !== 0) coalitionTraceEffect.setIntensity(0);
+    return;
+  }
+
+  const activePlayer = getActivePlayerPosition();
+  const station = getMission14StationPosition();
+  const stationDistance = activePlayer.distanceTo(station);
+  const inRange = stationDistance <= mission14Tuning.stationRange;
+  const state = mission14.state;
+
+  // The search readout is distance-driven and has to be fed before anything
+  // reads `readout`, including the visuals sync.
+  mission14.setSearchDistance(activePlayer.distanceTo(auroraTraceNodes.hiddenNodePosition));
+  const readout = mission14.readout;
+
+  // --- Contamination visuals. The mark retreats node by node as it is purged.
+  const analyzed = state.coalitionSignatureAnalyzed;
+  coalitionTraceEffect.setNode(0, auroraStormStations.generatorPosition, !state.coalitionPowerNodePurged);
+  coalitionTraceEffect.setNode(1, auroraStormStations.antennaPosition, !state.coalitionCommsNodePurged);
+  coalitionTraceEffect.setNode(
+    2,
+    auroraTraceNodes.hiddenNodePosition,
+    // The hidden node never glows before it has been found — a visible halo
+    // would hand over the search the phase is built around.
+    analyzed && !state.coalitionTraceSampleRecovered && (state.coalitionHiddenNodeLocated || mission14.isHiddenNodeRevealed())
+  );
+  // Before the analysis the pilot has symptoms, not a diagnosis, so the layer
+  // stays faint; afterwards it tracks the measured contamination.
+  coalitionTraceEffect.setIntensity(analyzed ? readout.contamination / 100 : 0.22);
+  coalitionTraceEffect.update(delta, elapsed);
+  // The sensor lights up as the pilot closes on it, so the marker has to follow
+  // the approach rather than wait for the next state change.
+  auroraTraceNodes.setHiddenRevealed(
+    mission14.isHiddenNodeRevealed(),
+    analyzed,
+    state.coalitionTraceSampleRecovered
+  );
+  auroraTraceNodes.update(elapsed, readout.contamination);
+
+  if (coalitionTraceEffect.consumePulse() && analyzed && readout.contamination > 1) {
+    void sfxManager.playAmbient('silentProbeInterference', elapsed, 3.2, 0.18);
+  }
+
+  // Phase 1: three inspections, in order, each one hands-on.
+  if (mission14.activeInspectionIndex >= 0) {
+    if (inRange) {
+      const index = mission14.activeInspectionIndex;
+      if (mission14.advanceInspection(delta)) {
+        syncMission14Visuals();
+        void sfxManager.play('scanner', 0.4);
+        if (index === 0) {
+          triggerDialogue('m14_power_reading', 'mission14-power-reading');
+          missionText.textContent = 'Consumo anómalo registrado. Revisa la torre de comunicaciones.';
+        } else if (index === 1) {
+          triggerDialogue('m14_comms_reading', 'mission14-comms-reading');
+          missionText.textContent = 'Emisión periódica registrada. Revisa el módulo principal.';
+        } else {
+          // The pulses are only artificial once all three readings line up.
+          triggerDialogue('m14_pulse_detected', 'mission14-pulse-detected');
+          showPhaseBanner('PULSOS ARTIFICIALES', 'La tormenta termino // la transmision no');
+          missionText.textContent = 'Pulsos periódicos artificiales. Analiza la firma en la terminal.';
+          playTone(320, 0.2);
+        }
+        saveProgress();
+      } else {
+        transientWarning = `INSPECCIONANDO ${Math.round(mission14.phaseProgress)}%`;
+      }
+    } else {
+      mission14.resetInspectionProgress();
+      transientWarning = `ACERCATE A ${getMission14StationLabel()}`;
+    }
+  }
+
+  // Phase 2: terminal analysis confirms the silent probe's signature.
+  if (mission14.step === 'analyzeSignature') {
+    if (inRange) {
+      if (mission14.advanceAnalysis(delta)) {
+        syncMission14Visuals();
+        void sfxManager.play('confirm', 0.55);
+        triggerDialogue('m14_signature_match', 'mission14-signature-match');
+        triggerDialogue('m14_three_nodes', 'mission14-three-nodes', 1.2);
+        showPhaseBanner('FIRMA CONFIRMADA', 'Coincide con la sonda silenciosa // 3 nodos contaminados');
+        missionText.textContent = 'Tres nodos contaminados. Purga el nodo energético.';
+        musicManager.playSting('discovery', clock.elapsedTime);
+        saveProgress();
+      } else {
+        transientWarning = `ANALIZANDO FIRMA ${Math.round(mission14.phaseProgress)}%`;
+      }
+    } else {
+      mission14.resetAnalysisProgress();
+      transientWarning = 'ACERCATE A LA TERMINAL PRINCIPAL';
+    }
+  }
+
+  // Phase 3: the purge only advances while the dial sits on the drifting
+  // carrier, so the pilot has to keep re-tuning with E.
+  if (mission14.step === 'purgePowerNode') {
+    const tuned = mission14.isTuned(elapsed);
+    if (mission14.advancePowerPurge(delta, inRange, elapsed)) {
+      syncMission14Visuals();
+      void sfxManager.play('scanner', 0.5);
+      triggerDialogue('m14_power_clean', 'mission14-power-clean');
+      showPhaseBanner('NODO ENERGETICO LIMPIO', 'Queda el repetidor de comunicaciones');
+      missionText.textContent = 'Nodo energético limpio. Ve al repetidor y bloquea sus pulsos.';
+      playTone(560, 0.14);
+      saveProgress();
+    } else if (!inRange) {
+      transientWarning = 'ACERCATE AL NODO ENERGETICO';
+    } else if (!tuned) {
+      const deviation = mission14.tunerDeviation(elapsed);
+      transientWarning = `SINTONIA ${deviation >= 0 ? '+' : ''}${deviation.toFixed(1)} // AJUSTA CON E`;
+    } else {
+      transientWarning = `PURGANDO ENERGIA ${Math.round(mission14.powerPurgePercent)}%`;
+    }
+  }
+
+  // Phase 4: the packet train runs on its own clock; E is the only input.
+  if (mission14.step === 'purgeCommsNode') {
+    if (!inRange) {
+      transientWarning = 'ACERCATE AL REPETIDOR';
+    } else if (mission14.isPulseWindowOpen(elapsed)) {
+      transientWarning = `PAQUETE CORRUPTO // BLOQUEA CON E (${mission14.pulsesBlocked}/${mission14Tuning.pulseCount})`;
+    } else {
+      transientWarning = `ESPERANDO PULSO ${mission14.pulsesBlocked}/${mission14Tuning.pulseCount}`;
+    }
+  }
+
+  // Phase 5: pure signal search. Nothing is revealed until the pilot is close.
+  if (mission14.step === 'locateHiddenNode') {
+    transientWarning = readout.signalIntensity > 0
+      ? `SEÑAL ${readout.signalIntensity}% // ${getBearingLabel(activePlayer, auroraTraceNodes.hiddenNodePosition)}`
+      : 'SIN SEÑAL // BARRE EL VALLE';
+  }
+
+  // Phase 6: extraction against the device's own transmission.
+  if (mission14.step === 'extractSample') {
+    const holding = stationDistance <= mission14Tuning.stationRange;
+    const result = mission14.advanceExtraction(delta, holding);
+    if (result === 'recovered') {
+      syncMission14Visuals();
+      scannerPulse.trigger(auroraTraceNodes.hiddenNodePosition, true);
+      void sfxManager.play('confirm', 0.6);
+      triggerDialogue('m14_sample_recovered', 'mission14-sample-recovered');
+      showPhaseBanner('MUESTRA RECUPERADA', 'Patron de la Coalicion en nuestras manos');
+      missionText.textContent = 'Muestra recuperada. Vuelve al repetidor para la triangulación inversa.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      saveProgress();
+    } else if (result === 'lost') {
+      // A setback, never a dead end: the device re-locks and the pilot retries.
+      if (elapsed - mission14ExtractionLostAt > 6) {
+        mission14ExtractionLostAt = elapsed;
+        triggerDialogue('m14_extraction_lost', 'mission14-extraction-lost');
+        void sfxManager.play('warning', 0.45);
+      }
+      transientWarning = 'RAFAGA COMPLETADA // AISLAMIENTO REINICIADO';
+    } else if (!holding) {
+      transientWarning = `VUELVE AL SENSOR // TRANSMISION ${Math.round(mission14.transmissionPercent)}%`;
+    } else {
+      transientWarning = `EXTRAYENDO ${Math.round(mission14.extractionPercent)}% // TRANSMISION ${Math.round(mission14.transmissionPercent)}%`;
+    }
+  }
+
+  // Phase 7: reverse triangulation back at the relay.
+  if (mission14.step === 'reverseTriangulate') {
+    if (mission14.advanceTriangulation(delta, inRange)) {
+      syncMission14Visuals();
+      triggerDialogue('m14_triangulation', 'mission14-triangulation');
+      showPhaseBanner('TRIANGULACION INVERSA', 'Un paquete escapo hacia un repetidor desconocido');
+      missionText.textContent = 'Un paquete escapó hacia un repetidor desconocido.';
+      playTone(300, 0.24);
+      saveProgress();
+    } else if (!inRange) {
+      transientWarning = 'VUELVE AL REPETIDOR';
+    } else {
+      transientWarning = `TRIANGULACION INVERSA ${Math.round(mission14.triangulationPercent)}%`;
+    }
+  }
+
+  // Phase 8: the residue drains out of the valley and the mission closes.
+  if (mission14.step === 'traceClosure') {
+    if (mission14.advanceClosure(delta)) {
+      coalitionTraceEffect.setIntensity(0);
+      syncMission14Visuals();
+      triggerDialogue('m14_crew_quiet', 'mission14-crew-quiet');
+      triggerDialogue('m14_pleyadan_mark', 'mission14-pleyadan-mark', 2.6);
+      triggerDialogue('m14_complete', 'mission14-complete', 5.6);
+      showPhaseBanner('RED LIMPIA', 'La Coalicion del Silencio ya sabe que seguimos vivos');
+      missionText.textContent = 'La red quedó limpia. La Coalición ya sabe que seguimos vivos.';
+      musicManager.playSting('complete', clock.elapsedTime);
+      playTone(620, 0.22);
+      window.setTimeout(() => playTone(880, 0.26), 220);
+      saveProgress();
+    } else {
+      transientWarning = 'INTERFERENCIA DISIPANDOSE';
+    }
+  }
+}
+
+function getMission14ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission14.started || mission14.completed) return {};
+  const activePosition = getActivePlayerPosition();
+  const station = getMission14StationPosition();
+  const distance = activePosition.distanceTo(station);
+  const inRange = distance <= mission14Tuning.stationRange;
+
+  switch (mission14.step) {
+    case 'inspectPower':
+    case 'inspectComms':
+    case 'inspectHabitat':
+      return {
+        nextAction: inRange
+          ? `Inspeccionando: ${Math.round(mission14.phaseProgress)}%.`
+          : `Ve a ${getMission14StationLabel().toLowerCase()}.`,
+        key: inRange ? '' : 'WASD'
+      };
+    case 'analyzeSignature':
+      return {
+        nextAction: inRange
+          ? `Analizando la firma: ${Math.round(mission14.phaseProgress)}%.`
+          : 'Ve a la terminal principal.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'purgePowerNode':
+      return {
+        nextAction: inRange
+          ? `Purga ${Math.round(mission14.powerPurgePercent)}% // sintoniza con E.`
+          : 'Ve al nodo energético.',
+        key: inRange ? 'E' : 'WASD',
+        blockedReason:
+          inRange && !mission14.isTuned(clock.elapsedTime)
+            ? 'Portadora fuera de rango: la purga se está perdiendo.'
+            : ''
+      };
+    case 'purgeCommsNode':
+      return {
+        nextAction: inRange
+          ? `Bloquea los pulsos con E: ${mission14.pulsesBlocked}/${mission14Tuning.pulseCount}.`
+          : 'Vuelve al repetidor de comunicaciones.',
+        key: inRange ? 'E' : 'WASD'
+      };
+    case 'locateHiddenNode':
+      return {
+        nextAction:
+          mission14.readout.signalIntensity > 0
+            ? `Señal ${mission14.readout.signalIntensity}% hacia el ${getBearingLabel(activePosition, auroraTraceNodes.hiddenNodePosition)}.`
+            : 'Sin señal desde aquí. Barre el valle.',
+        key: distance <= mission14Tuning.lockRange ? 'E' : 'WASD'
+      };
+    case 'extractSample':
+      return {
+        nextAction: `Extracción ${Math.round(mission14.extractionPercent)}% // transmisión ${Math.round(mission14.transmissionPercent)}%.`,
+        key: '',
+        blockedReason: inRange ? '' : 'Fuera de rango: el dispositivo está terminando de transmitir.'
+      };
+    case 'reverseTriangulate':
+      return {
+        nextAction: inRange
+          ? `Reconstruyendo destino: ${Math.round(mission14.triangulationPercent)}%.`
+          : 'Vuelve al repetidor de comunicaciones.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'traceClosure':
+      return { nextAction: 'La interferencia residual se está disipando.', key: '' };
+    default:
+      return { key: '' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mission 15: Sabotaje en Aurora
+// ---------------------------------------------------------------------------
+
+/** The station the current M15 step is fought at. */
+function getMission15StationPosition(): THREE.Vector3 {
+  switch (mission15.stepDefinition.target) {
+    case 'supply':
+      return auroraSupplyPosition;
+    case 'habitat':
+      return auroraSealedDoorPosition;
+    case 'terminal':
+      return auroraTraceNodes.terminalPosition;
+    case 'energyParasite':
+      return auroraParasiteNodes.positions[0];
+    case 'lifeParasite':
+      return auroraParasiteNodes.positions[1];
+    case 'commsParasite':
+      return auroraParasiteNodes.positions[2];
+    case 'core':
+      return auroraHabitatModule.interactionPosition;
+    default:
+      return auroraTraceNodes.terminalPosition;
+  }
+}
+
+function getMission15StationLabel(): string {
+  switch (mission15.step) {
+    case 'routineTask':
+      return 'DEPOSITO';
+    case 'habitatEmergency':
+    case 'restoreDoorPower':
+      return 'AURORA-02 // PUERTA';
+    case 'detectCoordinatedFailure':
+    case 'analyzeParasite':
+      return 'TERMINAL PRINCIPAL';
+    case 'findEnergyParasite':
+    case 'findLifeSupportParasite':
+    case 'findCommsParasite':
+      // Never name the device before it has been found: the label is the
+      // search readout, not the answer.
+      return mission15.isParasiteRevealed() ? 'NODO PARASITO' : 'FUENTE DESCONOCIDA';
+    case 'disableEnergyParasite':
+      return 'PARASITO // ENERGIA';
+    case 'disableLifeSupportParasite':
+      return 'PARASITO // SOPORTE VITAL';
+    case 'disableCommsParasite':
+      return 'PARASITO // COMUNICACIONES';
+    case 'centralOverload':
+      return 'MODULO CENTRAL';
+    case 'completed':
+      return 'AURORA RESTAURADA';
+    default:
+      return 'AURORA';
+  }
+}
+
+function syncMission15Visuals(): void {
+  const state = mission15.state;
+  // The supply cache and the sealed door are anchored to hardware M10-M13
+  // already put in the clearing, so nothing new is placed for them.
+  const [sx, sz] = auroraSupplyCacheDefinition.position;
+  auroraSupplyPosition.set(sx, auroraSurfaceHeight(sx, sz) + 1, sz);
+  const [dx, dz] = sealedModuleDoorDefinition.position;
+  auroraSealedDoorPosition.set(dx, auroraSurfaceHeight(dx, dz) + 1.2, dz);
+
+  auroraParasiteNodes.setLayout((x, z) => auroraSurfaceHeight(x, z));
+  auroraParasiteNodes.restore(
+    mission15.started && !mission15.completed,
+    state.auroraParasiteStates,
+    mission15.isParasiteRevealed() ? mission15.activeParasiteIndex : -1
+  );
+
+  // The sabotage pulses crawl the runs between the hardware each parasite is
+  // strangling and the module it feeds.
+  coalitionSabotageEffect.setRun(
+    0,
+    auroraStormStations.generatorPosition,
+    auroraSecondModule.interactionPosition,
+    state.auroraCoordinatedFailureConfirmed && state.auroraParasiteStates[0] !== 'disabled'
+  );
+  coalitionSabotageEffect.setRun(
+    1,
+    auroraWaterFilter.interactionPosition,
+    auroraHabitatModule.interactionPosition,
+    state.auroraCoordinatedFailureConfirmed && state.auroraParasiteStates[1] !== 'disabled'
+  );
+  coalitionSabotageEffect.setRun(
+    2,
+    auroraStormStations.antennaPosition,
+    auroraSecondModule.interactionPosition,
+    state.auroraCoordinatedFailureConfirmed && state.auroraParasiteStates[2] !== 'disabled'
+  );
+  coalitionSabotageEffect.setCorePosition(auroraHabitatModule.interactionPosition);
+}
+
+function getMission15Progress(): number {
+  if (!mission15.started) return 0;
+  if (mission15.completed) return 100;
+  // Eleven milestones carry the mission; the live phase adds the last slice.
+  const milestones = mission15.milestoneCount * 8;
+  return Math.min(99, Math.max(3, milestones + mission15.phaseProgress * 0.08));
+}
+
+function startMission15IfReady(): boolean {
+  if (!inSurfacePhase || !mission15.start(mission14.snapshot())) return false;
+  syncMission15Visuals();
+  triggerDialogue('m15_start', 'mission15-start');
+  triggerDialogue('m15_crew_routine', 'mission15-crew-routine', 3.2);
+  showPhaseBanner('MISION 15: SABOTAJE EN AURORA', 'Turno normal en la colonia');
+  missionText.textContent = 'Revisa el depósito de suministros con E.';
+  saveProgress();
+  return true;
+}
+
+function performMission15Interaction(position: THREE.Vector3): boolean {
+  if (!mission15.started || mission15.completed) return false;
+  const station = getMission15StationPosition();
+  const distance = position.distanceTo(station);
+  const inRange = distance <= mission15Tuning.stationRange;
+
+  if (mission15.step === 'routineTask') {
+    missionText.textContent = inRange
+      ? `Revisando inventario: ${Math.round(mission15.phaseProgress)}%.`
+      : `Depósito a ${Math.round(distance)} m.`;
+    return true;
+  }
+
+  if (mission15.step === 'habitatEmergency') {
+    missionText.textContent = inRange
+      ? 'En la puerta. Restablece la energía de emergencia.'
+      : `Aurora-02 a ${Math.round(distance)} m. Presión ${Math.round(mission15.modulePressurePercent)}%.`;
+    return true;
+  }
+
+  if (mission15.step === 'restoreDoorPower') {
+    missionText.textContent = inRange
+      ? `Reenergizando la puerta: ${Math.round(mission15.phaseProgress)}%.`
+      : `Vuelve al panel: ${Math.round(mission15.phaseProgress)}% y bajando.`;
+    return true;
+  }
+
+  if (mission15.step === 'detectCoordinatedFailure') {
+    missionText.textContent = inRange
+      ? `Cruzando registros: ${Math.round(mission15.phaseProgress)}%.`
+      : `Terminal principal a ${Math.round(distance)} m.`;
+    return true;
+  }
+
+  // The three searches: E only works once genuinely close, and the readout is
+  // all the pilot gets until then.
+  if (mission15.activeParasiteIndex >= 0 && mission15.stepDefinition.target !== 'core') {
+    const searching =
+      mission15.step === 'findEnergyParasite' ||
+      mission15.step === 'findLifeSupportParasite' ||
+      mission15.step === 'findCommsParasite';
+    if (searching) {
+      if (mission15.lockParasite(distance)) {
+        syncMission15Visuals();
+        scannerPulse.trigger(station, true);
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m15_tech_parasite', 'mission15-tech-parasite');
+        showPhaseBanner('DISPOSITIVO LOCALIZADO', 'Adherido a infraestructura propia');
+        missionText.textContent = 'Dispositivo aislado. Desactívalo.';
+        saveProgress();
+        return true;
+      }
+      const intensity = mission15.readout.signalIntensity;
+      missionText.textContent = intensity > 0
+        ? `Intensidad ${intensity}% hacia el ${getBearingLabel(position, station)}.`
+        : 'Sin señal desde aquí. Barre la colonia.';
+      return true;
+    }
+
+    if (!inRange) {
+      missionText.textContent = `Nodo parásito a ${Math.round(distance)} m.`;
+      return true;
+    }
+
+    // Energy: pull the three lines, then ride the surge with further presses.
+    if (mission15.step === 'disableEnergyParasite') {
+      const result = mission15.workEnergyParasite();
+      void sfxManager.play('confirm', 0.3);
+      if (result === 'line') {
+        coalitionSabotageEffect.setSparkOrigin(station);
+        coalitionSabotageEffect.triggerSparks();
+        missionText.textContent = `Línea aislada ${mission15.linesOpenedCount}/${mission15Tuning.energyLineCount}.`;
+      } else if (result === 'load') {
+        const target = mission15.surgeTarget(clock.elapsedTime);
+        const delta = mission15.surgeLoadPercent - target;
+        missionText.textContent = mission15.isSurgeStable(clock.elapsedTime)
+          ? `Carga en rango (${delta >= 0 ? '+' : ''}${delta.toFixed(0)}). Sostenla.`
+          : `Desvío ${delta >= 0 ? '+' : ''}${delta.toFixed(0)}. Ajusta con E.`;
+      }
+      return true;
+    }
+
+    // Life support: shut valves faster than they drift back open.
+    if (mission15.step === 'disableLifeSupportParasite') {
+      if (mission15.closeNextValve()) {
+        void sfxManager.play('confirm', 0.35);
+        missionText.textContent = `Válvulas cerradas ${mission15.valvesClosedCount}/${mission15Tuning.valveCount}.`;
+      } else {
+        missionText.textContent = 'Todas las válvulas están cerradas. Sostén la presión.';
+      }
+      return true;
+    }
+
+    // Comms: answer only the marked symbol of the corrupt burst.
+    if (mission15.step === 'disableCommsParasite') {
+      const result = mission15.answerSequence(mission15.sequenceExpectedSymbol, clock.elapsedTime, true);
+      if (result === 'matched') {
+        void sfxManager.play('confirm', 0.4);
+        missionText.textContent = `Símbolo bloqueado ${mission15.sequenceMatchedCount}/${mission15Tuning.sequenceLength}.`;
+        saveProgress();
+      } else if (result === 'missed') {
+        void sfxManager.play('warning', 0.35);
+        missionText.textContent = 'Símbolo equivocado. La secuencia vuelve a empezar.';
+        saveProgress();
+      }
+      return true;
+    }
+  }
+
+  if (mission15.step === 'centralOverload') {
+    missionText.textContent = inRange
+      ? `Purgando sobrecarga: ${Math.round(mission15.centralOverloadPercent)}%.`
+      : `Vuelve al núcleo: sobrecarga ${Math.round(mission15.centralOverloadPercent)}%.`;
+    return true;
+  }
+
+  if (mission15.step === 'analyzeParasite') {
+    missionText.textContent = inRange
+      ? `Rastreando el origen: ${Math.round(mission15.phaseProgress)}%.`
+      : `Terminal principal a ${Math.round(distance)} m.`;
+    return true;
+  }
+
+  return false;
+}
+
+function updateMission15Systems(delta: number, elapsed: number): void {
+  startMission15IfReady();
+  if (!mission15.started || mission15.completed) {
+    // Outside the mission's context the sabotage layer must be silent — safe
+    // to call repeatedly, it no-ops when already parked.
+    if (coalitionSabotageEffect.stressLevel !== 0) {
+      coalitionSabotageEffect.setStress(0);
+      coalitionSabotageEffect.setOverload(0);
+    }
+    return;
+  }
+
+  const activePlayer = getActivePlayerPosition();
+  const station = getMission15StationPosition();
+  const distance = activePlayer.distanceTo(station);
+  const inRange = distance <= mission15Tuning.stationRange;
+  const state = mission15.state;
+
+  // Search readout has to be fed before anything reads `readout`.
+  const activeIndex = mission15.activeParasiteIndex;
+  mission15.setSearchDistance(
+    activeIndex >= 0 ? activePlayer.distanceTo(auroraParasiteNodes.positions[activeIndex]) : Number.POSITIVE_INFINITY
+  );
+  mission15.advancePressure(delta);
+  const readout = mission15.readout;
+
+  // --- Sabotage visuals. Stress rides how much of the colony is still down.
+  coalitionSabotageEffect.setStress(Math.min(1, readout.compromisedSystems / 4));
+  coalitionSabotageEffect.setOverload(readout.centralOverload / 100);
+  coalitionSabotageEffect.update(delta, elapsed);
+  auroraParasiteNodes.update(elapsed);
+
+  // Phase 1: the ordinary supply check.
+  if (mission15.step === 'routineTask') {
+    if (inRange) {
+      if (mission15.advanceRoutine(delta)) {
+        syncMission15Visuals();
+        void sfxManager.play('confirm', 0.4);
+        triggerDialogue('m15_seal_alarm', 'mission15-seal-alarm');
+        triggerDialogue('m15_trapped_crew', 'mission15-trapped-crew', 2.6);
+        showPhaseBanner('AURORA-02 SELLADO', 'Tres personas adentro // presion cayendo');
+        missionText.textContent = 'Aurora-02 se selló. Corre al módulo.';
+        void sfxManager.play('warning', 0.6);
+        musicManager.playSting('discovery', clock.elapsedTime);
+        saveProgress();
+      } else {
+        transientWarning = `REVISANDO INVENTARIO ${Math.round(mission15.phaseProgress)}%`;
+      }
+    } else {
+      mission15.resetRoutineProgress();
+    }
+  }
+
+  // Phase 2: reaching the door opens the release phase.
+  if (mission15.step === 'habitatEmergency') {
+    transientWarning = `PRESION ${Math.round(readout.modulePressure)}% // AURORA-02 SELLADO`;
+    if (inRange && mission15.reachSealedDoor()) {
+      syncMission15Visuals();
+      missionText.textContent = 'Panel muerto. Restablece la línea de emergencia.';
+      saveProgress();
+    }
+  }
+
+  if (mission15.step === 'restoreDoorPower') {
+    if (mission15.advanceDoorPower(delta, inRange)) {
+      syncMission15Visuals();
+      coalitionSabotageEffect.setSparkOrigin(station);
+      coalitionSabotageEffect.triggerSparks();
+      void sfxManager.play('confirm', 0.5);
+      triggerDialogue('m15_door_open', 'mission15-door-open');
+      triggerDialogue('m15_failures', 'mission15-failures', 3);
+      showPhaseBanner('MODULO LIBERADO', 'La linea estaba cortada, no agotada');
+      missionText.textContent = 'Módulo abierto. Revisa los registros en la terminal.';
+      saveProgress();
+    } else {
+      transientWarning = inRange
+        ? `REENERGIZANDO PUERTA ${Math.round(mission15.phaseProgress)}% // PRESION ${Math.round(readout.modulePressure)}%`
+        : `VUELVE AL PANEL // PRESION ${Math.round(readout.modulePressure)}%`;
+    }
+  }
+
+  // Phase 3: the terminal proves the four failures share a trigger.
+  if (mission15.step === 'detectCoordinatedFailure') {
+    if (inRange) {
+      if (mission15.advanceDiagnostic(delta)) {
+        syncMission15Visuals();
+        void sfxManager.play('confirm', 0.55);
+        triggerDialogue('m15_deliberate', 'mission15-deliberate');
+        showPhaseBanner('SABOTAJE CONFIRMADO', 'Cuatro sistemas // una sola señal');
+        missionText.textContent = 'Sabotaje deliberado. Busca el dispositivo en la línea energética.';
+        musicManager.playSting('discovery', clock.elapsedTime);
+        saveProgress();
+      } else {
+        transientWarning = `CRUZANDO REGISTROS ${Math.round(mission15.phaseProgress)}%`;
+      }
+    } else {
+      mission15.resetDiagnosticProgress();
+    }
+  }
+
+  // Phases 4-6: the three hunts and their three different disarms.
+  if (mission15.step === 'findEnergyParasite' || mission15.step === 'findLifeSupportParasite' || mission15.step === 'findCommsParasite') {
+    transientWarning = readout.signalIntensity > 0
+      ? `SEÑAL ${readout.signalIntensity}% // ${getBearingLabel(activePlayer, station)}`
+      : 'SIN SEÑAL // BARRE LA COLONIA';
+  }
+
+  if (mission15.step === 'disableEnergyParasite') {
+    if (mission15.advanceEnergyParasite(delta, inRange, elapsed)) {
+      syncMission15Visuals();
+      void sfxManager.play('confirm', 0.5);
+      triggerDialogue('m15_energy_clear', 'mission15-energy-clear');
+      showPhaseBanner('PARASITO NEUTRALIZADO', 'Linea energetica libre');
+      missionText.textContent = 'Nodo energético fuera. Busca el siguiente.';
+      saveProgress();
+    } else if (!inRange) {
+      transientWarning = 'ACERCATE AL NODO PARASITO';
+    } else if (mission15.linesOpenedCount < mission15Tuning.energyLineCount) {
+      transientWarning = `AISLA LAS LINEAS ${mission15.linesOpenedCount}/${mission15Tuning.energyLineCount} // E`;
+    } else {
+      const deviation = mission15.surgeLoadPercent - mission15.surgeTarget(elapsed);
+      transientWarning = mission15.isSurgeStable(elapsed)
+        ? `SOBRECARGA ESTABLE ${Math.round(mission15.phaseProgress)}%`
+        : `CARGA ${deviation >= 0 ? '+' : ''}${deviation.toFixed(0)} // AJUSTA CON E`;
+    }
+  }
+
+  if (mission15.step === 'disableLifeSupportParasite') {
+    if (mission15.advanceLifeSupportParasite(delta, inRange)) {
+      syncMission15Visuals();
+      void sfxManager.play('confirm', 0.5);
+      triggerDialogue('m15_life_clear', 'mission15-life-clear');
+      showPhaseBanner('PARASITO NEUTRALIZADO', 'Presion redirigida');
+      missionText.textContent = 'Soporte vital libre. Queda comunicaciones.';
+      saveProgress();
+    } else {
+      transientWarning = inRange
+        ? `VALVULAS ${mission15.valvesClosedCount}/${mission15Tuning.valveCount} // CIERRA CON E`
+        : 'ACERCATE: LAS VALVULAS SE ABREN SOLAS';
+    }
+  }
+
+  if (mission15.step === 'disableCommsParasite') {
+    if (state.auroraParasiteStates[2] === 'disabled') {
+      // Handled below by the overload phase; nothing to warn about here.
+    } else if (!inRange) {
+      transientWarning = 'ACERCATE AL NODO PARASITO';
+    } else {
+      const symbol = mission15.sequenceHighlightedSymbol;
+      const symbolLabel = MISSION15_SEQUENCE_LABELS[symbol] ?? 'DESCONOCIDO';
+      transientWarning = `SECUENCIA ${mission15.sequenceVisualStep}/${mission15Tuning.sequenceLength} // ${symbolLabel} MARCADO // E`;
+    }
+  }
+
+  // The comms kill hands straight over to the core, so announce it once.
+  if (mission15.step === 'centralOverload' && !state.auroraCentralOverloadResolved) {
+    if (mission15.advanceCentralOverload(delta, inRange)) {
+      syncMission15Visuals();
+      coalitionSabotageEffect.setOverload(0);
+      void sfxManager.play('confirm', 0.6);
+      triggerDialogue('m15_overload_clear', 'mission15-overload-clear');
+      showPhaseBanner('NUCLEO ESTABILIZADO', 'El modulo central aguanto');
+      missionText.textContent = 'Núcleo estable. Analiza el nodo recuperado en la terminal.';
+      musicManager.playSting('discovery', clock.elapsedTime);
+      saveProgress();
+    } else {
+      if (mission15.overloadCritical && elapsed - mission15OverloadWarnedAt > 8) {
+        mission15OverloadWarnedAt = elapsed;
+        triggerDialogue('m15_overload_warning', 'mission15-overload-warning');
+        void sfxManager.play('warning', 0.5);
+      }
+      transientWarning = inRange
+        ? `PURGANDO SOBRECARGA ${Math.round(readout.centralOverload)}%`
+        : `SOBRECARGA ${Math.round(readout.centralOverload)}% // VUELVE AL NUCLEO`;
+    }
+  }
+
+  // Phase 8: where the device came from, and the mission's close.
+  if (mission15.step === 'analyzeParasite') {
+    if (mission15.advanceAnalysis(delta, inRange)) {
+      coalitionSabotageEffect.setStress(0);
+      coalitionSabotageEffect.setOverload(0);
+      syncMission15Visuals();
+      triggerDialogue('m15_origin', 'mission15-origin');
+      triggerDialogue('m15_pleyadan_step', 'mission15-pleyadan-step', 2.8);
+      triggerDialogue('m15_complete', 'mission15-complete', 5.8);
+      showPhaseBanner('AURORA RESTAURADA', 'Primera agresion fisica de la Coalicion');
+      missionText.textContent = 'Aurora resistió. Ahora hay que defenderla.';
+      musicManager.playSting('complete', clock.elapsedTime);
+      playTone(600, 0.22);
+      window.setTimeout(() => playTone(900, 0.26), 220);
+      saveProgress();
+    } else {
+      transientWarning = inRange
+        ? `RASTREANDO ORIGEN ${Math.round(mission15.phaseProgress)}%`
+        : 'VUELVE A LA TERMINAL';
+    }
+  }
+}
+
+function getMission15ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission15.started || mission15.completed) return {};
+  const activePosition = getActivePlayerPosition();
+  const station = getMission15StationPosition();
+  const distance = activePosition.distanceTo(station);
+  const inRange = distance <= mission15Tuning.stationRange;
+
+  switch (mission15.step) {
+    case 'routineTask':
+      return {
+        nextAction: inRange
+          ? `Revisando inventario: ${Math.round(mission15.phaseProgress)}%.`
+          : 'Ve al depósito de suministros.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'habitatEmergency':
+      return {
+        nextAction: `Corre a Aurora-02. Presión ${Math.round(mission15.modulePressurePercent)}%.`,
+        key: 'WASD'
+      };
+    case 'restoreDoorPower':
+      return {
+        nextAction: `Reenergizando la puerta: ${Math.round(mission15.phaseProgress)}%.`,
+        key: '',
+        blockedReason: inRange ? '' : 'Fuera del panel: la carga se está perdiendo.'
+      };
+    case 'detectCoordinatedFailure':
+      return {
+        nextAction: inRange
+          ? `Cruzando registros: ${Math.round(mission15.phaseProgress)}%.`
+          : 'Ve a la terminal principal.',
+        key: inRange ? '' : 'WASD'
+      };
+    case 'findEnergyParasite':
+    case 'findLifeSupportParasite':
+    case 'findCommsParasite':
+      return {
+        nextAction:
+          mission15.readout.signalIntensity > 0
+            ? `Señal ${mission15.readout.signalIntensity}% hacia el ${getBearingLabel(activePosition, station)}.`
+            : 'Sin señal desde aquí. Barre la colonia.',
+        key: distance <= mission15Tuning.lockRange ? 'E' : 'WASD'
+      };
+    case 'disableEnergyParasite':
+      return {
+        nextAction:
+          mission15.linesOpenedCount < mission15Tuning.energyLineCount
+            ? `Aísla las líneas con E: ${mission15.linesOpenedCount}/${mission15Tuning.energyLineCount}.`
+            : `Sostén la carga: ${Math.round(mission15.phaseProgress)}%.`,
+        key: 'E',
+        blockedReason:
+          inRange && mission15.linesOpenedCount >= mission15Tuning.energyLineCount && !mission15.isSurgeStable(clock.elapsedTime)
+            ? 'Carga fuera de rango: la estabilización se pierde.'
+            : ''
+      };
+    case 'disableLifeSupportParasite':
+      return {
+        nextAction: `Cierra las válvulas con E: ${mission15.valvesClosedCount}/${mission15Tuning.valveCount}.`,
+        key: 'E',
+        blockedReason: inRange ? '' : 'Lejos del circuito: las válvulas se abren el doble de rápido.'
+      };
+    case 'disableCommsParasite':
+      const sequenceSymbol = mission15.sequenceHighlightedSymbol;
+      const sequenceLabel = MISSION15_SEQUENCE_LABELS[sequenceSymbol] ?? 'DESCONOCIDO';
+      return {
+        nextAction: `Bloquea ${sequenceLabel} con E: ${mission15.sequenceMatchedCount}/${mission15Tuning.sequenceLength}.`,
+        key: 'E'
+      };
+    case 'centralOverload':
+      return {
+        nextAction: `Sobrecarga ${Math.round(mission15.centralOverloadPercent)}%. Purga en el núcleo.`,
+        key: inRange ? '' : 'WASD',
+        blockedReason: inRange ? '' : 'Fuera del núcleo: la sobrecarga sigue subiendo.'
+      };
+    case 'analyzeParasite':
+      return {
+        nextAction: inRange
+          ? `Rastreando el origen: ${Math.round(mission15.phaseProgress)}%.`
+          : 'Vuelve a la terminal principal.',
+        key: inRange ? '' : 'WASD'
+      };
+    default:
+      return { key: '' };
+  }
+}
+
+function isPlayerInDefenseSyncRange(): boolean {
+  return getActivePlayerPosition().distanceTo(getActiveDefenseBeacon().interactionPosition) <=
+    mission04Tuning.synchronizationRange;
+}
+
+function getMission04OrbitalScanClearance(): number {
+  return ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+}
+
+// ---------------------------------------------------------------------------
+// Mission 16: Protocolo Pleyadiano
+// ---------------------------------------------------------------------------
+
+const MISSION16_STEP_ORDER = [
+  'inactive', 'receiveAlert', 'accessTerminal', 'establishTripleLink', 'recoverAtlasKey',
+  'revealSeedWorld', 'unlockDetection', 'unlockShield', 'unlockAlertNetwork', 'synchronizeNodes',
+  'runSimulation', 'confirmEnergyDeficit', 'completed'
+] as const;
+
+function mission16StepIndex(step: string): number {
+  const i = (MISSION16_STEP_ORDER as readonly string[]).indexOf(step);
+  return i < 0 ? 0 : i;
+}
+
+/** The Pleyadian nodes only exist in the world from the sync step onward. */
+function mission16NodesShown(): boolean {
+  return mission16.started && mission16StepIndex(mission16.step) >= mission16StepIndex('synchronizeNodes');
+}
+
+function mission16NodeStates(): PleyadianNodeState[] {
+  const active = mission16.activeNodeIndex;
+  return pleyadianNodeDefinitions.map((_, i) =>
+    mission16.nodeSynchronized(i) ? 'synchronized' : i === active ? 'aligning' : 'dormant'
+  );
+}
+
+/** The station the current M16 step is worked at. */
+function getMission16StationPosition(): THREE.Vector3 {
+  switch (mission16.stepDefinition.target) {
+    case 'terminal':
+      return auroraTraceNodes.terminalPosition;
+    case 'antenna':
+      return auroraStormStations.antennaPosition;
+    case 'node': {
+      const active = mission16.activeNodeIndex;
+      return active >= 0 ? pleyadianDefenseNodes.positions[active] : auroraTraceNodes.terminalPosition;
+    }
+    case 'core':
+      return auroraHabitatModule.interactionPosition;
+    default:
+      return auroraTraceNodes.terminalPosition;
+  }
+}
+
+function getMission16StationLabel(): string {
+  switch (mission16.step) {
+    case 'synchronizeNodes': {
+      const active = mission16.activeNodeIndex;
+      return active >= 0 ? `NODO ${pleyadianNodeDefinitions[active].band}` : 'NODOS PLEYADIANOS';
+    }
+    case 'completed':
+      return 'PROTOCOLO ASEGURADO';
+    default:
+      return 'TERMINAL PRINCIPAL';
+  }
+}
+
+function syncMission16Visuals(): void {
+  pleyadianDefenseNodes.setLayout((x, z) => auroraSurfaceHeight(x, z));
+  const nodesShown = mission16NodesShown();
+  pleyadianDefenseNodes.restore(nodesShown, mission16NodeStates(), mission16.activeNodeIndex);
+  const habitat = auroraStationPosition(auroraSettlementSiteDefinition.position);
+  pleyadianProtocolEffect.setOrigin(habitat.x, habitat.y, habitat.z);
+  pleyadianProtocolEffect.setSimulationActive(mission16.started && mission16.step === 'runSimulation');
+}
+
+function mission16ProtocolIntensity(): number {
+  if (!mission16.started) return 0;
+  if (mission16.completed) return 0.55;
+  return Math.min(1, 0.2 + mission16.milestoneCount * 0.07);
+}
+
+function startMission16IfReady(): boolean {
+  // Cheap guard first: building a snapshot every frame just to be told the
+  // mission cannot start yet is a per-frame allocation in the hot loop.
+  if (!inSurfacePhase || mission16.started || !mission15.completed) return false;
+  if (!mission16.start(mission15.snapshot())) return false;
+  syncMission16Visuals();
+  triggerDialogue('m16_start', 'mission16-start');
+  triggerDialogue('m16_alert', 'mission16-alert', 3.4);
+  showPhaseBanner('MISION 16: PROTOCOLO PLEYADIANO', 'Transmision de urgencia');
+  missionText.textContent = 'Ve a la terminal principal.';
+  saveProgress();
+  return true;
+}
+
+function performMission16Interaction(position: THREE.Vector3): boolean {
+  if (!mission16.started || mission16.completed) return false;
+  const station = getMission16StationPosition();
+  const distance = position.distanceTo(station);
+  const inRange =
+    distance <= (mission16.step === 'synchronizeNodes' ? mission16Tuning.nodeRange : mission16Tuning.stationRange);
+
+  // Node sync is the one step that needs discrete presses: each nudges the
+  // emitter phase. Everything else is a hold — standing in range progresses it,
+  // and the press just reports status.
+  if (mission16.step === 'synchronizeNodes') {
+    if (inRange && mission16.nudgeNodePhase()) {
+      void sfxManager.play('confirm', 0.28);
+    }
+    const active = mission16.activeNodeIndex;
+    missionText.textContent = mission16.isNodeRevealed()
+      ? `Fase ${Math.round(mission16.readout.nodePhase)} // objetivo ${Math.round(mission16.readout.nodePhaseTarget)} — E para alinear.`
+      : active >= 0
+        ? `Señal ${mission16.readout.nodeSignal}% hacia el ${getBearingLabel(position, station)}.`
+        : 'Nodos Pleyadianos sincronizados.';
+    return true;
+  }
+
+  missionText.textContent = inRange
+    ? `${getMission16StationLabel()}: ${Math.round(mission16.phaseProgress)}%.`
+    : `${getMission16StationLabel()} a ${Math.round(distance)} m.`;
+  return true;
+}
+
+function updateMission16Systems(delta: number, elapsed: number): void {
+  startMission16IfReady();
+  if (!mission16.started) {
+    if (pleyadianProtocolEffect.group.visible) pleyadianProtocolEffect.setIntensity(0);
+    pleyadianProtocolEffect.update(delta, elapsed);
+    return;
+  }
+  if (mission16.completed) {
+    pleyadianProtocolEffect.setIntensity(mission16ProtocolIntensity());
+    pleyadianProtocolEffect.update(delta, elapsed);
+    pleyadianDefenseNodes.update(elapsed);
+    return;
+  }
+
+  const activePlayer = getActivePlayerPosition();
+  const station = getMission16StationPosition();
+  const distance = activePlayer.distanceTo(station);
+  const stepRange = mission16.step === 'synchronizeNodes' ? mission16Tuning.nodeRange : mission16Tuning.stationRange;
+  const inRange = distance <= stepRange;
+
+  const active = mission16.activeNodeIndex;
+  mission16.setNodeSearchDistance(
+    mission16.step === 'synchronizeNodes' && active >= 0
+      ? activePlayer.distanceTo(pleyadianDefenseNodes.positions[active])
+      : Number.POSITIVE_INFINITY
+  );
+
+  pleyadianProtocolEffect.setIntensity(mission16ProtocolIntensity());
+
+  switch (mission16.step) {
+    case 'receiveAlert':
+      transientWarning = 'TRANSMISION PLEYADIANA // FRAGMENTADA';
+      if (inRange && mission16.reachTerminal()) {
+        syncMission16Visuals();
+        triggerDialogue('m16_terminal', 'mission16-terminal');
+        missionText.textContent = 'Confirma si el sabotaje fue una prueba de vulnerabilidades.';
+        saveProgress();
+      }
+      break;
+    case 'accessTerminal':
+      if (mission16.advanceAccess(delta, inRange)) {
+        syncMission16Visuals();
+        void sfxManager.play('confirm', 0.45);
+        triggerDialogue('m16_probe_confirmed', 'mission16-probe');
+        showPhaseBanner('SABOTAJE = PRUEBA', 'Median nuestras defensas');
+        missionText.textContent = 'Enlaza Aurora, Nereida y el Arca. Calibra tres frecuencias.';
+        saveProgress();
+      } else {
+        transientWarning = `CRUZANDO REGISTROS ${Math.round(mission16.phaseProgress)}%`;
+      }
+      break;
+    case 'establishTripleLink': {
+      const before = mission16.linkFrequenciesCalibrated;
+      const done = mission16.advanceTripleLink(delta, inRange);
+      if (mission16.linkFrequenciesCalibrated > before) {
+        void sfxManager.play('confirm', 0.4);
+        const label = TRIPLE_LINK_ANCHORS[Math.min(before, TRIPLE_LINK_ANCHORS.length - 1)];
+        transientWarning = `FRECUENCIA ${mission16.linkFrequenciesCalibrated}/3 // ${label.toUpperCase()}`;
+      }
+      if (done) {
+        syncMission16Visuals();
+        triggerDialogue('m16_triple_link', 'mission16-triple-link');
+        showPhaseBanner('ENLACE TRIPLE ACTIVO', 'Aurora // Nereida // Arca');
+        missionText.textContent = 'Recupera la clave del Resonador Atlas por enlace remoto.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `CALIBRANDO FRECUENCIA ${Math.round(mission16.phaseProgress)}%`;
+      }
+      break;
+    }
+    case 'recoverAtlasKey':
+      if (mission16.advanceAtlasKey(delta, inRange)) {
+        syncMission16Visuals();
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m16_atlas_key', 'mission16-atlas-key');
+        showPhaseBanner('CLAVE ATLAS RECUPERADA', 'Firma Pleyadiana reconocida');
+        saveProgress();
+      } else {
+        transientWarning = `ENLACE REMOTO ${Math.round(mission16.phaseProgress)}%`;
+      }
+      break;
+    case 'revealSeedWorld': {
+      // The revelation plays on the frame the step is entered, then the beat
+      // holds and the mission advances on its own.
+      if (!mission16SeedWorldAnnounced) {
+        mission16SeedWorldAnnounced = true;
+        triggerDialogue('m16_seed_world', 'mission16-seed-world');
+        triggerDialogue('m16_seed_network', 'mission16-seed-network', 3.0);
+        showPhaseBanner('E-01: MUNDO SEMILLA', 'Parte de una red antigua');
+      }
+      if (mission16.advanceRevelation(delta)) {
+        syncMission16Visuals();
+        missionText.textContent = 'Compila los protocolos defensivos en la terminal.';
+        saveProgress();
+      }
+      break;
+    }
+    case 'unlockDetection':
+    case 'unlockShield':
+    case 'unlockAlertNetwork': {
+      const unlocked = mission16.advanceProtocol(delta, inRange);
+      if (unlocked) {
+        syncMission16Visuals();
+        void sfxManager.play('confirm', 0.5);
+        const labels: Record<string, [string, string]> = {
+          detection: ['PROTOCOLO // DETECCION', 'Deteccion de firmas hostiles'],
+          shield: ['PROTOCOLO // ESCUDO', 'Refuerzo de escudo'],
+          alertNetwork: ['PROTOCOLO // RED DE ALERTA', 'Aurora // Nereida // Arca']
+        };
+        const [t, s] = labels[unlocked];
+        showPhaseBanner(t, s);
+        triggerDialogue('m16_protocols', 'mission16-protocols');
+        missionText.textContent =
+          unlocked === 'alertNetwork'
+            ? 'Sincroniza los tres nodos Pleyadianos.'
+            : 'Compila el siguiente prototipo.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `COMPILANDO PLANO ${Math.round(mission16.phaseProgress)}%`;
+      }
+      break;
+    }
+    case 'synchronizeNodes': {
+      const before = mission16.nodesSynchronizedCount;
+      const done = mission16.advanceSynchronize(delta, inRange, elapsed);
+      if (mission16.nodesSynchronizedCount > before) {
+        syncMission16Visuals();
+        void sfxManager.play('confirm', 0.5);
+        transientWarning = `NODO SINCRONIZADO ${mission16.nodesSynchronizedCount}/3`;
+      } else if (inRange) {
+        transientWarning = mission16.isPhaseStable(elapsed)
+          ? `SINCRONIZANDO ${Math.round(mission16.phaseProgress)}%`
+          : 'FASE FUERA DE BANDA — E PARA ALINEAR';
+      }
+      if (done) {
+        syncMission16Visuals();
+        triggerDialogue('m16_nodes_synced', 'mission16-nodes-synced');
+        showPhaseBanner('NODOS SINCRONIZADOS', 'Red Pleyadiana en linea');
+        missionText.textContent = 'Corre la simulación defensiva en la terminal.';
+        saveProgress();
+      }
+      break;
+    }
+    case 'runSimulation':
+      if (mission16.advanceSimulation(delta, inRange)) {
+        syncMission16Visuals();
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m16_simulation', 'mission16-simulation');
+        showPhaseBanner('SIMULACION COMPLETA', 'Rutas de aproximacion mapeadas');
+        missionText.textContent = 'Confirma el déficit energético del protocolo.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `PROYECTANDO ECOS ${Math.round(mission16.phaseProgress)}%`;
+      }
+      break;
+    case 'confirmEnergyDeficit':
+      if (mission16.advanceEnergyDeficit(delta, inRange)) {
+        syncMission16Visuals();
+        void sfxManager.play('confirm', 0.5);
+        // Mandatory closing Pleyadian line + the M17 hand-off.
+        triggerDialogue('m16_energy_deficit', 'mission16-deficit');
+        triggerDialogue('m16_final_line', 'mission16-final', 3.2);
+        showPhaseBanner('PROTOCOLO ASEGURADO', 'Preparativos de defensa desbloqueados');
+        musicManager.playSting('discovery', clock.elapsedTime);
+        missionText.textContent = 'Planos defensivos guardados. Prepara las defensas de Aurora.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `CERRANDO INFORME ${Math.round(mission16.phaseProgress)}%`;
+      }
+      break;
+    default:
+      break;
+  }
+
+  pleyadianDefenseNodes.update(elapsed);
+  pleyadianProtocolEffect.update(delta, elapsed);
+}
+
+function getMission16ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission16.started || mission16.completed) return {};
+  const activePosition = getActivePlayerPosition();
+  const station = getMission16StationPosition();
+  const distance = activePosition.distanceTo(station);
+  const stepRange = mission16.step === 'synchronizeNodes' ? mission16Tuning.nodeRange : mission16Tuning.stationRange;
+  const inRange = distance <= stepRange;
+
+  if (mission16.step === 'receiveAlert') {
+    return { nextAction: 'Ve a la terminal principal.', key: 'WASD' };
+  }
+  if (mission16.step === 'revealSeedWorld') {
+    return { nextAction: 'Escucha la transmisión Pleyadiana…', key: '' };
+  }
+  if (mission16.step === 'synchronizeNodes') {
+    return {
+      nextAction: mission16.isNodeRevealed()
+        ? `Fase ${Math.round(mission16.readout.nodePhase)}/${Math.round(mission16.readout.nodePhaseTarget)} — E para alinear (${Math.round(mission16.phaseProgress)}%).`
+        : mission16.readout.nodeSignal > 0
+          ? `Señal ${mission16.readout.nodeSignal}% hacia el ${getBearingLabel(activePosition, station)}.`
+          : 'Acércate al siguiente nodo Pleyadiano.',
+      key: inRange ? 'E' : 'WASD'
+    };
+  }
+  return {
+    nextAction: inRange
+      ? `${getMission16StationLabel()}: ${Math.round(mission16.phaseProgress)}%.`
+      : `${getMission16StationLabel()} a ${Math.round(distance)} m.`,
+    key: inRange ? '' : 'WASD',
+    blockedReason: !inRange && mission16.phaseProgress > 0 ? 'Fuera de la estación: el avance se está perdiendo.' : ''
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mission 17: Preparativos de Defensa
+// ---------------------------------------------------------------------------
+
+const MISSION17_STEP_ORDER = [
+  'inactive', 'emergencyCouncil', 'installEnergyReserve', 'deploySensors', 'calibrateDetection',
+  'installShieldEmitters', 'establishAlertNetwork', 'markEvacuationRoutes', 'runDefenseDrill',
+  'stabilizeOverload', 'detectIncomingSignatures', 'completed'
+] as const;
+
+function mission17StepIndex(step: string): number {
+  const i = (MISSION17_STEP_ORDER as readonly string[]).indexOf(step);
+  return i < 0 ? 0 : i;
+}
+
+/** The defence hardware exists in the world from the reserve step onward. */
+function mission17NetworkShown(): boolean {
+  return mission17.started && mission17StepIndex(mission17.step) >= mission17StepIndex('installEnergyReserve');
+}
+
+function mission17SensorStates(): DefensePartState[] {
+  const active = mission17.activeSensorIndex;
+  return defenseSensorDefinitions.map((_, i) =>
+    mission17.sensorDeployed(i) ? 'online' : i === active ? 'deploying' : 'stowed'
+  );
+}
+
+function mission17EmitterStates(): DefensePartState[] {
+  const active = mission17.activeEmitterIndex;
+  return shieldEmitterDefinitions.map((_, i) =>
+    mission17.emitterInstalled(i) ? 'online' : i === active ? 'deploying' : 'stowed'
+  );
+}
+
+/** The station the current M17 step is worked at. */
+function getMission17StationPosition(): THREE.Vector3 {
+  switch (mission17.stepDefinition.target) {
+    case 'terminal':
+      return auroraTraceNodes.terminalPosition;
+    case 'reserve':
+      return auroraDefenseNetwork.reservePosition;
+    case 'sensor': {
+      const active = mission17.activeSensorIndex;
+      return active >= 0 ? auroraDefenseNetwork.sensorPositions[active] : auroraTraceNodes.terminalPosition;
+    }
+    case 'emitter': {
+      const active = mission17.activeEmitterIndex;
+      return active >= 0 ? auroraDefenseNetwork.emitterPositions[active] : auroraTraceNodes.terminalPosition;
+    }
+    case 'core':
+      return auroraHabitatModule.interactionPosition;
+    default:
+      return auroraTraceNodes.terminalPosition;
+  }
+}
+
+function getMission17StationLabel(): string {
+  switch (mission17.step) {
+    case 'installEnergyReserve':
+      return 'RESERVA ENERGETICA';
+    case 'deploySensors': {
+      const active = mission17.activeSensorIndex;
+      return active >= 0 ? defenseSensorDefinitions[active].route : 'SENSORES PERIMETRALES';
+    }
+    case 'installShieldEmitters': {
+      const active = mission17.activeEmitterIndex;
+      return active >= 0 ? shieldEmitterDefinitions[active].shortName.toUpperCase() : 'EMISORES DE ESCUDO';
+    }
+    case 'stabilizeOverload':
+      return 'NUCLEO // RED';
+    case 'completed':
+      return 'DEFENSAS EN ESPERA';
+    default:
+      return 'TERMINAL PRINCIPAL';
+  }
+}
+
+/** Range for the current M17 step: field hardware is worked closer than a terminal. */
+function mission17StepRange(): number {
+  const target = mission17.stepDefinition.target;
+  return target === 'sensor' || target === 'emitter' || target === 'reserve'
+    ? mission17Tuning.deployRange
+    : mission17Tuning.stationRange;
+}
+
+function syncMission17Visuals(): void {
+  auroraDefenseNetwork.setLayout((x, z) => auroraSurfaceHeight(x, z));
+  const shown = mission17NetworkShown();
+  auroraDefenseNetwork.restore(
+    shown,
+    mission17SensorStates(),
+    mission17EmitterStates(),
+    mission17.state.energyReserveOnline,
+    mission17.state.sensorsCalibrated
+  );
+  const habitat = auroraStationPosition(auroraSettlementSiteDefinition.position);
+  auroraDefenseEffect.setOrigin(habitat.x, habitat.y, habitat.z);
+}
+
+function startMission17IfReady(): boolean {
+  if (!inSurfacePhase || mission17.started || !mission16.completed) return false;
+  if (!mission17.start(mission16.snapshot())) return false;
+  syncMission17Visuals();
+  triggerDialogue('m17_start', 'mission17-start');
+  triggerDialogue('m17_council', 'mission17-council', 3.2);
+  showPhaseBanner('MISION 17: PREPARATIVOS DE DEFENSA', 'Consejo de emergencia');
+  missionText.textContent = 'Ve a la terminal y abre el consejo de emergencia.';
+  saveProgress();
+  return true;
+}
+
+function performMission17Interaction(position: THREE.Vector3): boolean {
+  if (!mission17.started || mission17.completed) return false;
+  const station = getMission17StationPosition();
+  const distance = position.distanceTo(station);
+  const inRange = distance <= mission17StepRange();
+  missionText.textContent = inRange
+    ? `${getMission17StationLabel()}: ${Math.round(mission17.phaseProgress)}%.`
+    : `${getMission17StationLabel()} a ${Math.round(distance)} m.`;
+  return true;
+}
+
+function updateMission17Systems(delta: number, elapsed: number): void {
+  startMission17IfReady();
+  if (!mission17.started) {
+    auroraDefenseEffect.setShieldTest(0);
+    auroraDefenseEffect.setAlertLevel(0);
+    auroraDefenseEffect.setSignatureLevel(0);
+    auroraDefenseEffect.update(delta, elapsed);
+    return;
+  }
+
+  const state = mission17.state;
+  // Defences stay standing once the mission is over: the shield parks, the
+  // alert net idles low and the real signatures remain on the readout.
+  if (mission17.completed) {
+    auroraDefenseEffect.setShieldTest(0);
+    auroraDefenseEffect.setAlertLevel(0.25);
+    auroraDefenseEffect.setSignatureLevel(1);
+    auroraDefenseNetwork.setShieldTestLevel(0);
+    auroraDefenseNetwork.update(elapsed, delta);
+    auroraDefenseEffect.update(delta, elapsed);
+    return;
+  }
+
+  const activePlayer = getActivePlayerPosition();
+  const station = getMission17StationPosition();
+  const distance = activePlayer.distanceTo(station);
+  const inRange = distance <= mission17StepRange();
+
+  // Search readout for whichever field part is being worked.
+  const activeSensor = mission17.activeSensorIndex;
+  const activeEmitter = mission17.activeEmitterIndex;
+  mission17.setDeploySearchDistance(
+    activeSensor >= 0
+      ? activePlayer.distanceTo(auroraDefenseNetwork.sensorPositions[activeSensor])
+      : activeEmitter >= 0
+        ? activePlayer.distanceTo(auroraDefenseNetwork.emitterPositions[activeEmitter])
+        : Number.POSITIVE_INFINITY
+  );
+
+  // Shield is only visible while an emitter load test or the drill is running.
+  const shieldTest =
+    mission17.step === 'installShieldEmitters' && inRange
+      ? 0.4 + (mission17.phaseProgress / 100) * 0.3
+      : mission17.step === 'runDefenseDrill'
+        ? Math.min(1, 0.35 + (mission17.phaseProgress / 100) * 0.65)
+        : 0;
+  auroraDefenseEffect.setShieldTest(shieldTest);
+  auroraDefenseNetwork.setShieldTestLevel(shieldTest);
+  auroraDefenseEffect.setAlertLevel(
+    mission17.step === 'establishAlertNetwork'
+      ? 0.35 + (state.alertChannelsVerified / 3) * 0.5
+      : mission17.step === 'runDefenseDrill'
+        ? 0.8
+        : state.alertNetworkOnline
+          ? 0.2
+          : 0
+  );
+  auroraDefenseEffect.setSignatureLevel(mission17.step === 'detectIncomingSignatures' ? 1 : 0);
+
+  switch (mission17.step) {
+    case 'emergencyCouncil':
+      if (mission17.advanceCouncil(delta, inRange)) {
+        syncMission17Visuals();
+        void sfxManager.play('confirm', 0.45);
+        triggerDialogue('m17_deficit', 'mission17-deficit');
+        showPhaseBanner('DEFICIT CONFIRMADO', 'Puntos vulnerables identificados');
+        missionText.textContent = 'Activa la reserva energética y reparte los tres circuitos.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `REVISANDO PLANOS ${Math.round(mission17.phaseProgress)}%`;
+      }
+      break;
+    case 'installEnergyReserve': {
+      const before = state.energyCircuitsBalanced;
+      const done = mission17.advanceEnergyReserve(delta, inRange);
+      if (state.energyCircuitsBalanced > before) {
+        void sfxManager.play('confirm', 0.4);
+        const label = ENERGY_CIRCUITS[Math.min(before, ENERGY_CIRCUITS.length - 1)];
+        transientWarning = `CIRCUITO ${state.energyCircuitsBalanced}/3 // ${label}`;
+      }
+      if (done) {
+        syncMission17Visuals();
+        triggerDialogue('m17_reserve', 'mission17-reserve');
+        showPhaseBanner('RESERVA ENERGETICA ACTIVA', 'Soporte vital intacto');
+        missionText.textContent = 'Despliega los tres sensores perimetrales.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `EQUILIBRANDO CIRCUITO ${Math.round(mission17.phaseProgress)}%`;
+      }
+      break;
+    }
+    case 'deploySensors': {
+      const before = mission17.sensorsDeployedCount;
+      const done = mission17.advanceSensor(delta, inRange);
+      if (mission17.sensorsDeployedCount > before) {
+        syncMission17Visuals();
+        void sfxManager.play('confirm', 0.45);
+        transientWarning = `SENSOR ${mission17.sensorsDeployedCount}/3 DESPLEGADO`;
+      } else if (inRange) {
+        transientWarning = `DESPLEGANDO SENSOR ${Math.round(mission17.phaseProgress)}%`;
+      }
+      if (done) {
+        syncMission17Visuals();
+        triggerDialogue('m17_sensors', 'mission17-sensors');
+        showPhaseBanner('PERIMETRO CUBIERTO', 'Tres rutas vigiladas');
+        missionText.textContent = 'Calibra la detección con el protocolo Pleyadiano.';
+        saveProgress();
+      }
+      break;
+    }
+    case 'calibrateDetection':
+      if (mission17.advanceCalibration(delta, inRange)) {
+        syncMission17Visuals();
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m17_calibration', 'mission17-calibration');
+        showPhaseBanner('DETECCION CALIBRADA', 'Firmas simuladas identificadas');
+        missionText.textContent = 'Instala los tres emisores de escudo.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `CALIBRANDO DETECCION ${Math.round(mission17.phaseProgress)}%`;
+      }
+      break;
+    case 'installShieldEmitters': {
+      const before = mission17.emittersInstalledCount;
+      const done = mission17.advanceEmitter(delta, inRange);
+      if (mission17.emittersInstalledCount > before) {
+        syncMission17Visuals();
+        void sfxManager.play('confirm', 0.45);
+        transientWarning = `EMISOR ${mission17.emittersInstalledCount}/3 // PRUEBA DE CARGA OK`;
+      } else if (inRange) {
+        transientWarning = `INSTALANDO EMISOR ${Math.round(mission17.phaseProgress)}%`;
+      }
+      if (done) {
+        syncMission17Visuals();
+        triggerDialogue('m17_shield', 'mission17-shield');
+        showPhaseBanner('ESCUDO REFORZADO', 'Anillo de tres emisores');
+        missionText.textContent = 'Verifica los tres canales de la red de alerta.';
+        saveProgress();
+      }
+      break;
+    }
+    case 'establishAlertNetwork': {
+      const before = state.alertChannelsVerified;
+      const done = mission17.advanceAlertNetwork(delta, inRange);
+      if (state.alertChannelsVerified > before) {
+        void sfxManager.play('confirm', 0.4);
+        const enclave = ALERT_ENCLAVES[Math.min(before, ALERT_ENCLAVES.length - 1)];
+        transientWarning = `CANAL ${state.alertChannelsVerified}/3 // ${enclave.toUpperCase()} EN LINEA`;
+      }
+      if (done) {
+        syncMission17Visuals();
+        triggerDialogue('m17_alert_network', 'mission17-alert-network');
+        showPhaseBanner('RED DE ALERTA ACTIVA', 'Aurora // Nereida // Arca');
+        missionText.textContent = 'Marca refugio, punto médico y zona de extracción.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `VERIFICANDO CANAL ${Math.round(mission17.phaseProgress)}%`;
+      }
+      break;
+    }
+    case 'markEvacuationRoutes': {
+      const before = state.evacMarkersSet;
+      const done = mission17.advanceEvacuation(delta, inRange);
+      if (state.evacMarkersSet > before) {
+        void sfxManager.play('confirm', 0.38);
+        const marker = EVAC_MARKERS[Math.min(before, EVAC_MARKERS.length - 1)];
+        transientWarning = `${marker} MARCADO (${state.evacMarkersSet}/3)`;
+      }
+      if (done) {
+        syncMission17Visuals();
+        triggerDialogue('m17_evacuation', 'mission17-evacuation');
+        showPhaseBanner('RUTAS DE EVACUACION', 'Simulacro sin incidentes');
+        missionText.textContent = 'Lanza la prueba integral de defensa.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `MARCANDO RUTA ${Math.round(mission17.phaseProgress)}%`;
+      }
+      break;
+    }
+    case 'runDefenseDrill':
+      if (mission17.advanceDrill(delta, inRange)) {
+        syncMission17Visuals();
+        void sfxManager.play('warning', 0.5);
+        triggerDialogue('m17_drill', 'mission17-drill');
+        showPhaseBanner('SOBRECARGA DE RED', 'La red no aguanta un ataque prolongado');
+        missionText.textContent = 'Estabiliza la red en el núcleo antes del apagón.';
+        musicManager.playSting('discovery', clock.elapsedTime);
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `SIMULANDO INTRUSION ${Math.round(mission17.phaseProgress)}%`;
+      }
+      break;
+    case 'stabilizeOverload': {
+      const done = mission17.advanceStabilize(delta, inRange);
+      if (!done) {
+        transientWarning = `SOBRECARGA ${Math.round(mission17.overloadPercent)}%`;
+        if (mission17.overloadCritical && clock.elapsedTime - mission17OverloadWarnedAt > 8) {
+          mission17OverloadWarnedAt = clock.elapsedTime;
+          void sfxManager.play('warning', 0.55);
+        }
+      } else {
+        syncMission17Visuals();
+        void sfxManager.play('confirm', 0.5);
+        triggerDialogue('m17_stabilized', 'mission17-stabilized');
+        showPhaseBanner('RED ESTABILIZADA', 'Defensas en modo de espera');
+        saveProgress();
+      }
+      break;
+    }
+    case 'detectIncomingSignatures': {
+      // The real signatures land here — the first non-simulated contact.
+      if (!mission17SignaturesAnnounced) {
+        mission17SignaturesAnnounced = true;
+        void sfxManager.play('warning', 0.65);
+        triggerDialogue('m17_signatures', 'mission17-signatures');
+        triggerDialogue('m17_not_a_simulation', 'mission17-not-simulation', 2.8);
+        showPhaseBanner('FIRMAS EN ALTA ATMOSFERA', 'Multiples contactos // no es un simulacro');
+      }
+      transientWarning = 'MULTIPLES FIRMAS DESCENDIENDO';
+      if (mission17.advanceDetection(delta)) {
+        syncMission17Visuals();
+        showPhaseBanner('PREPARATIVOS COMPLETOS', 'Mision 18 preparada');
+        missionText.textContent = 'Defensas en espera. Esto ya no es una simulación.';
+        musicManager.playSting('discovery', clock.elapsedTime);
+        saveProgress();
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  auroraDefenseNetwork.update(elapsed, delta);
+  auroraDefenseEffect.update(delta, elapsed);
+}
+
+function getMission17ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission17.started || mission17.completed) return {};
+  const activePosition = getActivePlayerPosition();
+  const station = getMission17StationPosition();
+  const distance = activePosition.distanceTo(station);
+  const inRange = distance <= mission17StepRange();
+
+  if (mission17.step === 'detectIncomingSignatures') {
+    return { nextAction: 'Multiples firmas descendiendo. Esto ya no es una simulación.', key: '' };
+  }
+  if (mission17.step === 'stabilizeOverload') {
+    return {
+      nextAction: `Purga la sobrecarga: ${Math.round(mission17.overloadPercent)}%.`,
+      key: inRange ? '' : 'WASD',
+      blockedReason: inRange ? '' : 'Fuera del núcleo: la sobrecarga sigue subiendo.'
+    };
+  }
+  if ((mission17.step === 'deploySensors' || mission17.step === 'installShieldEmitters') && !inRange) {
+    return {
+      nextAction: mission17.readout.deploySignal > 0
+        ? `${getMission17StationLabel()} — señal ${mission17.readout.deploySignal}% hacia el ${getBearingLabel(activePosition, station)}.`
+        : `Ve a ${getMission17StationLabel()}.`,
+      key: 'WASD'
+    };
+  }
+  return {
+    nextAction: inRange
+      ? `${getMission17StationLabel()}: ${Math.round(mission17.phaseProgress)}%.`
+      : `${getMission17StationLabel()} a ${Math.round(distance)} m.`,
+    key: inRange ? '' : 'WASD',
+    blockedReason: !inRange && mission17.phaseProgress > 0 ? 'Fuera de la estación: el avance se está perdiendo.' : ''
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mission 18: Primer Fuego
+// ---------------------------------------------------------------------------
+
+/** Fires a one-shot M18 beat (dialogue/banner) at most once per step entry. */
+function mission18Beat(key: string, run: () => void): void {
+  if (mission18AnnouncedBeats.has(key)) return;
+  mission18AnnouncedBeats.add(key);
+  run();
+}
+
+/** The struck critical system is the M13 comms mast — no new hardware. */
+function getMission18CriticalPosition(): THREE.Vector3 {
+  return auroraStormStations.antennaPosition;
+}
+
+function getMission18WreckagePosition(): THREE.Vector3 {
+  const [x, z] = droneWreckageDefinition.position;
+  return mission18WreckageScratch.set(x, auroraSurfaceHeight(x, z) + droneWreckageDefinition.height, z);
+}
+
+/** The station the current M18 step is worked at. */
+function getMission18StationPosition(): THREE.Vector3 {
+  switch (mission18.stepDefinition.target) {
+    case 'terminal':
+      return auroraTraceNodes.terminalPosition;
+    case 'critical':
+      return getMission18CriticalPosition();
+    case 'wreckage':
+      return getMission18WreckagePosition();
+    case 'turret':
+      return auroraDefenseNetwork.turretPositions[0] ?? auroraTraceNodes.terminalPosition;
+    case 'ship':
+      return ship.position;
+    default:
+      return auroraTraceNodes.terminalPosition;
+  }
+}
+
+function getMission18StationLabel(): string {
+  switch (mission18.step) {
+    case 'defendCriticalSystem':
+      return CRITICAL_SYSTEM.shortName.toUpperCase();
+    case 'recoverWreckage':
+      return 'RESTOS DE DRON';
+    case 'firstWave':
+      return 'BATERIAS DE PUNTO';
+    case 'boardShip':
+      return 'NAVE';
+    case 'interceptDrones':
+    case 'defendShield':
+    case 'pursueFinalDrone':
+      return 'CONTACTOS AEREOS';
+    case 'completed':
+      return 'AURORA OPERATIVA';
+    default:
+      return 'TERMINAL PRINCIPAL';
+  }
+}
+
+function mission18StepRange(): number {
+  const target = mission18.stepDefinition.target;
+  return target === 'critical' || target === 'wreckage' || target === 'turret'
+    ? mission18Tuning.fieldRange
+    : mission18Tuning.stationRange;
+}
+
+/** The batteries exist from M17 (sealed) and open when M18 authorises fire. */
+function syncMission18Visuals(): void {
+  const turretsShown = mission17.completed || mission18.started;
+  auroraDefenseNetwork.restoreTurrets(turretsShown, mission18.state.defenseWeaponsAuthorized);
+  const habitat = auroraStationPosition(auroraSettlementSiteDefinition.position);
+  coalitionDrones.setOrigin(habitat.x, habitat.y, habitat.z);
+}
+
+function startMission18IfReady(): boolean {
+  if (!inSurfacePhase || mission18.started || !mission17.completed) return false;
+  if (!mission18.start(mission17.snapshot())) return false;
+  syncMission18Visuals();
+  triggerDialogue('m18_start', 'mission18-start');
+  triggerDialogue('m18_attack_confirmed', 'mission18-attack-confirmed', 3.2);
+  showPhaseBanner('MISION 18: PRIMER FUEGO', 'Contactos hostiles confirmados');
+  missionText.textContent = 'Activa el protocolo de emergencia en la terminal.';
+  saveProgress();
+  return true;
+}
+
+function performMission18Interaction(position: THREE.Vector3): boolean {
+  if (!mission18.started || mission18.completed) return false;
+  // Airborne combat steps are resolved by the ship's weapons, not by E.
+  if (mission18.stepDefinition.target === 'sky' || mission18.stepDefinition.target === 'ship') {
+    const readout = mission18.readout;
+    missionText.textContent =
+      mission18.step === 'boardShip'
+        ? 'Vuelve a la nave con F y despega.'
+        : `Contactos activos: ${readout.dronesActive} // restantes ${readout.dronesRemaining}.`;
+    return true;
+  }
+  const station = getMission18StationPosition();
+  const distance = position.distanceTo(station);
+  const inRange = distance <= mission18StepRange();
+  missionText.textContent = inRange
+    ? `${getMission18StationLabel()}: ${Math.round(mission18.phaseProgress)}%.`
+    : `${getMission18StationLabel()} a ${Math.round(distance)} m.`;
+  return true;
+}
+
+/**
+ * Aurora's point-defence batteries. They engage on their own — the pilot keeps
+ * the reserve alive rather than aiming — and never spawn a light per shot.
+ */
+function updateMission18Turrets(delta: number): void {
+  if (!mission18.weaponsFree) return;
+  const powered = mission18.batteriesPowered;
+  for (let i = 0; i < TURRET_COUNT; i += 1) {
+    const muzzle = auroraDefenseNetwork.turretPositions[i];
+    if (!muzzle) continue;
+    const target = coalitionDrones.nearestPosition(muzzle, mission18Tuning.turretRange);
+    auroraDefenseNetwork.aimTurret(i, target);
+    mission18TurretCooldowns[i] = Math.max(0, mission18TurretCooldowns[i] - delta);
+    if (!target || !powered || mission18TurretCooldowns[i] > 0) continue;
+    if (!mission18.spendDefenseEnergy(mission18Tuning.turretEnergyPerShot)) continue;
+    mission18TurretCooldowns[i] = mission18Tuning.turretFireInterval;
+    auroraDefenseNetwork.fireTurret(i);
+    auroraDefenseEffect.fireTracer(muzzle, target);
+    const killed = coalitionDrones.damageNearest(muzzle, mission18Tuning.turretRange, mission18Tuning.turretDamage);
+    if (killed) void sfxManager.play('confirm', 0.3);
+  }
+}
+
+function updateMission18Systems(delta: number, elapsed: number): void {
+  startMission18IfReady();
+  if (!mission18.started) {
+    if (coalitionDrones.activeCount > 0 && !mission22.started && !mission23.started) coalitionDrones.clearAll();
+    return;
+  }
+  if (mission18.completed) {
+    if (coalitionDrones.activeCount > 0 && !mission22.started && !mission23.started) coalitionDrones.clearAll();
+    mission18.setActiveDrones(0);
+    auroraDefenseEffect.setShieldTest(0);
+    auroraDefenseEffect.update(delta, elapsed);
+    return;
+  }
+
+  const state = mission18.state;
+  const activePlayer = getActivePlayerPosition();
+  const station = getMission18StationPosition();
+  const distance = activePlayer.distanceTo(station);
+  const inRange = distance <= mission18StepRange();
+  mission18.advanceMeters(delta);
+  mission18.setActiveDrones(coalitionDrones.activeCount);
+
+  // --- Waves: launch on entry, and never twice for the same step.
+  const wave = mission18.waveDefinition;
+  if (wave && coalitionDrones.activeCount === 0 && !mission18AnnouncedBeats.has(`wave:${wave.id}`)) {
+    mission18AnnouncedBeats.add(`wave:${wave.id}`);
+    coalitionDrones.launchWave(wave.count, wave.id === 'runner');
+    showPhaseBanner(wave.label, `${wave.count} contacto(s) hostil(es)`);
+    void sfxManager.play('warning', 0.5);
+  }
+
+  // --- Drones: deterministic flight + damage feedback into the mission.
+  coalitionDrones.update(
+    delta,
+    elapsed,
+    () => {
+      // One drone lost. Advancing the wave may move the mission on.
+      const waveDone = mission18.reportDroneDestroyed();
+      auroraDefenseEffect.setSignatureLevel(0);
+      if (waveDone) {
+        syncMission18Visuals();
+        coalitionDrones.clearAll();
+        saveProgress();
+      }
+    },
+    (dronePosition) => {
+      // A completed attack pass presses whatever the current step protects.
+      if (mission18.step === 'defendShield') {
+        mission18.damageShield(mission18Tuning.shieldDamagePerHit);
+        auroraDefenseEffect.registerShieldImpact(dronePosition);
+      } else if (mission18.step === 'defendCriticalSystem') {
+        mission18.damageCriticalSystem(4);
+      }
+    }
+  );
+
+  // Shield dome is visible while it is being defended or tested.
+  auroraDefenseEffect.setShieldTest(
+    mission18.step === 'defendShield' && !mission18.shieldCollapsed
+      ? 0.45 + (mission18.shieldIntegrityPercent / 100) * 0.5
+      : 0
+  );
+  auroraDefenseEffect.setAlertLevel(state.emergencyProtocolActive && !mission18.completed ? 0.8 : 0);
+  auroraDefenseEffect.setSignatureLevel(coalitionDrones.activeCount > 0 ? 1 : 0);
+
+  updateMission18Turrets(delta);
+
+  switch (mission18.step) {
+    case 'realAlert':
+      transientWarning = 'CONTACTOS REALES // NO ES UN SIMULACRO';
+      if (mission18.advanceAlert(delta, inRange)) {
+        syncMission18Visuals();
+        void sfxManager.play('warning', 0.6);
+        triggerDialogue('m18_shelter', 'mission18-shelter');
+        showPhaseBanner('PROTOCOLO DE EMERGENCIA', 'Habitantes en refugios');
+        missionText.textContent = 'Clasifica los contactos con los sensores.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `ACTIVANDO PROTOCOLO ${Math.round(mission18.phaseProgress)}%`;
+      }
+      break;
+    case 'identifyHostiles':
+      if (mission18.advanceIdentify(delta, inRange)) {
+        syncMission18Visuals();
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m18_identified', 'mission18-identified');
+        showPhaseBanner('DRONES HOSTILES', 'Reconocimiento armado // Coalicion');
+        missionText.textContent = 'Autoriza las baterías defensivas.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `CLASIFICANDO CONTACTOS ${Math.round(mission18.phaseProgress)}% // RUMBO 0-4-2 // ALT 2100 m`;
+      }
+      break;
+    case 'authorizeDefenseWeapons':
+      if (mission18.advanceAuthorize(delta, inRange)) {
+        syncMission18Visuals();
+        void sfxManager.play('confirm', 0.55);
+        triggerDialogue('m18_weapons_free', 'mission18-weapons-free');
+        showPhaseBanner('FUEGO AUTORIZADO', 'Tres baterias de punto en linea');
+        missionText.textContent = 'Las baterías abren fuego. Mantén la reserva.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `AUTORIZANDO FUEGO ${Math.round(mission18.phaseProgress)}%`;
+      }
+      break;
+    case 'firstWave': {
+      const r = mission18.readout;
+      transientWarning = `OLEADA 1 // ${r.dronesActive} ACTIVOS // ENERGIA ${Math.round(r.defenseEnergy)}%`;
+      if (!mission18.batteriesPowered && clock.elapsedTime - mission18WarnedAt > 8) {
+        mission18WarnedAt = clock.elapsedTime;
+        void sfxManager.play('warning', 0.5);
+        transientWarning = 'RESERVA AGOTADA // BATERIAS EN SILENCIO';
+      }
+      break;
+    }
+    case 'defendCriticalSystem':
+      mission18Beat('breach', () => {
+        void sfxManager.play('warning', 0.6);
+        triggerDialogue('m18_breach', 'mission18-breach');
+        showPhaseBanner('BRECHA // ANTENA ALCANZADA', 'Repara bajo fuego');
+      });
+      transientWarning = `ANTENA ${Math.round(mission18.criticalIntegrityPercent)}%`;
+      if (mission18.advanceRepair(delta, inRange)) {
+        syncMission18Visuals();
+        void sfxManager.play('confirm', 0.5);
+        triggerDialogue('m18_mast_restored', 'mission18-mast-restored');
+        showPhaseBanner('ANTENA ESTABILIZADA', 'Suben a la nave');
+        missionText.textContent = 'Sube a la nave e intercepta a los que quedan.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `REPARANDO ANTENA ${Math.round(mission18.phaseProgress)}%`;
+      }
+      break;
+    case 'boardShip':
+      mission18Beat('board', () => {
+        triggerDialogue('m18_takeoff', 'mission18-takeoff');
+      });
+      transientWarning = 'SUBE A LA NAVE // F';
+      // Boarding is confirmed by the existing player-mode system: inside the
+      // ship and actually airborne.
+      // Airborne = inside the ship and genuinely off the ground, using the same
+      // altitude expression the rest of the surface systems use.
+      const shipAltitude = ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+      if (playerModeSystem.insideShip && !playerModeSystem.transitionActive && shipAltitude > 12) {
+        if (mission18.confirmBoarded()) {
+          syncMission18Visuals();
+          showPhaseBanner('INTERCEPCION', 'Usa las armas de la nave');
+          missionText.textContent = 'Fija blanco y dispara.';
+          saveProgress();
+        }
+      }
+      break;
+    case 'interceptDrones':
+    case 'defendShield': {
+      const r = mission18.readout;
+      transientWarning =
+        mission18.step === 'defendShield'
+          ? `ESCUDO ${Math.round(r.shieldIntegrity)}% // ${r.dronesActive} ATACANTES`
+          : `INTERCEPCION // ${r.dronesActive} ACTIVOS // CASCO ${Math.round(resources.hull)}%`;
+      if (mission18.step === 'defendShield') {
+        mission18Beat('shieldwave', () => {
+          triggerDialogue('m18_shield_attack', 'mission18-shield-attack');
+        });
+        // A collapsed dome is a setback, never a loss: it can be rebuilt.
+        if (mission18.shieldCollapsed) {
+          transientWarning = 'CUPULA CAIDA // RESTABLECIENDO';
+          if (mission18.advanceShieldRestore(delta, true)) {
+            void sfxManager.play('confirm', 0.45);
+            showPhaseBanner('CUPULA RESTABLECIDA', 'A menor potencia');
+          }
+        }
+      }
+      break;
+    }
+    case 'pursueFinalDrone': {
+      mission18Beat('runner', () => {
+        triggerDialogue('m18_runner', 'mission18-runner');
+        showPhaseBanner('DRON EN FUGA', 'Esta transmitiendo');
+      });
+      const r = mission18.readout;
+      transientWarning = `TRANSMISION ENEMIGA ${Math.round(r.transmissionProgress)}%`;
+      // The packet always gets out — the story needs Nereida targeted — but
+      // killing the runner first is recorded and changes the closing copy.
+      if (mission18.advanceTransmission(delta)) {
+        syncMission18Visuals();
+        coalitionDrones.clearAll();
+        void sfxManager.play('warning', 0.55);
+        triggerDialogue('m18_transmission', 'mission18-transmission');
+        showPhaseBanner('PAQUETE ENVIADO', 'Rumbo: Base Nereida');
+        missionText.textContent = 'Escanea los restos del dron abatido.';
+        saveProgress();
+      }
+      break;
+    }
+    case 'recoverWreckage':
+      if (mission18.advanceWreckage(delta, inRange)) {
+        syncMission18Visuals();
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m18_wreckage', 'mission18-wreckage');
+        showPhaseBanner('RESTOS ANALIZADOS', 'Unidad avanzada, no la fuerza principal');
+        missionText.textContent = 'Descifra el paquete enemigo en la terminal.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `ESCANEANDO RESTOS ${Math.round(mission18.phaseProgress)}%`;
+      }
+      break;
+    case 'confirmNereidaTarget':
+      if (mission18.advanceNereidaConfirm(delta, inRange)) {
+        syncMission18Visuals();
+        coalitionDrones.clearAll();
+        void sfxManager.play('confirm', 0.5);
+        triggerDialogue('m18_nereida_target', 'mission18-nereida-target');
+        triggerDialogue('m18_closing', 'mission18-closing', 3.0);
+        showPhaseBanner('AURORA RESISTIO', 'Proximo objetivo: Base Nereida');
+        musicManager.playSting('discovery', clock.elapsedTime);
+        missionText.textContent = 'Se retiran de Aurora. Pero ahora van hacia Nereida.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `DESCIFRANDO PAQUETE ${Math.round(mission18.phaseProgress)}%`;
+      }
+      break;
+    default:
+      break;
+  }
+
+  auroraDefenseEffect.update(delta, elapsed);
+}
+
+function getMission18ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission18.started || mission18.completed) return {};
+  const r = mission18.readout;
+  const target = mission18.stepDefinition.target;
+  if (target === 'sky') {
+    return {
+      nextAction:
+        mission18.step === 'pursueFinalDrone'
+          ? `Derriba al dron en fuga — transmision ${Math.round(r.transmissionProgress)}%.`
+          : `${r.dronesActive} contacto(s) en el aire. Fija blanco y dispara.`,
+      key: 'ESPACIO'
+    };
+  }
+  if (target === 'ship') {
+    return { nextAction: 'Vuelve a la nave y despega.', key: 'F' };
+  }
+  if (mission18.step === 'firstWave') {
+    return {
+      nextAction: `Las baterias estan disparando — energia ${Math.round(r.defenseEnergy)}%.`,
+      key: '',
+      blockedReason: mission18.batteriesPowered ? '' : 'Reserva agotada: las baterias no pueden disparar.'
+    };
+  }
+  const activePosition = getActivePlayerPosition();
+  const station = getMission18StationPosition();
+  const distance = activePosition.distanceTo(station);
+  const inRange = distance <= mission18StepRange();
+  return {
+    nextAction: inRange
+      ? `${getMission18StationLabel()}: ${Math.round(mission18.phaseProgress)}%.`
+      : `${getMission18StationLabel()} a ${Math.round(distance)} m.`,
+    key: inRange ? '' : 'WASD',
+    blockedReason: !inRange && mission18.phaseProgress > 0 ? 'Fuera de la estación: el avance se está perdiendo.' : ''
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mission 19: Nereida bajo Ataque
+// ---------------------------------------------------------------------------
+
+function mission19Beat(key: string, run: () => void): void {
+  if (mission19AnnouncedBeats.has(key)) return;
+  mission19AnnouncedBeats.add(key);
+  run();
+}
+
+/** World position of an M19 station, seated on Nereida's existing terrain. */
+function mission19StationPosition(
+  definition: { position: readonly [number, number]; height: number },
+  out: THREE.Vector3
+): THREE.Vector3 {
+  const [x, z] = definition.position;
+  return out.set(x, planetaryWorld.getHeightAt(x, z) + definition.height, z);
+}
+
+/** The defence system currently being restored maps onto real Nereida hardware. */
+function getMission19DefensePosition(out: THREE.Vector3): THREE.Vector3 {
+  const index = Math.max(0, mission19.activeDefenseIndex);
+  if (index === 0) {
+    // Reuse M04's own defensive beacon: the east one covers the Atlas side.
+    const beacon = defensiveBeacons.find((b) => b.site.id === 'defense-beacon-east') ?? defensiveBeacons[0];
+    return beacon ? out.copy(beacon.interactionPosition) : mission19StationPosition(nereidaEmergencyPower, out);
+  }
+  if (index === 1) return mission19StationPosition(nereidaEmergencyPower, out);
+  return mission19StationPosition(nereidaAtlasGate, out);
+}
+
+function getMission19StationPosition(): THREE.Vector3 {
+  switch (mission19.stepDefinition.target) {
+    case 'terminal':
+      // Before the flight the pilot is still at Aurora; afterwards, at Atlas.
+      return mission19.state.landedAtNereida
+        ? mission19StationPosition(nereidaAtlasGate, mission19Scratch)
+        : auroraTraceNodes.terminalPosition;
+    case 'landing':
+      return mission19StationPosition(nereidaLandingZone, mission19Scratch);
+    case 'defense':
+      return getMission19DefensePosition(mission19Scratch);
+    case 'atlas':
+      return mission19StationPosition(nereidaAtlasGate, mission19Scratch);
+    case 'battery':
+      return mission19StationPosition(nereidaHeavyBattery, mission19Scratch);
+    case 'wreckage':
+      return mission19StationPosition(nereidaWreckage, mission19Scratch);
+    case 'ship':
+      return ship.position;
+    default:
+      return mission19StationPosition(nereidaAtlasGate, mission19Scratch);
+  }
+}
+
+function getMission19StationLabel(): string {
+  switch (mission19.step) {
+    case 'restoreDefenses': {
+      const index = Math.max(0, mission19.activeDefenseIndex);
+      return NEREIDA_DEFENSE_LABELS[NEREIDA_DEFENSE_ORDER[index]] ?? 'DEFENSAS';
+    }
+    case 'travelToNereida':
+      return 'RUMBO A NEREIDA';
+    case 'clearAirspace':
+      return 'CONTACTOS AEREOS';
+    case 'landAtNereida':
+      return 'ZONA DE ATERRIZAJE';
+    case 'repelGroundIncursion':
+      return 'INCURSION TERRESTRE';
+    case 'protectAtlas':
+    case 'chooseOperationalPriority':
+      return 'COMPUERTA ATLAS';
+    case 'activateCounterattack':
+      return 'BATERIA PESADA';
+    case 'recoverEnemyWreckage':
+      return 'RESTOS ENEMIGOS';
+    case 'completed':
+      return 'NEREIDA OPERATIVA';
+    default:
+      return 'TERMINAL';
+  }
+}
+
+function mission19StepRange(): number {
+  const target = mission19.stepDefinition.target;
+  if (target === 'landing') return mission19Tuning.arrivalRange * 0.25;
+  return target === 'defense' || target === 'atlas' || target === 'battery' || target === 'wreckage'
+    ? mission19Tuning.fieldRange
+    : mission19Tuning.stationRange;
+}
+
+function syncMission19Visuals(): void {
+  const gate = mission19StationPosition(nereidaAtlasGate, mission19Scratch);
+  coalitionBreachDrones.setGoal(gate.x, gate.y, gate.z, (x, z) => planetaryWorld.getHeightAt(x, z));
+}
+
+function startMission19IfReady(): boolean {
+  if (!inSurfacePhase || mission19.started || !mission18.completed) return false;
+  if (!mission19.start(mission18.snapshot())) return false;
+  syncMission19Visuals();
+  triggerDialogue('m19_start', 'mission19-start');
+  triggerDialogue('m19_nereida_call', 'mission19-call', 3.2);
+  showPhaseBanner('MISION 19: NEREIDA BAJO ATAQUE', 'Transmision de emergencia');
+  missionText.textContent = 'Confirma la llamada en la terminal y embarca.';
+  saveProgress();
+  return true;
+}
+
+function performMission19Interaction(position: THREE.Vector3): boolean {
+  if (!mission19.started || mission19.completed) return false;
+  const target = mission19.stepDefinition.target;
+  if (target === 'sky' || target === 'ship') {
+    const r = mission19.readout;
+    missionText.textContent =
+      mission19.step === 'travelToNereida'
+        ? 'Rumbo a Nereida. Mantén el vuelo.'
+        : `Contactos: ${r.intrudersActive} // restantes ${r.intrudersRemaining}.`;
+    return true;
+  }
+  // The priority call is made at the gate with E.
+  if (mission19.step === 'chooseOperationalPriority') {
+    const station = getMission19StationPosition();
+    if (position.distanceTo(station) <= mission19StepRange()) {
+      // Pressing at the gate confirms the currently highlighted priority.
+      if (mission19.choosePriority('atlasCore')) {
+        syncMission19Visuals();
+        void sfxManager.play('confirm', 0.5);
+        triggerDialogue('m19_priority', 'mission19-priority');
+        showPhaseBanner('PRIORIDAD: NUCLEO ATLAS', 'El resto aguanta como pueda');
+        missionText.textContent = 'Rehabilita la batería pesada.';
+        saveProgress();
+      }
+    } else {
+      missionText.textContent = `Compuerta Atlas a ${Math.round(position.distanceTo(station))} m.`;
+    }
+    return true;
+  }
+  const station = getMission19StationPosition();
+  const distance = position.distanceTo(station);
+  const inRange = distance <= mission19StepRange();
+  missionText.textContent = inRange
+    ? `${getMission19StationLabel()}: ${Math.round(mission19.phaseProgress)}%.`
+    : `${getMission19StationLabel()} a ${Math.round(distance)} m.`;
+  return true;
+}
+
+/** Nereida's remote defences: the restored beacon plus the heavy battery. */
+function updateMission19Defenses(delta: number): void {
+  if (!mission19.defensesOnline) return;
+  const sources: THREE.Vector3[] = [];
+  const beacon = defensiveBeacons.find((b) => b.site.id === 'defense-beacon-east') ?? defensiveBeacons[0];
+  if (beacon && mission19.defenseRestored('beacon')) sources.push(beacon.interactionPosition);
+  if (mission19.state.counterattackActivated) {
+    sources.push(mission19StationPosition(nereidaHeavyBattery, mission19DefenseScratch));
+  }
+  for (let i = 0; i < sources.length && i < mission19DefenseCooldowns.length; i += 1) {
+    mission19DefenseCooldowns[i] = Math.max(0, mission19DefenseCooldowns[i] - delta);
+    const from = sources[i];
+    const target = coalitionBreachDrones.nearestPosition(from, mission19Tuning.stationRange * 14);
+    if (!target || mission19DefenseCooldowns[i] > 0) continue;
+    mission19DefenseCooldowns[i] = 1.2;
+    auroraDefenseEffect.fireTracer(from, target);
+    // The heavy battery hits far harder: it is what expels the extractor.
+    const damage = mission19.state.counterattackActivated && i === sources.length - 1 ? 60 : 16;
+    if (coalitionBreachDrones.damageNearest(from, mission19Tuning.stationRange * 14, damage)) {
+      void sfxManager.play('confirm', 0.3);
+    }
+  }
+}
+
+function updateMission19Systems(delta: number, elapsed: number): void {
+  startMission19IfReady();
+  if (!mission19.started) {
+    if (coalitionBreachDrones.activeCount > 0 && !mission22.started) coalitionBreachDrones.clearAll();
+    return;
+  }
+  if (mission19.completed) {
+    if (coalitionBreachDrones.activeCount > 0 && !mission22.started) coalitionBreachDrones.clearAll();
+    return;
+  }
+
+  const activePlayer = getActivePlayerPosition();
+  const station = getMission19StationPosition();
+  const distance = activePlayer.distanceTo(station);
+  const inRange = distance <= mission19StepRange();
+  const airborne =
+    playerModeSystem.insideShip &&
+    !playerModeSystem.transitionActive &&
+    ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z) > 12;
+
+  // Atlas drains while enemies are at the gate, and recovers otherwise.
+  const underInterference =
+    mission19.step === 'protectAtlas' ||
+    (mission19.step === 'repelGroundIncursion' && coalitionBreachDrones.activeCount > 0);
+  mission19.advanceMeters(delta, underInterference);
+  mission19.setActiveIntruders(coalitionBreachDrones.activeCount + coalitionDrones.activeCount);
+
+  // --- Waves -------------------------------------------------------------
+  if (mission19.step === 'clearAirspace' && coalitionDrones.activeCount === 0 && !mission19AnnouncedBeats.has('wave:air')) {
+    mission19AnnouncedBeats.add('wave:air');
+    const habitat = auroraStationPosition(auroraSettlementSiteDefinition.position);
+    coalitionDrones.setOrigin(ship.position.x, habitat.y, ship.position.z);
+    coalitionDrones.launchWave(mission19Tuning.airWaveCount);
+    showPhaseBanner('CONTACTOS EN RUTA', 'Despeja el corredor');
+    void sfxManager.play('warning', 0.5);
+  }
+  if (
+    mission19.step === 'repelGroundIncursion' &&
+    coalitionBreachDrones.activeCount === 0 &&
+    !mission19AnnouncedBeats.has('wave:ground')
+  ) {
+    mission19AnnouncedBeats.add('wave:ground');
+    syncMission19Visuals();
+    syncMission20Visuals();
+    coalitionBreachDrones.launchWave(mission19Tuning.groundWaveCount, true);
+    showPhaseBanner('INCURSION TERRESTRE', 'Avanzan hacia Atlas');
+    void sfxManager.play('warning', 0.55);
+  }
+
+  // Air drones reuse M18's fleet wholesale.
+  if (coalitionDrones.activeCount > 0) {
+    coalitionDrones.update(
+      delta,
+      elapsed,
+      () => {
+        if (mission19.reportIntruderDestroyed()) {
+          syncMission19Visuals();
+          coalitionDrones.clearAll();
+          saveProgress();
+        }
+      },
+      () => { /* air drones do not damage the base in M19 */ }
+    );
+  }
+  if (coalitionBreachDrones.activeCount > 0) {
+    coalitionBreachDrones.update(
+      delta,
+      elapsed,
+      () => {
+        if (mission19.reportIntruderDestroyed()) {
+          syncMission19Visuals();
+          coalitionBreachDrones.clearAll();
+          saveProgress();
+        }
+      },
+      (position) => {
+        // A unit reaching the gate hurts the base and rattles the core.
+        mission19.damageNereida(mission19Tuning.integrityLossPerBreach);
+        auroraDefenseEffect.registerShieldImpact(position);
+      }
+    );
+  }
+  updateMission19Defenses(delta);
+
+  switch (mission19.step) {
+    case 'emergencyTransmission':
+      transientWarning = 'NEREIDA // SIN COMUNICACIONES';
+      if (mission19.advanceTransmission(delta, inRange)) {
+        syncMission19Visuals();
+        void sfxManager.play('warning', 0.55);
+        triggerDialogue('m19_defenses_down', 'mission19-defenses-down');
+        showPhaseBanner('NEREIDA SIN DEFENSAS', 'Embarca y despega');
+        missionText.textContent = 'Sube a la nave y pon rumbo a Nereida.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `CONFIRMANDO LLAMADA ${Math.round(mission19.phaseProgress)}%`;
+      }
+      break;
+    case 'travelToNereida':
+      transientWarning = airborne
+        ? `RUMBO A NEREIDA ${Math.round(mission19.phaseProgress)}% // INTERFERENCIA`
+        : 'SUBE A LA NAVE // F';
+      if (mission19.advanceTravel(delta, airborne)) {
+        syncMission19Visuals();
+        triggerDialogue('m19_interference', 'mission19-interference');
+        saveProgress();
+      }
+      break;
+    case 'clearAirspace': {
+      const r = mission19.readout;
+      transientWarning = `CONTACTOS ${r.intrudersActive} // CASCO ${Math.round(resources.hull)}%`;
+      break;
+    }
+    case 'landAtNereida':
+      mission19Beat('arrival', () => {
+        triggerDialogue('m19_arrival', 'mission19-arrival');
+        showPhaseBanner('PERIMETRO COMPROMETIDO', 'Humo, alarmas y defensas caidas');
+      });
+      transientWarning = `NEREIDA ${Math.round(mission19.nereidaIntegrityPercent)}% // ATERRIZA`;
+      if (mission19.advanceLanding(delta, inRange && !airborne)) {
+        syncMission19Visuals();
+        void sfxManager.play('confirm', 0.45);
+        missionText.textContent = 'Reactiva baliza, energía de emergencia y barrera Atlas.';
+        saveProgress();
+      }
+      break;
+    case 'restoreDefenses': {
+      const restored = mission19.advanceDefenseRestore(delta, inRange);
+      if (restored) {
+        syncMission19Visuals();
+        void sfxManager.play('confirm', 0.45);
+        transientWarning = `${NEREIDA_DEFENSE_LABELS[restored]} EN LINEA (${mission19.defensesRestoredCount}/3)`;
+        if (mission19.defensesRestoredCount >= 3) {
+          triggerDialogue('m19_defenses_up', 'mission19-defenses-up');
+          showPhaseBanner('DEFENSAS RESTAURADAS', 'Llega la incursion');
+          missionText.textContent = 'Las defensas disparan solas. Mantén Atlas estable.';
+        }
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `REACTIVANDO ${Math.round(mission19.phaseProgress)}%`;
+      }
+      break;
+    }
+    case 'repelGroundIncursion': {
+      const r = mission19.readout;
+      transientWarning = `INTRUSOS ${r.intrudersActive} // ATLAS ${Math.round(r.atlasStability)}% // NEREIDA ${Math.round(r.nereidaIntegrity)}%`;
+      if (mission19.atlasCritical && clock.elapsedTime - mission19WarnedAt > 8) {
+        mission19WarnedAt = clock.elapsedTime;
+        void sfxManager.play('warning', 0.5);
+      }
+      break;
+    }
+    case 'protectAtlas':
+      mission19Beat('breach', () => {
+        void sfxManager.play('warning', 0.6);
+        triggerDialogue('m19_breach', 'mission19-breach');
+        showPhaseBanner('BRECHA EN ATLAS', 'Cierra las compuertas');
+      });
+      transientWarning = `ATLAS ${Math.round(mission19.atlasStabilityPercent)}%`;
+      if (mission19.advanceGateSeal(delta, inRange)) {
+        syncMission19Visuals();
+        void sfxManager.play('confirm', 0.5);
+        triggerDialogue('m19_gate_sealed', 'mission19-gate-sealed');
+        showPhaseBanner('COMPUERTAS SELLADAS', 'Elige una prioridad');
+        missionText.textContent = 'No alcanza para todo. Elige qué sostener.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `SELLANDO COMPUERTA ${Math.round(mission19.phaseProgress)}%`;
+      }
+      break;
+    case 'chooseOperationalPriority':
+      transientWarning = 'PRIORIDAD OPERATIVA // E EN LA COMPUERTA';
+      break;
+    case 'activateCounterattack':
+      mission19Beat('counter', () => {
+        triggerDialogue('m19_counterattack', 'mission19-counterattack');
+      });
+      if (mission19.advanceCounterattack(delta, inRange)) {
+        syncMission19Visuals();
+        void sfxManager.play('confirm', 0.55);
+        showPhaseBanner('BATERIA PESADA ACTIVA', 'Expulsando la unidad de extraccion');
+        missionText.textContent = 'La batería expulsa a la unidad de extracción.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `REHABILITANDO BATERIA ${Math.round(mission19.phaseProgress)}%`;
+      }
+      break;
+    case 'detectDataLeak': {
+      mission19Beat('leak', () => {
+        triggerDialogue('m19_data_leak', 'mission19-data-leak');
+      });
+      const r = mission19.readout;
+      transientWarning = `FUGA DE DATOS ${Math.round(r.dataLeakProgress)}%`;
+      if (mission19.advanceDataLeak(delta)) {
+        syncMission19Visuals();
+        coalitionBreachDrones.clearAll();
+        void sfxManager.play('warning', 0.55);
+        showPhaseBanner('FRACCION TRANSMITIDA', 'Ruta orbital y firma del Arca');
+        missionText.textContent = 'Escanea los restos y repara el enlace con Aurora.';
+        saveProgress();
+      }
+      break;
+    }
+    case 'recoverEnemyWreckage':
+      if (mission19.advanceWreckage(delta, inRange)) {
+        syncMission19Visuals();
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m19_wreckage', 'mission19-wreckage');
+        showPhaseBanner('ENLACE REPARADO', 'Aurora vuelve a escuchar');
+        missionText.textContent = 'Confirma el estado de Atlas y el rumbo enemigo.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `ESCANEANDO RESTOS ${Math.round(mission19.phaseProgress)}%`;
+      }
+      break;
+    case 'confirmArkTarget':
+      if (mission19.advanceArkConfirm(delta, inRange)) {
+        syncMission19Visuals();
+        coalitionBreachDrones.clearAll();
+        coalitionDrones.clearAll();
+        void sfxManager.play('confirm', 0.5);
+        triggerDialogue('m19_ark_target', 'mission19-ark-target');
+        triggerDialogue('m19_closing', 'mission19-closing', 3.0);
+        showPhaseBanner('NEREIDA RESISTIO', 'Proximo objetivo: el Arca');
+        musicManager.playSting('discovery', clock.elapsedTime);
+        missionText.textContent = 'Nereida era el camino. El Arca siempre fue el objetivo.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `CONFIRMANDO RUMBO ${Math.round(mission19.phaseProgress)}%`;
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+function getMission19ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission19.started || mission19.completed) return {};
+  const r = mission19.readout;
+  const target = mission19.stepDefinition.target;
+  if (target === 'sky') {
+    return { nextAction: `${r.intrudersActive} contacto(s) en ruta. Fija blanco y dispara.`, key: 'ESPACIO' };
+  }
+  if (target === 'ship') {
+    return { nextAction: `Rumbo a Nereida — ${Math.round(mission19.phaseProgress)}%.`, key: 'F' };
+  }
+  if (mission19.step === 'repelGroundIncursion') {
+    return {
+      nextAction: `Defensas activas: ${r.defensesActive}/3 — intrusos ${r.intrudersActive}.`,
+      key: '',
+      blockedReason: mission19.atlasCritical ? 'Atlas inestable: la interferencia está ganando.' : ''
+    };
+  }
+  const activePosition = getActivePlayerPosition();
+  const station = getMission19StationPosition();
+  const distance = activePosition.distanceTo(station);
+  const inRange = distance <= mission19StepRange();
+  return {
+    nextAction: inRange
+      ? `${getMission19StationLabel()}: ${Math.round(mission19.phaseProgress)}%.`
+      : `${getMission19StationLabel()} a ${Math.round(distance)} m.`,
+    key: inRange ? 'E' : 'WASD',
+    blockedReason: !inRange && mission19.phaseProgress > 0 ? 'Fuera de la estación: el avance se está perdiendo.' : ''
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mission 20: Batalla por el Arca
+// ---------------------------------------------------------------------------
+
+function mission20Beat(key: string, run: () => void): void {
+  if (mission20AnnouncedBeats.has(key)) return;
+  mission20AnnouncedBeats.add(key);
+  run();
+}
+
+/** Resolve an Ark station offset against the Ark's own hull. Never absolute. */
+function arkStation(offset: readonly [number, number, number], out: THREE.Vector3): THREE.Vector3 {
+  return out.copy(mothership.group.position).add(mission20OffsetScratch.set(offset[0], offset[1], offset[2]));
+}
+
+/** The station the current M20 step is flown to. */
+function getMission20StationPosition(): THREE.Vector3 {
+  switch (mission20.stepDefinition.target) {
+    case 'link': {
+      const index = Math.max(0, mission20.activeLinkIndex);
+      return arkStation(arkLinkPoints[Math.min(index, arkLinkPoints.length - 1)].offset, mission20Scratch);
+    }
+    case 'engine': {
+      const damaged = mission20.damagedEngineIndex;
+      return arkStation(arkEngines[damaged >= 0 ? damaged : 0].offset, mission20Scratch);
+    }
+    case 'module':
+      return arkStation(arkCivilianModules[0].offset, mission20Scratch);
+    case 'core':
+      return arkStation(arkDataCore.offset, mission20Scratch);
+    case 'battery':
+      return arkStation(arkMainBattery.offset, mission20Scratch);
+    case 'ship':
+    case 'sky':
+    default:
+      return mothership.group.position;
+  }
+}
+
+function getMission20StationLabel(): string {
+  switch (mission20.step) {
+    case 'emergencyAscent':
+      return 'ASCENSO';
+    case 'rendezvousWithArk':
+      return 'EL ARCA';
+    case 'restoreArkLink': {
+      const i = Math.max(0, mission20.activeLinkIndex);
+      return `ENLACE ${arkLinkPoints[Math.min(i, arkLinkPoints.length - 1)].shortName.toUpperCase()}`;
+    }
+    case 'locateJammer':
+    case 'disableJammer':
+      return 'INTERFERIDOR';
+    case 'defendEngines':
+      return 'MOTORES ORBITALES';
+    case 'protectCivilianModules':
+      return 'MODULOS CIVILES';
+    case 'stopDataBreach':
+      return ARK_SYSTEM_LABELS.dataCore;
+    case 'activateArkCounterattack':
+      return 'BATERIA PRINCIPAL';
+    case 'finalOrbitalWave':
+      return 'ULTIMA OLEADA';
+    case 'stabilizeArk':
+      return 'INTEGRIDAD DEL ARCA';
+    case 'completed':
+      return 'ARCA OPERATIVA';
+    default:
+      return 'EL ARCA';
+  }
+}
+
+function syncMission20Visuals(): void {
+  const ark = mothership.group.position;
+  coalitionJammer.setOrigin(ark.x, ark.y, ark.z);
+  coalitionDrones.setOrigin(ark.x, ark.y, ark.z);
+}
+
+function startMission20IfReady(): boolean {
+  if (mission20.started || !mission19.completed) return false;
+  if (!mission20.start(mission19.snapshot())) return false;
+  syncMission20Visuals();
+  triggerDialogue('m20_start', 'mission20-start');
+  triggerDialogue('m20_ark_silent', 'mission20-ark-silent', 3.2);
+  showPhaseBanner('MISION 20: BATALLA POR EL ARCA', 'Ascenso de emergencia');
+  missionText.textContent = 'Sube a la nave y asciende a la órbita.';
+  saveProgress();
+  return true;
+}
+
+function performMission20Interaction(position: THREE.Vector3): boolean {
+  if (!mission20.started || mission20.completed) return false;
+  const r = mission20.readout;
+  const target = mission20.stepDefinition.target;
+  if (target === 'sky') {
+    missionText.textContent = mission20.step === 'locateJammer'
+      ? `Señal del interferidor ${r.jammerSignal}%.`
+      : `Hostiles: ${r.hostilesActive} // restantes ${r.hostilesRemaining}.`;
+    return true;
+  }
+  const station = getMission20StationPosition();
+  const distance = position.distanceTo(station);
+  const inRange = distance <= mission20Tuning.stationRange;
+  missionText.textContent = inRange
+    ? `${getMission20StationLabel()}: ${Math.round(mission20.phaseProgress)}%.`
+    : `${getMission20StationLabel()} a ${Math.round(distance)} m.`;
+  return true;
+}
+
+function updateMission20Systems(delta: number, elapsed: number): void {
+  startMission20IfReady();
+  if (!mission20.started) {
+    if (coalitionJammer.isActive && !mission23.started) coalitionJammer.clear();
+    return;
+  }
+  if (mission20.completed) {
+    if (coalitionJammer.isActive && !mission23.started) coalitionJammer.clear();
+    if (coalitionDrones.activeCount > 0 && !mission22.started && !mission23.started) coalitionDrones.clearAll();
+    return;
+  }
+
+  const playerPosition = ship.position;
+  const station = getMission20StationPosition();
+  const distance = playerPosition.distanceTo(station);
+  const inRange = distance <= mission20Tuning.stationRange;
+  const arkDistance = playerPosition.distanceTo(mothership.group.position);
+  const aboveAtmosphere = !inSurfacePhase || ship.position.y > mission20Tuning.ascentAltitude;
+
+  mission20.setActiveHostiles(coalitionDrones.activeCount + (coalitionJammer.alive ? 1 : 0));
+  if (mission20.step === 'locateJammer' || mission20.step === 'disableJammer') {
+    mission20.setJammerDistance(
+      coalitionJammer.isActive ? playerPosition.distanceTo(coalitionJammer.position) : Number.POSITIVE_INFINITY
+    );
+  }
+  mission20.advanceSiphon(delta);
+
+  // --- Waves: one launch per combat step, never twice ----------------------
+  const waveCount = mission20.activeWaveCount;
+  const waveKey = `wave:${mission20.step}`;
+  if (waveCount > 0 && coalitionDrones.activeCount === 0 && !mission20AnnouncedBeats.has(waveKey)) {
+    mission20AnnouncedBeats.add(waveKey);
+    syncMission20Visuals();
+    coalitionDrones.launchWave(Math.min(waveCount, mission20Tuning.maxSimultaneous));
+    showPhaseBanner(getMission20StationLabel(), `${waveCount} hostil(es)`);
+    void sfxManager.play('warning', 0.5);
+  }
+  // The jammer deploys with its escorts and lives until they are gone.
+  if (mission20.step === 'locateJammer' && !coalitionJammer.isActive && !mission20.state.jammerDisabled) {
+    syncMission20Visuals();
+    coalitionJammer.deploy();
+  }
+
+  if (coalitionDrones.activeCount > 0) {
+    coalitionDrones.update(
+      delta,
+      elapsed,
+      () => {
+        if (mission20.reportHostileDestroyed()) {
+          syncMission20Visuals();
+          coalitionDrones.clearAll();
+          saveProgress();
+        }
+      },
+      (dronePosition) => {
+        // A completed pass presses whatever the current step protects.
+        if (mission20.step === 'defendEngines') {
+          mission20.damageEngine(0, mission20Tuning.engineLossPerHit);
+        } else if (mission20.step === 'protectCivilianModules') {
+          mission20.damageModule(0, mission20Tuning.moduleLossPerHit);
+        }
+        mission20.damageArk(mission20Tuning.integrityLossPerHit);
+        auroraDefenseEffect.registerShieldImpact(dronePosition);
+      }
+    );
+  }
+  coalitionJammer.update(delta, elapsed, () => {
+    // Killing the jammer itself also clears the suppression.
+    mission20.reportHostileDestroyed();
+  });
+
+  switch (mission20.step) {
+    case 'emergencyAscent':
+      transientWarning = aboveAtmosphere
+        ? `ASCENSO ${Math.round(mission20.phaseProgress)}% // INTERFERENCIA`
+        : 'SUBE A LA NAVE Y ASCIENDE // F';
+      if (mission20.advanceAscent(delta, aboveAtmosphere)) {
+        syncMission20Visuals();
+        triggerDialogue('m20_ascent', 'mission20-ascent');
+        missionText.textContent = 'Alcanza el Arca.';
+        saveProgress();
+      }
+      break;
+    case 'rendezvousWithArk':
+      transientWarning = `EL ARCA A ${Math.round(arkDistance)} m`;
+      if (mission20.advanceRendezvous(delta, arkDistance <= mission20Tuning.rendezvousRange)) {
+        syncMission20Visuals();
+        void sfxManager.play('scanner', 0.5);
+        triggerDialogue('m20_systems', 'mission20-systems');
+        showPhaseBanner('TRES SISTEMAS CRITICOS', 'Comunicaciones // Propulsion // Nucleo');
+        missionText.textContent = 'Sincroniza los tres puntos de enlace externos.';
+        saveProgress();
+      }
+      break;
+    case 'restoreArkLink': {
+      const linked = mission20.advanceLink(delta, inRange);
+      if (linked >= 0) {
+        syncMission20Visuals();
+        void sfxManager.play('confirm', 0.45);
+        transientWarning = `ENLACE ${mission20.linksRestoredCount}/3 SINCRONIZADO`;
+        if (mission20.linksRestoredCount >= 3) {
+          triggerDialogue('m20_link_restored', 'mission20-link-restored');
+          showPhaseBanner('ENLACE RESTABLECIDO', 'Fijacion de blancos disponible');
+        }
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `SINCRONIZANDO ${Math.round(mission20.phaseProgress)}%`;
+      }
+      break;
+    }
+    case 'firstOrbitalWave':
+      transientWarning = `ARCA ${Math.round(mission20.arkIntegrityPercent)}% // HOSTILES ${mission20.readout.hostilesActive}`;
+      break;
+    case 'locateJammer':
+      mission20Beat('jammer', () => {
+        void sfxManager.play('warning', 0.55);
+        triggerDialogue('m20_jammer', 'mission20-jammer');
+        showPhaseBanner('INTERFERENCIA ACTIVA', 'Fijacion de blancos bloqueada');
+      });
+      transientWarning = `SEÑAL ${mission20.readout.jammerSignal}% // SIN FIJACION`;
+      if (coalitionJammer.isActive && mission20.locateJammer(playerPosition.distanceTo(coalitionJammer.position))) {
+        syncMission20Visuals();
+        void sfxManager.play('scanner', 0.5);
+        showPhaseBanner('INTERFERIDOR LOCALIZADO', 'Elimina sus escoltas');
+        saveProgress();
+      }
+      break;
+    case 'disableJammer':
+      transientWarning = `ESCOLTAS ${mission20.readout.hostilesRemaining} // INTERFERIDOR ACTIVO`;
+      break;
+    case 'defendEngines': {
+      mission20Beat('engines', () => {
+        triggerDialogue('m20_engines', 'mission20-engines');
+        showPhaseBanner('MOTORES EN RIESGO', 'Defiende la propulsion orbital');
+      });
+      const r = mission20.readout;
+      transientWarning = `MOTOR ${Math.round(r.engineIntegrity)}% // HOSTILES ${r.hostilesActive}`;
+      if (mission20.advanceEngineRepair(delta, inRange)) {
+        void sfxManager.play('confirm', 0.45);
+        transientWarning = 'MOTOR ESTABILIZADO';
+      }
+      break;
+    }
+    case 'protectCivilianModules':
+      mission20Beat('modules', () => {
+        void sfxManager.play('warning', 0.55);
+        triggerDialogue('m20_modules', 'mission20-modules');
+        showPhaseBanner('MODULOS CIVILES EXPUESTOS', 'Intercepta antes del impacto');
+      });
+      transientWarning = `MODULOS ${Math.round(mission20.worstModuleIntegrity)}% // HOSTILES ${mission20.readout.hostilesActive}`;
+      break;
+    case 'stopDataBreach':
+      mission20Beat('breach', () => {
+        void sfxManager.play('warning', 0.6);
+        triggerDialogue('m20_breach', 'mission20-breach');
+        showPhaseBanner('BRECHA EN EL NUCLEO', 'Corta el acoplamiento desde fuera');
+      });
+      transientWarning = `DATOS EXTRAIDOS ${Math.round(mission20.readout.dataSiphoned)}%`;
+      if (mission20.advanceBreachCut(delta, inRange)) {
+        syncMission20Visuals();
+        coalitionDrones.clearAll();
+        void sfxManager.play('confirm', 0.5);
+        triggerDialogue('m20_breach_cut', 'mission20-breach-cut');
+        showPhaseBanner('ACOPLAMIENTO CORTADO', 'Solo se llevaron parte');
+        missionText.textContent = 'Reactiva la batería principal del Arca.';
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `CORTANDO ENLACE ${Math.round(mission20.phaseProgress)}%`;
+      }
+      break;
+    case 'activateArkCounterattack':
+      if (mission20.advanceCounterattack(delta, inRange)) {
+        syncMission20Visuals();
+        void sfxManager.play('confirm', 0.55);
+        triggerDialogue('m20_counterattack', 'mission20-counterattack');
+        showPhaseBanner('DESCARGA COORDINADA', 'Arca // Aurora // Nereida');
+        saveProgress();
+      } else if (inRange) {
+        transientWarning = `REACTIVANDO BATERIA ${Math.round(mission20.phaseProgress)}%`;
+      }
+      break;
+    case 'finalOrbitalWave':
+      transientWarning = `ULTIMA OLEADA // ${mission20.readout.hostilesActive} HOSTILES`;
+      if (mission20.arkIntegrityPercent <= 40 && clock.elapsedTime - mission20WarnedAt > 8) {
+        mission20WarnedAt = clock.elapsedTime;
+        void sfxManager.play('warning', 0.5);
+      }
+      break;
+    case 'stabilizeArk':
+      if (mission20.advanceStabilize(delta, arkDistance <= mission20Tuning.rendezvousRange)) {
+        syncMission20Visuals();
+        void sfxManager.play('confirm', 0.5);
+        triggerDialogue('m20_stabilized', 'mission20-stabilized');
+        showPhaseBanner('ARCA ESTABILIZADA', 'Enlace con E-01 restablecido');
+        saveProgress();
+      } else {
+        transientWarning = `ESTABILIZANDO ${Math.round(mission20.phaseProgress)}%`;
+      }
+      break;
+    case 'detectCapitalSignature':
+      mission20Beat('capital', () => {
+        void sfxManager.play('warning', 0.65);
+        triggerDialogue('m20_capital_signature', 'mission20-capital');
+        triggerDialogue('m20_closing', 'mission20-closing', 3.0);
+        showPhaseBanner('FIRMA DE ESCALA MAYOR', 'Transmision cifrada en curso');
+      });
+      transientWarning = 'TRANSMISION CIFRADA // ORIGEN DESCONOCIDO';
+      if (mission20.advanceCapitalSignature(delta)) {
+        syncMission20Visuals();
+        coalitionDrones.clearAll();
+        coalitionJammer.clear();
+        musicManager.playSting('discovery', clock.elapsedTime);
+        missionText.textContent = 'El ataque terminó. La señal no.';
+        saveProgress();
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+function getMission20ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission20.started || mission20.completed) return {};
+  const r = mission20.readout;
+  const target = mission20.stepDefinition.target;
+  if (target === 'sky') {
+    return {
+      nextAction:
+        mission20.step === 'locateJammer'
+          ? `Señal del interferidor ${r.jammerSignal}%. Acércate.`
+          : `${r.hostilesActive} hostil(es). Fija blanco y dispara.`,
+      key: 'ESPACIO',
+      blockedReason: r.jammed ? 'Interferencia: fijación de blancos bloqueada.' : ''
+    };
+  }
+  if (target === 'ship') {
+    return { nextAction: `${getMission20StationLabel()} — ${Math.round(mission20.phaseProgress)}%.`, key: 'F' };
+  }
+  const distance = ship.position.distanceTo(getMission20StationPosition());
+  const inRange = distance <= mission20Tuning.stationRange;
+  return {
+    nextAction: inRange
+      ? `${getMission20StationLabel()}: ${Math.round(mission20.phaseProgress)}%.`
+      : `${getMission20StationLabel()} a ${Math.round(distance)} m.`,
+    key: inRange ? '' : 'WASD',
+    blockedReason: r.jammed ? 'Interferencia activa.' : ''
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mission 21: La ruptura del Silencio
+// ---------------------------------------------------------------------------
+
+function mission21Beat(key: string, run: () => void): void {
+  if (mission21AnnouncedBeats.has(key)) return;
+  mission21AnnouncedBeats.add(key);
+  run();
+}
+
+function getMission21StationPosition(): THREE.Vector3 {
+  switch (mission21.stepDefinition.target) {
+    case 'capital':
+      return coalitionCapitalPresence.capitalPosition;
+    case 'beacon':
+      return coalitionCapitalPresence.remoteBeaconPosition;
+    case 'link': {
+      const index = Math.max(0, mission21.activeEnclaveChannelIndex);
+      return arkStation(arkLinkPoints[Math.min(index, arkLinkPoints.length - 1)].offset, mission21Scratch);
+    }
+    case 'network':
+      return arkStation(arkMainBattery.offset, mission21Scratch);
+    case 'ark':
+    case 'routes':
+    case 'response':
+    case 'none':
+    default:
+      return mothership.group.position;
+  }
+}
+
+function getMission21StationLabel(): string {
+  switch (mission21.step) {
+    case 'decryptTransmission': {
+      const index = Math.max(0, mission21.activeAlignmentIndex);
+      return MISSION21_CHANNEL_LABELS[MISSION21_CHANNEL_ORDER[Math.min(index, MISSION21_CHANNEL_ORDER.length - 1)]];
+    }
+    case 'detectCapitalShip':
+    case 'analyzeSignature':
+    case 'receiveUltimatum':
+      return 'NAVE CAPITAL DE LA COALICION';
+    case 'chooseResponse':
+      return 'RESPUESTA CONJUNTA';
+    case 'restoreThreeChannels': {
+      const index = Math.max(0, mission21.activeEnclaveChannelIndex);
+      return ENCLAVE_CHANNEL_LABELS[ENCLAVE_CHANNEL_ORDER[Math.min(index, ENCLAVE_CHANNEL_ORDER.length - 1)]];
+    }
+    case 'witnessDemonstration':
+      return 'BALIZA ORBITAL REMOTA';
+    case 'classifyAttackRoutes': {
+      const index = Math.max(0, mission21.activeRouteIndex);
+      return ATTACK_ROUTE_LABELS[ATTACK_ROUTE_ORDER[Math.min(index, ATTACK_ROUTE_ORDER.length - 1)]];
+    }
+    case 'activatePleyadianNetwork':
+      return 'RED PLEYADIANA PARCIAL';
+    case 'detectSimultaneousAssault':
+      return 'TRES FRENTES';
+    case 'completed':
+      return 'PROTOCOLO DE RESISTENCIA';
+    default:
+      return 'EL ARCA';
+  }
+}
+
+function syncMission21Visuals(): void {
+  const ark = mothership.group.position;
+  coalitionCapitalPresence.setOrigin(ark.x, ark.y, ark.z);
+  for (let i = 0; i < mission21LinkPositions.length; i += 1) {
+    const offset = arkLinkPoints[i].offset;
+    mission21LinkPositions[i].set(ark.x + offset[0], ark.y + offset[1], ark.z + offset[2]);
+  }
+  for (let i = 0; i < mission21RoutePositions.length; i += 1) {
+    const offset = mission21Tuning.attackRouteOffsets[i];
+    mission21RoutePositions[i].set(ark.x + offset[0], ark.y + offset[1], ark.z + offset[2]);
+  }
+  const capitalVisible = mission21.started && (
+    mission21.step !== 'inactive' && mission21.step !== 'decryptTransmission'
+  );
+  const routesVisible =
+    mission21.step === 'classifyAttackRoutes' ||
+    mission21.step === 'activatePleyadianNetwork' ||
+    mission21.step === 'detectSimultaneousAssault' ||
+    mission21.completed;
+  coalitionCapitalPresence.setState({
+    visible: capitalVisible,
+    signatureAnalyzed: mission21.state.capitalSignatureAnalyzed,
+    ultimatumActive: mission21.step === 'receiveUltimatum' || mission21.step === 'chooseResponse',
+    interferenceLevel: mission21.readout.interferenceLevel,
+    demonstrationActive: mission21.step === 'witnessDemonstration' && !mission21.state.demonstrationObserved,
+    demonstrationObserved: mission21.state.demonstrationObserved,
+    classifiedRoutes: mission21.state.attackRoutesClassified,
+    routesVisible,
+    pleyadianNetworkActive: mission21.state.pleyadianNetworkActivated,
+    simultaneousAssaultActive: mission21.state.simultaneousAssaultDetected
+  });
+  hud.classList.toggle('is-interference', mission21.started && mission21.readout.interferenceLevel >= 70);
+}
+
+function startMission21IfReady(): boolean {
+  if (mission21.started || !mission20.completed) return false;
+  if (!mission21.start(mission20.snapshot())) return false;
+  syncMission21Visuals();
+  triggerDialogue('m21_start', 'mission21-start');
+  showPhaseBanner('MISION 21: LA RUPTURA DEL SILENCIO', 'Descifra la transmisión');
+  missionText.textContent = 'Permanece junto al Arca y alinea los tres canales dañados.';
+  saveProgress();
+  return true;
+}
+
+function chooseMission21Response(tone: Exclude<CoalitionResponseTone, 'none'>): boolean {
+  if (!mission21.chooseResponse(tone)) return false;
+  mission21ResponsePanel.setVisible(false);
+  const dialogueByTone = {
+    defiant: 'm21_response_defiant',
+    diplomatic: 'm21_response_diplomatic',
+    strategic: 'm21_response_strategic'
+  } as const;
+  triggerDialogue(dialogueByTone[tone], `mission21-response-${tone}`);
+  triggerDialogue('m21_total_interference', 'mission21-interference', 2.8);
+  showPhaseBanner('RESPUESTA TRANSMITIDA', tone.toUpperCase());
+  missionText.textContent = 'La Coalición cortó los enlaces. Recupera Aurora, Nereida y el Arca.';
+  void sfxManager.play('warning', 0.55);
+  syncMission21Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  return true;
+}
+
+function performMission21Interaction(position: THREE.Vector3): boolean {
+  if (!mission21.started || mission21.completed) return false;
+  if (mission21.step === 'chooseResponse') {
+    mission21ResponsePanel.setVisible(true);
+    missionText.textContent = 'Elige el tono de la respuesta conjunta.';
+    return true;
+  }
+  const target = getMission21StationPosition();
+  const distance = position.distanceTo(target);
+  missionText.textContent = distance <= mission21Tuning.linkRange
+    ? `${getMission21StationLabel()}: ${Math.round(mission21.phaseProgress)}%.`
+    : `${getMission21StationLabel()} a ${Math.round(distance)} m.`;
+  return true;
+}
+
+function updateMission21Systems(delta: number, elapsed: number): void {
+  startMission21IfReady();
+  if (!mission21.started) {
+    mission21ResponsePanel.setVisible(false);
+    coalitionCapitalPresence.setState({
+      visible: false,
+      signatureAnalyzed: false,
+      ultimatumActive: false,
+      interferenceLevel: 0,
+      demonstrationActive: false,
+      demonstrationObserved: false,
+      classifiedRoutes: [false, false, false],
+      routesVisible: false,
+      pleyadianNetworkActive: false,
+      simultaneousAssaultActive: false
+    });
+    return;
+  }
+
+  coalitionCapitalPresence.update(delta, elapsed);
+  const showResponse =
+    mission21.step === 'chooseResponse' &&
+    !dialogueManager.current &&
+    !gamePaused &&
+    !starMap.active;
+  if (mission21ResponsePanel.visible !== showResponse) mission21ResponsePanel.setVisible(showResponse);
+  if (mission21.completed) return;
+
+  const arkDistance = ship.position.distanceTo(mothership.group.position);
+  const nearArk = arkDistance <= mission21Tuning.arkRange;
+  const stationDistance = ship.position.distanceTo(getMission21StationPosition());
+  const atLink = stationDistance <= mission21Tuning.linkRange;
+
+  switch (mission21.step) {
+    case 'decryptTransmission': {
+      transientWarning = nearArk
+        ? `ALINEANDO ${getMission21StationLabel()} // ${Math.round(mission21.phaseProgress)}%`
+        : `REGRESA AL ARCA // ${Math.round(arkDistance)} m`;
+      const aligned = mission21.advanceTransmissionAlignment(delta, nearArk);
+      if (aligned >= 0) {
+        void sfxManager.play('confirm', 0.4);
+        if (mission21.state.transmissionDecoded) {
+          triggerDialogue('m21_channels_aligned', 'mission21-decoded');
+          showPhaseBanner('TRANSMISION DESCIFRADA', 'Fuente visual adquirida');
+        }
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'detectCapitalShip':
+      mission21Beat('capital-reveal', () => {
+        showPhaseBanner('PRESENCIA CAPITAL', 'Firma fuera de alcance');
+        void sfxManager.play('warning', 0.62);
+      });
+      transientWarning = `FIRMA CAPITAL // ${Math.round(mission21.phaseProgress)}%`;
+      if (mission21.advanceCapitalDetection(delta)) {
+        triggerDialogue('m21_capital_detected', 'mission21-capital-detected');
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    case 'analyzeSignature':
+      transientWarning = nearArk
+        ? `ANALISIS DE MASA Y SALTO ${Math.round(mission21.phaseProgress)}%`
+        : `ENLACE DE SENSORES FUERA DE RANGO // ${Math.round(arkDistance)} m`;
+      if (mission21.advanceSignatureAnalysis(delta, nearArk)) {
+        triggerDialogue('m21_signature_analyzed', 'mission21-signature-analyzed');
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    case 'receiveUltimatum':
+      mission21Beat('ultimatum', () => {
+        triggerDialogue('m21_ultimatum_open', 'mission21-ultimatum-open');
+        triggerDialogue('m21_ultimatum_demands', 'mission21-ultimatum-demands', 2.4);
+        triggerDialogue('m21_ultimatum_close', 'mission21-ultimatum-close', 4.8);
+        showPhaseBanner('CANAL ENEMIGO FORZADO', 'Coalición del Silencio');
+        void sfxManager.play('silentProbeInterference', 0.62);
+      });
+      transientWarning = 'ULTIMATUM DE LA COALICION // CANAL FORZADO';
+      if (mission21.advanceUltimatum(delta)) {
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    case 'chooseResponse':
+      transientWarning = 'RESPUESTA CONJUNTA PENDIENTE';
+      break;
+    case 'restoreThreeChannels': {
+      const restored = mission21.advanceEnclaveChannel(delta, atLink);
+      transientWarning = atLink
+        ? `RESTAURANDO ${getMission21StationLabel()} // ${Math.round(mission21.phaseProgress)}%`
+        : `${getMission21StationLabel()} A ${Math.round(stationDistance)} m`;
+      if (restored >= 0) {
+        void sfxManager.play('confirm', 0.44);
+        if (mission21.restoredChannelCount >= ENCLAVE_CHANNEL_ORDER.length) {
+          triggerDialogue('m21_channels_restored', 'mission21-channels-restored');
+          showPhaseBanner('TRES ENCLAVES ENLAZADOS', 'Aurora // Nereida // Arca');
+        }
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'witnessDemonstration':
+      transientWarning = `BALIZA REMOTA // PULSO ENTRANTE ${Math.round(mission21.phaseProgress)}%`;
+      if (mission21.advanceDemonstration(delta)) {
+        triggerDialogue('m21_demonstration', 'mission21-demonstration');
+        triggerDialogue('m21_routes', 'mission21-routes', 2.8);
+        showPhaseBanner('BALIZA ORBITAL INUTILIZADA', 'Impacto a distancia extrema');
+        cameraShake = Math.max(cameraShake, 0.28);
+        void sfxManager.play('warning', 0.68);
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    case 'classifyAttackRoutes': {
+      const route = mission21.advanceRouteClassification(delta, nearArk);
+      transientWarning = nearArk
+        ? `CLASIFICANDO ${getMission21StationLabel()} // ${Math.round(mission21.phaseProgress)}%`
+        : `REGRESA AL ARCA // ${Math.round(arkDistance)} m`;
+      if (route >= 0) {
+        void sfxManager.play('scanner', 0.38);
+        if (mission21.classifiedRouteCount >= ATTACK_ROUTE_ORDER.length) {
+          triggerDialogue('m21_pleyadian_network', 'mission21-pleyadian-network');
+          showPhaseBanner('TRES RUTAS CONFIRMADAS', 'Activa la red Pleyadiana');
+        }
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'activatePleyadianNetwork':
+      transientWarning = nearArk
+        ? `SINCRONIZANDO RED PLEYADIANA ${Math.round(mission21.phaseProgress)}%`
+        : `REGRESA AL ARCA // ${Math.round(arkDistance)} m`;
+      if (mission21.advancePleyadianNetwork(delta, nearArk)) {
+        showPhaseBanner('RED PLEYADIANA PARCIAL', 'Protocolo de resistencia conjunto');
+        void sfxManager.play('defenseNetwork', 0.55);
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    case 'detectSimultaneousAssault':
+      transientWarning = 'ALARMAS MULTIPLES // AURORA // NEREIDA // ORBITA';
+      if (mission21.advanceAssaultDetection(delta)) {
+        triggerDialogue('m21_assault', 'mission21-simultaneous-assault');
+        triggerDialogue('m21_closing', 'mission21-closing', 3.2);
+        showPhaseBanner('MISION 21 COMPLETA', 'M22 // Frentes rotos desbloqueada');
+        missionText.textContent = 'El Silencio terminó. Ahora vienen por todo.';
+        cameraShake = Math.max(cameraShake, 0.34);
+        void sfxManager.play('warning', 0.7);
+        musicManager.playSting('discovery', clock.elapsedTime);
+        syncMission21Visuals();
+        saveProgress();
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+function getMission21Progress(): number {
+  if (!mission21.started) return 0;
+  if (mission21.completed) return 100;
+  const stable = [
+    mission21.state.transmissionDecoded,
+    mission21.state.capitalShipDetected,
+    mission21.state.capitalSignatureAnalyzed,
+    mission21.state.ultimatumReceived,
+    mission21.state.coalitionResponseTone !== 'none',
+    mission21.state.demonstrationObserved,
+    mission21.state.pleyadianNetworkActivated
+  ].filter(Boolean).length;
+  const arrays =
+    mission21.alignedChannelCount +
+    mission21.restoredChannelCount +
+    mission21.classifiedRouteCount;
+  return Math.min(99, stable * 8 + arrays * 4 + mission21.phaseProgress * 0.04);
+}
+
+function getMission21ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission21.started || mission21.completed) return {};
+  if (mission21.step === 'chooseResponse') {
+    return { nextAction: 'Elige una respuesta en el panel de comunicaciones.', key: '' };
+  }
+  if (
+    mission21.step === 'detectCapitalShip' ||
+    mission21.step === 'receiveUltimatum' ||
+    mission21.step === 'witnessDemonstration' ||
+    mission21.step === 'detectSimultaneousAssault'
+  ) {
+    return { nextAction: `${getMission21StationLabel()} // ${Math.round(mission21.phaseProgress)}%.`, key: '' };
+  }
+  const target = getMission21StationPosition();
+  const distance = ship.position.distanceTo(target);
+  const range = mission21.step === 'restoreThreeChannels' ? mission21Tuning.linkRange : mission21Tuning.arkRange;
+  const inRange = distance <= range;
+  return {
+    nextAction: inRange
+      ? `${getMission21StationLabel()} // ${Math.round(mission21.phaseProgress)}%.`
+      : `${getMission21StationLabel()} a ${Math.round(distance)} m.`,
+    key: inRange ? '' : 'WASD',
+    blockedReason: inRange ? '' : 'Fuera del alcance del enlace.'
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mission 22: Frentes rotos
+// ---------------------------------------------------------------------------
+
+function mission22Beat(key: string, run: () => void): void {
+  if (mission22AnnouncedBeats.has(key)) return;
+  mission22AnnouncedBeats.add(key);
+  run();
+}
+
+function getMission22StationPosition(): THREE.Vector3 {
+  if (mission22.step === 'defendOrbitalFront') {
+    const index = Math.max(0, mission22.state.orbitalRelaysProtected.findIndex((value) => !value));
+    return threeFrontCommandNetwork.relayPositions[Math.min(index, 2)];
+  }
+  if (mission22.step === 'surviveFinalPressure') return mothership.group.position;
+  return arkStation(arkDataCore.offset, mission22Scratch);
+}
+
+function getMission22StationLabel(): string {
+  switch (mission22.step) {
+    case 'simultaneousAlarm': return 'TRES FRENTES';
+    case 'accessCommandTerminal': return 'TERMINAL ESTRATÉGICA DEL ARCA';
+    case 'assignInitialResources': {
+      const resource = mission22.activeInitialResource;
+      return resource ? MISSION22_RESOURCE_LABELS[resource] : 'RECURSOS ASIGNADOS';
+    }
+    case 'defendAuroraFront': return MISSION22_FRONT_LABELS.aurora;
+    case 'defendNereidaFront': return MISSION22_FRONT_LABELS.nereida;
+    case 'defendOrbitalFront': return `RELÉ ORBITAL ${Math.min(3, mission22.relaysProtected + 1)}`;
+    case 'manageCrossFrontCrisis': return 'CENTRO DE MANDO';
+    case 'chooseSupportPriority': return 'REFUERZO PLEYADIANO';
+    case 'restoreJointNetwork': return 'RED AURORA–NEREIDA–ARCA';
+    case 'detectCoordinationNodes': {
+      const index = Math.max(0, mission22.activeNodeIndex);
+      return MISSION22_NODE_LABELS[MISSION22_NODE_ORDER[Math.min(index, MISSION22_NODE_ORDER.length - 1)]];
+    }
+    case 'surviveFinalPressure': return 'DEFENSA ORBITAL DEL ARCA';
+    case 'completed': return 'RED HUMANA OPERATIVA';
+    default: return 'EL ARCA';
+  }
+}
+
+function syncMission22Visuals(): void {
+  const ark = mothership.group.position;
+  threeFrontCommandNetwork.setOrigin(ark.x, ark.y, ark.z);
+  mission22VisualIntegrities[0] = mission22.state.auroraIntegrity;
+  mission22VisualIntegrities[1] = mission22.state.nereidaIntegrity;
+  mission22VisualIntegrities[2] = mission22.state.orbitalIntegrity;
+  threeFrontCommandNetwork.setState({
+    visible: mission22.started,
+    integrities: mission22VisualIntegrities,
+    activeFront: mission22.currentFront,
+    relaysProtected: mission22.state.orbitalRelaysProtected,
+    supportPriority: mission22.state.mission22SupportPriority,
+    jointNetworkRestored: mission22.state.jointNetworkRestored,
+    nodesDetected: mission22.state.coordinationNodesDetected,
+    finalPressureActive: mission22.step === 'surviveFinalPressure'
+  });
+
+  const aurora = auroraStationPosition(auroraSettlementSiteDefinition.position);
+  const atlas = mission19StationPosition(nereidaAtlasGate, mission19DefenseScratch);
+  if (mission22.step === 'defendAuroraFront') coalitionDrones.setOrigin(aurora.x, aurora.y, aurora.z);
+  else coalitionDrones.setOrigin(ark.x, ark.y, ark.z);
+  coalitionBreachDrones.setGoal(atlas.x, atlas.y, atlas.z, (x, z) => planetaryWorld.getHeightAt(x, z));
+  const auroraTurretsVisible = mission22.started || mission17.completed || mission18.started;
+  const auroraTurretsAuthorized = mission22.started || mission18.state.defenseWeaponsAuthorized;
+  auroraDefenseNetwork.restoreTurrets(auroraTurretsVisible, auroraTurretsAuthorized);
+}
+
+function commitMission22DebugMutation(clearEncounters = false): Mission22Snapshot {
+  if (clearEncounters) {
+    coalitionDrones.clearAll();
+    coalitionBreachDrones.clearAll();
+    mission22DefenseCooldowns.fill(0);
+  }
+  syncMission22Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  return mission22.snapshot();
+}
+
+function startMission22IfReady(): boolean {
+  if (mission22.started || !mission21.completed) return false;
+  if (!mission22.start(mission21.snapshot())) return false;
+  mission22AnnouncedBeats.clear();
+  mission22DefenseCooldowns.fill(0);
+  syncMission22Visuals();
+  triggerDialogue('m22_start', 'mission22-start');
+  triggerDialogue('m22_aurora_alarm', 'mission22-aurora-alarm', 2.2);
+  triggerDialogue('m22_nereida_alarm', 'mission22-nereida-alarm', 4.4);
+  triggerDialogue('m22_orbital_alarm', 'mission22-orbital-alarm', 6.6);
+  showPhaseBanner('MISIÓN 22: FRENTES ROTOS', 'Alarmas simultáneas');
+  missionText.textContent = 'Revisa la integridad de Aurora, Nereida y órbita.';
+  void sfxManager.play('warning', 0.68);
+  saveProgress();
+  return true;
+}
+
+function assignMission22InitialResource(resource: Mission22ResourceId, front: Mission22FrontId): boolean {
+  if (!mission22.assignInitialResource(resource, front)) return false;
+  void sfxManager.play('confirm', 0.42);
+  if (mission22.initialAssignmentsComplete) {
+    mission22CommandPanel.setVisible(false);
+    triggerDialogue('m22_resources_assigned', 'mission22-resources-assigned');
+    showPhaseBanner('RECURSOS ASIGNADOS', 'Primer frente: Aurora');
+  } else if (mission22.activeInitialResource) {
+    mission22CommandPanel.showInitial(mission22.activeInitialResource);
+  }
+  syncMission22Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  return true;
+}
+
+function chooseMission22Support(front: Mission22FrontId): boolean {
+  if (!mission22.chooseSupportPriority(front)) return false;
+  mission22CommandPanel.setVisible(false);
+  triggerDialogue('m22_support_chosen', `mission22-support-${front}`);
+  showPhaseBanner('REFUERZO TRANSFERIDO', MISSION22_FRONT_LABELS[front]);
+  void sfxManager.play('defenseNetwork', 0.5);
+  syncMission22Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  return true;
+}
+
+function performMission22Interaction(position: THREE.Vector3): boolean {
+  if (!mission22.started || mission22.completed) return false;
+  const distance = position.distanceTo(getMission22StationPosition());
+  if (mission22.step === 'accessCommandTerminal') {
+    if (distance > mission22Tuning.terminalRange) {
+      missionText.textContent = `Terminal estratégica a ${Math.round(distance)} m.`;
+      return true;
+    }
+    if (mission22.accessCommandTerminal()) {
+      const tone = mission21.state.coalitionResponseTone === 'none' ? 'strategic' : mission21.state.coalitionResponseTone;
+      triggerDialogue(`m22_command_${tone}`, `mission22-command-${tone}`);
+      mission22CommandPanel.showInitial(mission22.activeInitialResource ?? 'energy');
+      syncMission22Visuals();
+      saveProgress();
+    }
+    return true;
+  }
+  if (mission22.step === 'assignInitialResources' && mission22.activeInitialResource) {
+    mission22CommandPanel.showInitial(mission22.activeInitialResource);
+    return true;
+  }
+  if (mission22.step === 'chooseSupportPriority') {
+    mission22CommandPanel.showSupport();
+    return true;
+  }
+  missionText.textContent = distance <= mission22Tuning.commandRange
+    ? `${getMission22StationLabel()}: ${Math.round(mission22.phaseProgress)}%.`
+    : `${getMission22StationLabel()} a ${Math.round(distance)} m.`;
+  return true;
+}
+
+function updateMission22AuroraDefense(delta: number): void {
+  for (let index = 0; index < Math.min(3, auroraDefenseNetwork.turretPositions.length); index += 1) {
+    const muzzle = auroraDefenseNetwork.turretPositions[index];
+    mission22DefenseCooldowns[index] = Math.max(0, mission22DefenseCooldowns[index] - delta);
+    const target = coalitionDrones.nearestPosition(muzzle, mission18Tuning.turretRange * 1.5);
+    auroraDefenseNetwork.aimTurret(index, target);
+    if (!target || mission22DefenseCooldowns[index] > 0) continue;
+    mission22DefenseCooldowns[index] = mission18Tuning.turretFireInterval * 1.35;
+    auroraDefenseNetwork.fireTurret(index);
+    auroraDefenseEffect.fireTracer(muzzle, target);
+    coalitionDrones.damageNearest(muzzle, mission18Tuning.turretRange * 1.5, mission18Tuning.turretDamage * 0.85);
+  }
+}
+
+function updateMission22NereidaDefenseSource(index: number, source: THREE.Vector3, delta: number): void {
+  mission22DefenseCooldowns[index] = Math.max(0, mission22DefenseCooldowns[index] - delta);
+  if (mission22DefenseCooldowns[index] > 0) return;
+  mission22DefenseCooldowns[index] = 0.7 + index * 0.08;
+  coalitionBreachDrones.damageNearest(source, mission19Tuning.stationRange * 14, 18);
+}
+
+function updateMission22NereidaDefense(delta: number): void {
+  updateMission22NereidaDefenseSource(0, planetaryWorld.colonyModule.group.position, delta);
+  updateMission22NereidaDefenseSource(1, defensiveBeacons[0].group.position, delta);
+  updateMission22NereidaDefenseSource(2, defensiveBeacons[1].group.position, delta);
+  updateMission22NereidaDefenseSource(3, defensiveBeacons[2].group.position, delta);
+}
+
+function updateMission22OrbitalSupport(delta: number): void {
+  mission22DefenseCooldowns[0] = Math.max(0, mission22DefenseCooldowns[0] - delta);
+  if (mission22DefenseCooldowns[0] > 0 || coalitionDrones.activeCount <= 0) return;
+  mission22DefenseCooldowns[0] = mission22.step === 'surviveFinalPressure' ? 0.85 : 1.05;
+  coalitionDrones.damageNearest(mothership.group.position, 1450, 7);
+}
+
+function updateMission22AirWave(delta: number, elapsed: number, front: Mission22FrontId): void {
+  coalitionDrones.update(
+    delta,
+    elapsed,
+    () => undefined,
+    (position) => {
+      mission22.damageFront(front, front === 'orbital' ? 2.8 : 2.2);
+      if (front === 'aurora') auroraDefenseEffect.registerShieldImpact(position);
+    }
+  );
+  if (front === 'aurora') updateMission22AuroraDefense(delta);
+  else updateMission22OrbitalSupport(delta);
+}
+
+function updateMission22Systems(delta: number, elapsed: number): void {
+  startMission22IfReady();
+  if (!mission22.started) {
+    mission22CommandPanel.setVisible(false);
+    threeFrontCommandNetwork.setState({
+      visible: false,
+      integrities: mission22VisualIntegrities,
+      activeFront: 'none',
+      relaysProtected: mission22.state.orbitalRelaysProtected,
+      supportPriority: 'none',
+      jointNetworkRestored: false,
+      nodesDetected: mission22.state.coordinationNodesDetected,
+      finalPressureActive: false
+    });
+    return;
+  }
+
+  threeFrontCommandNetwork.update(delta, elapsed);
+  const pressureChanged = mission22.updateStrategicPressure(delta);
+  if (pressureChanged) syncMission22Visuals();
+  const showChoice = !dialogueManager.current && !gamePaused && !starMap.active;
+  if (mission22.step === 'assignInitialResources' && mission22.activeInitialResource && showChoice) {
+    if (!mission22CommandPanel.visible) mission22CommandPanel.showInitial(mission22.activeInitialResource);
+  } else if (mission22.step === 'chooseSupportPriority' && showChoice) {
+    if (!mission22CommandPanel.visible) mission22CommandPanel.showSupport();
+  } else if (mission22CommandPanel.visible) {
+    mission22CommandPanel.setVisible(false);
+  }
+  if (mission22.completed) return;
+
+  const arkDistance = ship.position.distanceTo(mothership.group.position);
+  const nearArk = arkDistance <= mission22Tuning.commandRange;
+  const terminalDistance = ship.position.distanceTo(arkStation(arkDataCore.offset, mission22Scratch));
+  const nearTerminal = terminalDistance <= mission22Tuning.terminalRange;
+
+  switch (mission22.step) {
+    case 'simultaneousAlarm':
+      transientWarning = `AURORA ${Math.round(mission22.state.auroraIntegrity)}% // NEREIDA ${Math.round(mission22.state.nereidaIntegrity)}% // ÓRBITA ${Math.round(mission22.state.orbitalIntegrity)}%`;
+      if (mission22.advanceAlarm(delta)) {
+        showPhaseBanner('CENTRO DE MANDO', 'Accede a la terminal estratégica');
+        saveProgress();
+      }
+      break;
+    case 'accessCommandTerminal':
+      transientWarning = nearTerminal ? 'TERMINAL LISTA // PULSA E' : `TERMINAL DEL ARCA // ${Math.round(terminalDistance)} m`;
+      break;
+    case 'assignInitialResources':
+      transientWarning = `ASIGNACIÓN PENDIENTE // ${getMission22StationLabel()}`;
+      break;
+    case 'defendAuroraFront': {
+      const waveKey = 'wave:aurora';
+      if (!mission22AnnouncedBeats.has(waveKey)) {
+        mission22AnnouncedBeats.add(waveKey);
+        syncMission22Visuals();
+        coalitionDrones.launchWave(mission22Tuning.auroraWaveCount);
+        showPhaseBanner('FRENTE AURORA', 'Defensas remotas activas');
+      }
+      updateMission22AirWave(delta, elapsed, 'aurora');
+      auroraDefenseEffect.setShieldTest(0.45 + mission22.state.auroraIntegrity / 200);
+      auroraDefenseEffect.setAlertLevel(0.72);
+      auroraDefenseEffect.update(delta, elapsed);
+      transientWarning = `AURORA ${Math.round(mission22.state.auroraIntegrity)}% // HOSTILES ${coalitionDrones.activeCount}`;
+      if (coalitionDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey) && mission22.completeAuroraFront()) {
+        triggerDialogue('m22_aurora_held', 'mission22-aurora-held');
+        coalitionDrones.clearAll();
+        mission22DefenseCooldowns.fill(0);
+        syncMission22Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'defendNereidaFront': {
+      const waveKey = 'wave:nereida';
+      if (!mission22AnnouncedBeats.has(waveKey)) {
+        mission22AnnouncedBeats.add(waveKey);
+        syncMission22Visuals();
+        coalitionBreachDrones.launchWave(mission22Tuning.nereidaWaveCount, true);
+        showPhaseBanner('FRENTE NEREIDA', 'Compuertas Atlas bajo presión');
+      }
+      coalitionBreachDrones.update(
+        delta,
+        elapsed,
+        () => undefined,
+        () => mission22.damageFront('nereida', 3.2)
+      );
+      updateMission22NereidaDefense(delta);
+      transientWarning = `NEREIDA ${Math.round(mission22.state.nereidaIntegrity)}% // BRECHAS ${coalitionBreachDrones.activeCount}`;
+      if (coalitionBreachDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey) && mission22.completeNereidaFront()) {
+        triggerDialogue('m22_nereida_held', 'mission22-nereida-held');
+        coalitionBreachDrones.clearAll();
+        mission22DefenseCooldowns.fill(0);
+        syncMission22Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'defendOrbitalFront': {
+      const waveKey = 'wave:orbital';
+      if (!mission22AnnouncedBeats.has(waveKey)) {
+        mission22AnnouncedBeats.add(waveKey);
+        syncMission22Visuals();
+        coalitionDrones.launchWave(mission22Tuning.orbitalWaveCount);
+        showPhaseBanner('FRENTE ORBITAL', 'Protege los tres relés');
+      }
+      updateMission22AirWave(delta, elapsed, 'orbital');
+      transientWarning = `ÓRBITA ${Math.round(mission22.state.orbitalIntegrity)}% // RELÉS ${mission22.relaysProtected}/3 // HOSTILES ${coalitionDrones.activeCount}`;
+      if (coalitionDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey)) {
+        for (let index = 0; index < 3; index += 1) mission22.protectOrbitalRelay(index);
+        triggerDialogue('m22_relays_held', 'mission22-relays-held');
+        triggerDialogue('m22_cross_crisis', 'mission22-cross-crisis', 2.8);
+        coalitionDrones.clearAll();
+        mission22DefenseCooldowns.fill(0);
+        syncMission22Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'manageCrossFrontCrisis':
+      transientWarning = nearTerminal
+        ? `RECUPERACIÓN CRUZADA ${Math.round(mission22.phaseProgress)}%`
+        : `REGRESA AL MANDO // ${Math.round(terminalDistance)} m`;
+      if (mission22.advanceCrossFrontCrisis(delta, nearTerminal)) {
+        showPhaseBanner('TELEMETRÍA ESTABILIZADA', 'Elige el frente prioritario');
+        syncMission22Visuals();
+        saveProgress();
+      }
+      break;
+    case 'chooseSupportPriority':
+      transientWarning = 'TRANSFERENCIA PLEYADIANA // PRIORIDAD PENDIENTE';
+      break;
+    case 'restoreJointNetwork':
+      transientWarning = nearArk
+        ? `SINCRONIZANDO TRES FRENTES ${Math.round(mission22.phaseProgress)}%`
+        : `REGRESA AL ARCA // ${Math.round(arkDistance)} m`;
+      if (mission22.advanceJointNetwork(delta, nearArk)) {
+        triggerDialogue('m22_joint_network', 'mission22-joint-network');
+        showPhaseBanner('DEFENSA COORDINADA', 'Aurora // Nereida // Arca');
+        void sfxManager.play('defenseNetwork', 0.58);
+        syncMission22Visuals();
+        saveProgress();
+      }
+      break;
+    case 'detectCoordinationNodes': {
+      const detected = mission22.advanceCoordinationNode(delta, nearArk);
+      transientWarning = nearArk
+        ? `ANALIZANDO ${getMission22StationLabel()} // ${Math.round(mission22.phaseProgress)}%`
+        : `SENSORES FUERA DE ENLACE // ${Math.round(arkDistance)} m`;
+      if (detected >= 0) {
+        void sfxManager.play('scanner', 0.42);
+        if (mission22.nodesDetected >= MISSION22_NODE_ORDER.length) {
+          triggerDialogue('m22_nodes_detected', 'mission22-nodes-detected');
+          triggerDialogue('m22_final_pressure', 'mission22-final-pressure', 3);
+          showPhaseBanner('TRES NODOS LOCALIZADOS', 'Última oleada entrante');
+        }
+        syncMission22Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'surviveFinalPressure': {
+      const waveKey = 'wave:final';
+      if (!mission22AnnouncedBeats.has(waveKey)) {
+        mission22AnnouncedBeats.add(waveKey);
+        syncMission22Visuals();
+        coalitionDrones.launchWave(mission22Tuning.finalWaveCount);
+      }
+      updateMission22AirWave(delta, elapsed, 'orbital');
+      transientWarning = `PRESIÓN FINAL // HOSTILES ${coalitionDrones.activeCount} // RED ${Math.round(mission22.readout.jointLink)}%`;
+      if (mission22.advanceFinalPressure(delta, coalitionDrones.activeCount === 0)) {
+        coalitionDrones.clearAll();
+        triggerDialogue('m22_closing', 'mission22-closing');
+        showPhaseBanner('MISIÓN 22 COMPLETA', 'M23 // La contraofensiva desbloqueada');
+        missionText.textContent = 'Los tres frentes sobreviven. Los nodos enemigos siguen activos.';
+        musicManager.playSting('discovery', clock.elapsedTime);
+        syncMission22Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function getMission22Progress(): number {
+  if (!mission22.started) return 0;
+  if (mission22.completed) return 100;
+  let stable = 0;
+  if (mission22.initialAssignmentsComplete) stable += 1;
+  if (mission22.state.auroraFrontDefended) stable += 1;
+  if (mission22.state.nereidaFrontDefended) stable += 1;
+  if (mission22.state.crossFrontCrisisManaged) stable += 1;
+  if (mission22.state.mission22SupportPriority !== 'none') stable += 1;
+  if (mission22.state.jointNetworkRestored) stable += 1;
+  stable += mission22.relaysProtected / 3;
+  stable += mission22.nodesDetected / 3;
+  return Math.min(99, stable / 8 * 92 + mission22.phaseProgress * 0.07);
+}
+
+function getMission22ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission22.started || mission22.completed) return {};
+  if (mission22.step === 'assignInitialResources' || mission22.step === 'chooseSupportPriority') {
+    return { nextAction: mission22.stepDefinition.nextAction, key: '' };
+  }
+  if (mission22.step === 'defendAuroraFront' || mission22.step === 'defendNereidaFront') {
+    const hostiles = mission22.step === 'defendAuroraFront' ? coalitionDrones.activeCount : coalitionBreachDrones.activeCount;
+    return { nextAction: `${getMission22StationLabel()} // ${hostiles} hostil(es). Defensas remotas activas.`, key: '' };
+  }
+  if (mission22.step === 'defendOrbitalFront' || mission22.step === 'surviveFinalPressure') {
+    return {
+      nextAction: `${coalitionDrones.activeCount} hostil(es). Protege la red orbital con la nave.`,
+      key: 'ESPACIO',
+      blockedReason: playerModeSystem.insideShip ? '' : 'Debes volver a la nave con F.'
+    };
+  }
+  const distance = ship.position.distanceTo(getMission22StationPosition());
+  const range = mission22.step === 'accessCommandTerminal' || mission22.step === 'manageCrossFrontCrisis'
+    ? mission22Tuning.terminalRange
+    : mission22Tuning.commandRange;
+  const inRange = distance <= range;
+  return {
+    nextAction: inRange ? `${getMission22StationLabel()} // ${Math.round(mission22.phaseProgress)}%.` : `${getMission22StationLabel()} a ${Math.round(distance)} m.`,
+    key: mission22.step === 'accessCommandTerminal' && inRange ? 'E' : inRange ? '' : 'WASD',
+    blockedReason: inRange ? '' : 'Fuera del alcance del centro de mando.'
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mission 23: La contraofensiva
+// ---------------------------------------------------------------------------
+
+function mission23StepUsesPlatform(): boolean {
+  return mission23.step === 'approachLogisticsPlatform' ||
+    mission23.step === 'disablePlatformDefenses' ||
+    mission23.step === 'destroyLogisticsCore';
+}
+
+function mission23StepUsesBeacon(): boolean {
+  return mission23.step === 'approachJumpBeacon' ||
+    mission23.step === 'disableBeaconAnchors' ||
+    mission23.step === 'collapseJumpBeacon' ||
+    mission23.step === 'escapeDistortion' ||
+    mission23.step === 'recoverEnemyRoute';
+}
+
+function getMission23JammerReadingPosition(): THREE.Vector3 {
+  const index = Math.max(0, mission23.activeReadingIndex);
+  mission23TargetScratch.copy(coalitionJammer.position);
+  if (index === 0) return mission23TargetScratch.add(mission23Scratch.set(-180, 20, -110));
+  if (index === 1) return mission23TargetScratch.add(mission23Scratch.set(160, -30, 70));
+  return mission23TargetScratch.add(mission23Scratch.set(-20, 90, 190));
+}
+
+function getMission23StationPosition(): THREE.Vector3 {
+  if (playerModeSystem.onFootActive && !mission23.completed) return shipAccessLift.getGroundExitPosition();
+  switch (mission23.step) {
+    case 'approachJammerNode': return getMission23JammerReadingPosition();
+    case 'destroyJammerNode': return coalitionJammer.position;
+    case 'approachLogisticsPlatform':
+    case 'disablePlatformDefenses':
+    case 'destroyLogisticsCore': return coalitionLogisticsPlatform.position;
+    case 'approachJumpBeacon':
+    case 'disableBeaconAnchors':
+    case 'collapseJumpBeacon':
+    case 'escapeDistortion': return coalitionJumpBeacon.position;
+    case 'recoverEnemyRoute': return ship.position;
+    case 'counteroffensiveCouncil':
+    case 'synchronizeJointForces':
+    case 'chooseTargetOrder':
+    case 'confirmReturnToArk':
+    case 'completed':
+    case 'inactive':
+    default: return mothership.group.position;
+  }
+}
+
+function getMission23StationLabel(): string {
+  if (playerModeSystem.onFootActive && !mission23.completed) return 'NAVE DE RECONOCIMIENTO';
+  switch (mission23.step) {
+    case 'counteroffensiveCouncil': return 'CONSEJO CONJUNTO';
+    case 'synchronizeJointForces': return 'RED ARCA // AURORA // NEREIDA // PLEYADIANOS';
+    case 'chooseTargetOrder': return 'ORDEN DE ATAQUE';
+    case 'approachJammerNode': return `LECTURA DE INTERFERENCIA ${Math.min(3, mission23.readingsCount + 1)}`;
+    case 'destroyJammerNode': return MISSION23_TARGET_LABELS.jammer;
+    case 'approachLogisticsPlatform':
+    case 'disablePlatformDefenses':
+    case 'destroyLogisticsCore': return MISSION23_TARGET_LABELS.logistics;
+    case 'approachJumpBeacon':
+    case 'disableBeaconAnchors':
+    case 'collapseJumpBeacon': return MISSION23_TARGET_LABELS.jumpBeacon;
+    case 'escapeDistortion': return 'ZONA DE DISTORSION';
+    case 'recoverEnemyRoute': return 'DATOS DE RUTA ENEMIGA';
+    case 'confirmReturnToArk': return 'ARCA EPSILON';
+    case 'completed': return 'RUTA AL ORIGEN';
+    default: return 'ARCA EPSILON';
+  }
+}
+
+function syncMission23Visuals(): void {
+  const ark = mothership.group.position;
+  coalitionJammer.setOrigin(ark.x, ark.y, ark.z);
+  coalitionLogisticsPlatform.setPosition(
+    ark.x + mission23Tuning.targetPositions.logistics[0],
+    ark.y + mission23Tuning.targetPositions.logistics[1],
+    ark.z + mission23Tuning.targetPositions.logistics[2]
+  );
+  coalitionJumpBeacon.setPosition(
+    ark.x + mission23Tuning.targetPositions.jumpBeacon[0],
+    ark.y + mission23Tuning.targetPositions.jumpBeacon[1],
+    ark.z + mission23Tuning.targetPositions.jumpBeacon[2]
+  );
+
+  const platformVisible = mission23.started && mission23StepUsesPlatform() && !mission23.state.logisticsPlatformDestroyed;
+  mission23PlatformVisualState.visible = platformVisible;
+  mission23PlatformVisualState.defensesDisabled = mission23.state.platformDefensesDisabled;
+  mission23PlatformVisualState.energyDisabled = mission23.state.platformEnergyDisabled;
+  mission23PlatformVisualState.destroyed = mission23.state.logisticsPlatformDestroyed;
+  mission23PlatformVisualState.method = mission23.state.mission23PlatformMethod;
+  coalitionLogisticsPlatform.setState(mission23PlatformVisualState);
+  const collapseVisible = mission23.state.jumpBeaconDestroyed &&
+    (mission23.step === 'escapeDistortion' || mission23.step === 'recoverEnemyRoute');
+  coalitionJumpBeacon.setState(
+    mission23.started && mission23StepUsesBeacon() && !mission23.state.jumpBeaconDestroyed,
+    mission23.state.jumpBeaconAnchorsDisabled,
+    collapseVisible,
+    mission23.step === 'collapseJumpBeacon' ? mission23.phaseProgress : 0
+  );
+}
+
+function clearMission23Encounter(): void {
+  coalitionDrones.clearAll();
+  if (coalitionJammer.isActive) coalitionJammer.clear();
+  mission23SupportCooldown = 0;
+}
+
+function commitMission23DebugMutation(clearEncounter = false): Mission23Snapshot {
+  if (clearEncounter) clearMission23Encounter();
+  syncMission23Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  updateStarMap();
+  return mission23.snapshot();
+}
+
+function startMission23IfReady(): boolean {
+  if (mission23.started || !mission22.completed) return false;
+  if (!mission23.start(mission22.snapshot())) return false;
+  mission23AnnouncedBeats.clear();
+  clearMission23Encounter();
+  syncMission23Visuals();
+  triggerDialogue('m23_start', 'mission23-start');
+  showPhaseBanner('MISION 23: LA CONTRAOFENSIVA', 'Primera respuesta coordinada');
+  missionText.textContent = 'Revisa los tres nodos y escucha al consejo conjunto.';
+  saveProgress();
+  return true;
+}
+
+function chooseMission23TargetOrder(first: Mission23PrimaryTarget): boolean {
+  if (!mission23.chooseTargetOrder(first)) return false;
+  mission23ChoicePanel.setVisible(false);
+  triggerDialogue('m23_order_chosen', `mission23-order-${first}`);
+  showPhaseBanner('ORDEN DE ATAQUE FIJADO', MISSION23_TARGET_LABELS[first]);
+  syncMission23Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  updateStarMap();
+  return true;
+}
+
+function chooseMission23PlatformMethod(method: Exclude<Mission23PlatformMethod, 'none'>): boolean {
+  if (!mission23.choosePlatformMethod(method)) return false;
+  mission23ChoicePanel.setVisible(false);
+  triggerDialogue('m23_platform_method', `mission23-platform-${method}`);
+  showPhaseBanner('ATAQUE COORDINADO', MISSION23_PLATFORM_METHOD_LABELS[method]);
+  syncMission23Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  return true;
+}
+
+function performMission23Interaction(position: THREE.Vector3): boolean {
+  if (!mission23.started || mission23.completed) return false;
+  if (playerModeSystem.onFootActive) {
+    missionText.textContent = 'Vuelve a la nave con F para continuar la contraofensiva orbital.';
+    return true;
+  }
+  const distance = position.distanceTo(getMission23StationPosition());
+  if (mission23.step === 'approachJammerNode') {
+    if (distance > mission23Tuning.triangulationRange) {
+      missionText.textContent = `Lectura ${mission23.readingsCount + 1}/3 a ${Math.round(distance)} m.`;
+      return true;
+    }
+    const reading = mission23.activeReadingIndex;
+    if (reading >= 0 && mission23.recordJammerReading(reading)) {
+      void sfxManager.play('scanner', 0.48);
+      triggerDialogue('m23_jammer_reading', `mission23-jammer-reading-${reading + 1}`);
+      scannerPulse.trigger(ship.position, true);
+      if (mission23.readingsComplete) {
+        showPhaseBanner('NUCLEO TRIANGULADO', 'Destruye las escoltas y el interferidor');
+      }
+      syncMission23Visuals();
+      saveProgress();
+      updateStarMap();
+    }
+    return true;
+  }
+  if (mission23.step === 'chooseTargetOrder') {
+    mission23ChoicePanel.showOrder();
+    return true;
+  }
+  if (mission23.step === 'destroyLogisticsCore' && mission23.state.mission23PlatformMethod === 'none') {
+    mission23ChoicePanel.showMethod();
+    return true;
+  }
+  if (mission23.step === 'recoverEnemyRoute') {
+    if (mission23.recoverEnemyRoute()) {
+      triggerDialogue('m23_route_recovered', 'mission23-route-recovered');
+      showPhaseBanner('RUTA ENEMIGA RECUPERADA', 'Regresa al Arca');
+      void sfxManager.play('confirm', 0.52);
+      syncMission23Visuals();
+      saveProgress();
+      updateStarMap();
+    }
+    return true;
+  }
+  if (mission23.step === 'confirmReturnToArk') {
+    const arkDistance = position.distanceTo(mothership.group.position);
+    if (arkDistance > mission23Tuning.commandRange) {
+      missionText.textContent = `Arca Epsilon a ${Math.round(arkDistance)} m.`;
+      return true;
+    }
+    if (mission23.confirmReturnToArk()) {
+      clearMission23Encounter();
+      syncMission23Visuals();
+      triggerDialogue('m23_closing', 'mission23-closing');
+      showPhaseBanner('MISION 23 COMPLETA', 'M24 // Regreso al origen desbloqueada');
+      missionText.textContent = 'Todo converge en el Arca. La ruta al sector inicial esta confirmada.';
+      musicManager.playSting('complete', clock.elapsedTime);
+      saveProgress();
+      updateStarMap();
+    }
+    return true;
+  }
+  missionText.textContent = distance <= mission23Tuning.approachRange
+    ? `${getMission23StationLabel()}: ${Math.round(mission23.phaseProgress)}%.`
+    : `${getMission23StationLabel()} a ${Math.round(distance)} m.`;
+  return true;
+}
+
+function handleMission23DroneImpact(position: THREE.Vector3): void {
+  resources.energy = clampResource(resources.energy - 1.8);
+  shieldEffect.registerImpact();
+  auroraDefenseEffect.registerShieldImpact(position);
+}
+
+function ignoreMission23DroneExit(): void {}
+
+function handleMission23JammerDestroyed(): void {
+  if (!mission23.destroyJammerNode()) return;
+  coalitionDrones.clearAll();
+  triggerDialogue('m23_jammer_destroyed', 'mission23-jammer-destroyed');
+  showPhaseBanner('INTERFERIDOR NEUTRALIZADO', 'Lock-on recuperado');
+  syncMission23Visuals();
+  saveProgress();
+  updateStarMap();
+}
+
+function updateMission23Drones(delta: number, elapsed: number): void {
+  if (coalitionDrones.activeCount <= 0) return;
+  coalitionDrones.update(delta, elapsed, ignoreMission23DroneExit, handleMission23DroneImpact);
+}
+
+function updateMission23Systems(delta: number, elapsed: number): void {
+  startMission23IfReady();
+  if (!mission23.started) {
+    mission23ChoicePanel.setVisible(false);
+    return;
+  }
+
+  const showChoice = !dialogueManager.current && !gamePaused && !starMap.active;
+  if (mission23.step === 'chooseTargetOrder' && showChoice) {
+    if (!mission23ChoicePanel.visible) mission23ChoicePanel.showOrder();
+  } else if (mission23.step === 'destroyLogisticsCore' && mission23.state.mission23PlatformMethod === 'none' && showChoice) {
+    if (!mission23ChoicePanel.visible) mission23ChoicePanel.showMethod();
+  } else if (mission23ChoicePanel.visible) {
+    mission23ChoicePanel.setVisible(false);
+  }
+  syncMission23Visuals();
+  coalitionLogisticsPlatform.update(delta, elapsed);
+  coalitionJumpBeacon.update(delta, elapsed, mission23.state.jumpBeaconDestroyed);
+  if (mission23.completed) return;
+
+  const arkDistance = ship.position.distanceTo(mothership.group.position);
+  switch (mission23.step) {
+    case 'counteroffensiveCouncil':
+      transientWarning = `NODOS ACTIVOS 3 // SOPORTE M22 ${String(mission22.state.mission22SupportPriority).toUpperCase()}`;
+      if (mission23.advanceCouncil(delta)) {
+        showPhaseBanner('PROTOCOLO AUTORIZADO', 'Sincroniza la red conjunta');
+        saveProgress();
+      }
+      break;
+    case 'synchronizeJointForces': {
+      const linked = arkDistance <= mission23Tuning.commandRange;
+      transientWarning = linked
+        ? `RED CONJUNTA ${Math.round(mission23.phaseProgress)}%`
+        : `REGRESA AL ARCA // ${Math.round(arkDistance)} m`;
+      if (mission23.advanceSynchronization(delta, linked)) {
+        triggerDialogue('m23_joint_forces', 'mission23-joint-forces');
+        showPhaseBanner('FUERZAS SINCRONIZADAS', 'Elige el primer objetivo');
+        void sfxManager.play('defenseNetwork', 0.55);
+        saveProgress();
+      }
+      break;
+    }
+    case 'chooseTargetOrder':
+      transientWarning = 'ORDEN DE ATAQUE PENDIENTE';
+      break;
+    case 'approachJammerNode': {
+      if (!coalitionJammer.isActive) coalitionJammer.deploy();
+      coalitionJammer.update(delta, elapsed, ignoreMission23DroneExit);
+      const readingDistance = ship.position.distanceTo(getMission23JammerReadingPosition());
+      transientWarning = `LOCK DEGRADADO // LECTURAS ${mission23.readingsCount}/3 // ${Math.round(readingDistance)} m`;
+      break;
+    }
+    case 'destroyJammerNode': {
+      if (!coalitionJammer.isActive && !mission23.state.jammerNodeDestroyed) coalitionJammer.deploy();
+      const waveKey = 'wave:jammer';
+      if (!mission23AnnouncedBeats.has(waveKey)) {
+        mission23AnnouncedBeats.add(waveKey);
+        coalitionDrones.setOrigin(coalitionJammer.position.x, coalitionJammer.position.y, coalitionJammer.position.z);
+        coalitionDrones.launchWave(mission23Tuning.jammerEscortCount);
+      }
+      updateMission23Drones(delta, elapsed);
+      coalitionJammer.update(delta, elapsed, handleMission23JammerDestroyed);
+      transientWarning = coalitionDrones.activeCount > 0
+        ? `LOCK DEGRADADO // ESCOLTAS ${coalitionDrones.activeCount}`
+        : `NUCLEO EXPUESTO // INTERFERIDOR ${Math.max(0, Math.round(coalitionJammer.target.health))}`;
+      break;
+    }
+    case 'approachLogisticsPlatform': {
+      const distance = ship.position.distanceTo(coalitionLogisticsPlatform.position);
+      transientWarning = `PLATAFORMA LOGISTICA // ${Math.round(distance)} m`;
+      if (distance <= mission23Tuning.approachRange && mission23.reachLogisticsPlatform()) {
+        triggerDialogue('m23_platform_exposed', 'mission23-platform-exposed');
+        showPhaseBanner('MODULOS IDENTIFICADOS', 'Defensa // energia // nucleo');
+        syncMission23Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'disablePlatformDefenses': {
+      const waveKey = 'wave:platform';
+      if (!mission23AnnouncedBeats.has(waveKey)) {
+        mission23AnnouncedBeats.add(waveKey);
+        coalitionDrones.setOrigin(coalitionLogisticsPlatform.position.x, coalitionLogisticsPlatform.position.y, coalitionLogisticsPlatform.position.z);
+        coalitionDrones.launchWave(mission23Tuning.logisticsEscortCount);
+      }
+      updateMission23Drones(delta, elapsed);
+      if (!mission23.state.platformDefensesDisabled && coalitionLogisticsPlatform.defenseTarget.health <= 0) {
+        mission23.disablePlatformModule('defense');
+        void sfxManager.play('confirm', 0.42);
+        syncMission23Visuals();
+        saveProgress();
+      } else if (mission23.state.platformDefensesDisabled && !mission23.state.platformEnergyDisabled && coalitionLogisticsPlatform.energyTarget.health <= 0) {
+        mission23.disablePlatformModule('energy');
+        coalitionDrones.clearAll();
+        showPhaseBanner('NUCLEO LOGISTICO EXPUESTO', 'Elige el metodo de neutralizacion');
+        syncMission23Visuals();
+        saveProgress();
+      }
+      transientWarning = coalitionDrones.activeCount > 0
+        ? `INTERCEPTA DRONES // ${coalitionDrones.activeCount} HOSTILES`
+        : mission23.state.platformDefensesDisabled
+          ? 'DEPOSITOS ENERGETICOS EXPUESTOS'
+          : 'DEFENSA EXTERIOR EXPUESTA';
+      break;
+    }
+    case 'destroyLogisticsCore': {
+      if (mission23.state.mission23PlatformMethod === 'none') {
+        transientWarning = 'METODO DE ATAQUE PENDIENTE';
+        break;
+      }
+      mission23SupportCooldown = Math.max(0, mission23SupportCooldown - delta);
+      if (mission23SupportCooldown <= 0) {
+        const supportFactor = mission22.state.mission22SupportPriority === 'orbital' ? 0.8 : 1;
+        mission23SupportCooldown = mission23Tuning.platformSupportInterval * supportFactor;
+        coalitionLogisticsPlatform.applyCoordinatedDamage(mission23Tuning.platformSupportDamage);
+      }
+      transientWarning = `ATAQUE COORDINADO // NUCLEO ${Math.max(0, Math.round(coalitionLogisticsPlatform.coreTarget.health))}`;
+      if (coalitionLogisticsPlatform.coreTarget.health <= 0 && mission23.destroyLogisticsPlatform()) {
+        triggerDialogue('m23_platform_destroyed', 'mission23-platform-destroyed');
+        showPhaseBanner('PLATAFORMA NEUTRALIZADA', 'Refuerzos enemigos interrumpidos');
+        syncMission23Visuals();
+        saveProgress();
+        updateStarMap();
+      }
+      break;
+    }
+    case 'approachJumpBeacon': {
+      const distance = ship.position.distanceTo(coalitionJumpBeacon.position);
+      transientWarning = `BALIZA DE SALTO // ${Math.round(distance)} m`;
+      if (distance <= mission23Tuning.approachRange && mission23.reachJumpBeacon()) {
+        triggerDialogue('m23_beacon_located', 'mission23-beacon-located');
+        showPhaseBanner('BALIZA LOCALIZADA', 'Tres anclajes energeticos');
+        syncMission23Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'disableBeaconAnchors': {
+      const waveKey = 'wave:beacon';
+      if (!mission23AnnouncedBeats.has(waveKey)) {
+        mission23AnnouncedBeats.add(waveKey);
+        coalitionDrones.setOrigin(coalitionJumpBeacon.position.x, coalitionJumpBeacon.position.y, coalitionJumpBeacon.position.z);
+        coalitionDrones.launchWave(mission23Tuning.beaconEscortCount);
+      }
+      updateMission23Drones(delta, elapsed);
+      let disabled = -1;
+      if (!mission23.state.jumpBeaconAnchorsDisabled[0] && coalitionJumpBeacon.anchorTargets[0]?.health <= 0) disabled = 0;
+      else if (!mission23.state.jumpBeaconAnchorsDisabled[1] && coalitionJumpBeacon.anchorTargets[1]?.health <= 0) disabled = 1;
+      else if (!mission23.state.jumpBeaconAnchorsDisabled[2] && coalitionJumpBeacon.anchorTargets[2]?.health <= 0) disabled = 2;
+      if (disabled >= 0 && mission23.disableBeaconAnchor(disabled)) {
+        void sfxManager.play('confirm', 0.44);
+        if (mission23.anchorsDisabled === 3) {
+          coalitionDrones.clearAll();
+          triggerDialogue('m23_beacon_collapse', 'mission23-beacon-collapse');
+          showPhaseBanner('ANCLAJES DESACTIVADOS', 'Pulso Pleyadiano preparado');
+        }
+        syncMission23Visuals();
+        saveProgress();
+      }
+      transientWarning = coalitionDrones.activeCount > 0
+        ? `BALIZA DEFENDIDA // ${coalitionDrones.activeCount} HOSTILES`
+        : `ANCLAJES ${mission23.anchorsDisabled}/3`;
+      break;
+    }
+    case 'collapseJumpBeacon': {
+      const waveKey = 'wave:collapse';
+      if (!mission23AnnouncedBeats.has(waveKey)) {
+        mission23AnnouncedBeats.add(waveKey);
+        coalitionDrones.setOrigin(coalitionJumpBeacon.position.x, coalitionJumpBeacon.position.y, coalitionJumpBeacon.position.z);
+        coalitionDrones.launchWave(Math.min(3, mission23Tuning.beaconEscortCount));
+      }
+      updateMission23Drones(delta, elapsed);
+      const nearBeacon = ship.position.distanceTo(coalitionJumpBeacon.position) <= mission23Tuning.approachRange * 1.4;
+      transientWarning = coalitionDrones.activeCount > 0
+        ? `OLEADA FINAL // ${coalitionDrones.activeCount} HOSTILES`
+        : nearBeacon
+          ? `PULSO PLEYADIANO ${Math.round(mission23.phaseProgress)}%`
+          : 'REGRESA AL RANGO DE SINCRONIZACION';
+      if (mission23.advanceBeaconCollapse(delta, nearBeacon, coalitionDrones.activeCount === 0)) {
+        coalitionDrones.clearAll();
+        triggerDialogue('m23_escape', 'mission23-escape');
+        showPhaseBanner('COLAPSO DE RUTA', 'Evacua la distorsion');
+        cameraShake = Math.max(cameraShake, 0.42);
+        syncMission23Visuals();
+        saveProgress();
+      }
+      break;
+    }
+    case 'escapeDistortion': {
+      const escapeDistance = ship.position.distanceTo(coalitionJumpBeacon.position);
+      const playerInitiatedEscape = input.has('w') || input.has('a') || input.has('s') || input.has('d') ||
+        input.has(' ') || input.has('q') || input.has('c') || input.has('control') || input.has('shift');
+      const result = mission23.advanceEscape(delta, escapeDistance, playerInitiatedEscape);
+      transientWarning = `EVACUACION // ${Math.round(escapeDistance)}/${mission23Tuning.escapeSafeDistance} m // ${mission23.readout.escapeSecondsRemaining.toFixed(1)} s`;
+      cameraShake = Math.max(cameraShake, Math.max(0.05, 0.28 * (1 - escapeDistance / mission23Tuning.escapeSafeDistance)));
+      if (result === 'retry') {
+        ship.position.copy(coalitionJumpBeacon.position).add(mission23Scratch.set(0, 35, 240));
+        velocity.set(0, 0, 0);
+        requestCameraFollowSync('mission23-escape-checkpoint');
+        showPhaseBanner('CHECKPOINT RESTAURADO', 'Reintenta la evacuacion');
+      } else if (result === 'complete') {
+        showPhaseBanner('FUERA DE LA DISTORSION', 'Recupera los datos expulsados con E');
+        saveProgress();
+        updateStarMap();
+      }
+      break;
+    }
+    case 'recoverEnemyRoute':
+      transientWarning = 'DATOS DE RUTA DISPONIBLES // PULSA E';
+      break;
+    case 'confirmReturnToArk':
+      transientWarning = arkDistance <= mission23Tuning.commandRange
+        ? 'RUTA LISTA // CONFIRMA CON E'
+        : `REGRESA AL ARCA // ${Math.round(arkDistance)} m`;
+      break;
+    default:
+      break;
+  }
+}
+
+function getMission23Progress(): number {
+  if (!mission23.started) return 0;
+  if (mission23.completed) return 100;
+  let completed = Number(mission23.state.jointForcesSynchronized);
+  completed += mission23.readingsCount / 3;
+  completed += Number(mission23.state.jammerNodeDestroyed);
+  completed += Number(mission23.state.platformDefensesDisabled) * 0.33;
+  completed += Number(mission23.state.platformEnergyDisabled) * 0.33;
+  completed += Number(mission23.state.logisticsPlatformDestroyed);
+  completed += mission23.anchorsDisabled / 3;
+  completed += Number(mission23.state.jumpBeaconDestroyed);
+  completed += Number(mission23.state.escapeCompleted);
+  completed += Number(mission23.state.enemyRouteRecovered);
+  return Math.min(99, completed / 8 * 96 + mission23.phaseProgress * 0.03);
+}
+
+function setMission23Guidance(nextAction: string, key = '', blockedReason = ''): Mission03ObjectiveGuidance {
+  mission23ObjectiveGuidance.nextAction = nextAction;
+  mission23ObjectiveGuidance.key = key;
+  mission23ObjectiveGuidance.blockedReason = blockedReason;
+  return mission23ObjectiveGuidance;
+}
+
+function getMission23ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission23.started || mission23.completed) return setMission23Guidance('');
+  if (playerModeSystem.onFootActive) {
+    return setMission23Guidance('Vuelve a la nave con F.', 'F', 'La contraofensiva requiere vuelo orbital.');
+  }
+  if (mission23.step === 'chooseTargetOrder') return setMission23Guidance(mission23.stepDefinition.nextAction);
+  if (mission23.step === 'destroyLogisticsCore' && mission23.state.mission23PlatformMethod === 'none') {
+    return setMission23Guidance('Elige el metodo contra el nucleo logistico.');
+  }
+  if (mission23.step === 'counteroffensiveCouncil') {
+    return setMission23Guidance(`Consejo conjunto // ${Math.round(mission23.phaseProgress)}%.`);
+  }
+  if (mission23.step === 'recoverEnemyRoute') return setMission23Guidance('Recupera los datos de ruta con E.', 'E');
+  const target = getMission23StationPosition();
+  const distance = ship.position.distanceTo(target);
+  if (mission23.step === 'synchronizeJointForces') {
+    const inRange = distance <= mission23Tuning.commandRange;
+    return setMission23Guidance(
+      inRange ? `Sincronizando fuerzas ${Math.round(mission23.phaseProgress)}%.` : `Regresa al Arca (${Math.round(distance)} m).`,
+      inRange ? '' : 'WASD',
+      inRange ? '' : 'Red conjunta fuera de alcance.'
+    );
+  }
+  if (mission23.step === 'approachJammerNode') {
+    const inRange = distance <= mission23Tuning.triangulationRange;
+    return setMission23Guidance(
+      inRange ? `Registra lectura ${mission23.readingsCount + 1}/3 con E.` : `Acercate a la lectura ${mission23.readingsCount + 1}/3 (${Math.round(distance)} m).`,
+      inRange ? 'E' : 'WASD',
+      'Lock-on degradado por el interferidor.'
+    );
+  }
+  if (mission23.step === 'destroyJammerNode') {
+    return setMission23Guidance(
+      coalitionDrones.activeCount > 0 ? `Destruye ${coalitionDrones.activeCount} escolta(s).` : 'Neutraliza el nucleo del interferidor.',
+      'ESPACIO',
+      coalitionDrones.activeCount > 0 ? 'Nucleo protegido por escoltas.' : ''
+    );
+  }
+  if (mission23.step === 'approachLogisticsPlatform' || mission23.step === 'approachJumpBeacon') {
+    return setMission23Guidance(`${mission23.stepDefinition.nextAction} ${Math.round(distance)} m.`, 'WASD');
+  }
+  if (mission23.step === 'disablePlatformDefenses') {
+    const module = mission23.state.platformDefensesDisabled ? 'depositos energeticos' : 'defensa exterior';
+    return setMission23Guidance(
+      coalitionDrones.activeCount > 0 ? `Intercepta ${coalitionDrones.activeCount} dron(es).` : `Ataca ${module}.`,
+      'ESPACIO',
+      coalitionDrones.activeCount > 0 ? 'Modulo cubierto por escoltas.' : ''
+    );
+  }
+  if (mission23.step === 'destroyLogisticsCore') return setMission23Guidance('Ejecuta el ataque coordinado contra el nucleo.', 'ESPACIO');
+  if (mission23.step === 'disableBeaconAnchors') {
+    return setMission23Guidance(
+      coalitionDrones.activeCount > 0 ? `Despeja ${coalitionDrones.activeCount} escolta(s).` : `Desactiva anclajes ${mission23.anchorsDisabled}/3.`,
+      'ESPACIO',
+      coalitionDrones.activeCount > 0 ? 'Anclajes protegidos por escoltas.' : ''
+    );
+  }
+  if (mission23.step === 'collapseJumpBeacon') {
+    return setMission23Guidance(
+      coalitionDrones.activeCount > 0 ? `Elimina ${coalitionDrones.activeCount} hostil(es).` : `Mantente en rango: pulso ${Math.round(mission23.phaseProgress)}%.`,
+      coalitionDrones.activeCount > 0 ? 'ESPACIO' : ''
+    );
+  }
+  if (mission23.step === 'escapeDistortion') {
+    const escaped = ship.position.distanceTo(coalitionJumpBeacon.position);
+    return setMission23Guidance(`Alejate de la distorsion: ${Math.round(escaped)}/${mission23Tuning.escapeSafeDistance} m.`, 'WASD');
+  }
+  if (mission23.step === 'confirmReturnToArk') {
+    const inRange = distance <= mission23Tuning.commandRange;
+    return setMission23Guidance(inRange ? 'Confirma la ruta con E.' : `Regresa al Arca (${Math.round(distance)} m).`, inRange ? 'E' : 'WASD');
+  }
+  return setMission23Guidance(mission23.stepDefinition.nextAction);
+}
+
+function mission24StepAtLeast(step: Mission24StepId): boolean {
+  return MISSION24_STEP_ORDER.indexOf(mission24.step) >= MISSION24_STEP_ORDER.indexOf(step);
+}
+
+function getMission24StationPosition(): THREE.Vector3 {
+  switch (mission24.step) {
+    case 'decodeReturnRoute':
+      return planetaryWorld.colonyModule.group.position;
+    case 'prepareLaunch':
+    case 'boardShip':
+    case 'ignitionSequence':
+      return playerModeSystem.onFootActive ? shipAccessLift.getGroundExitPosition() : ship.position;
+    case 'lowAtmosphereAscent':
+    case 'cloudLayerCrossing':
+    case 'midAtmosphereAscent':
+    case 'upperAtmosphereAscent':
+    case 'vacuumTransition':
+      return mission24Scratch.set(ship.position.x, ship.position.y + 75, ship.position.z - 110);
+    case 'orbitalInsertion':
+    case 'stabilizeOrbit':
+      return mission24Scratch.set(ship.position.x, ship.position.y, ship.position.z - 220);
+    case 'approachArk':
+    case 'arriveAtOrigin':
+      return mothership.group.position;
+    case 'assessArkDamage':
+      return arkFinalPreparationNetwork.systemPositions[Math.max(0, mission24.activeArkSystemIndex)];
+    case 'restoreEnclaveLinks':
+      return arkFinalPreparationNetwork.enclaveLinkPositions[Math.max(0, mission24.activeEnclaveLinkIndex)];
+    case 'prepareArkSystems':
+      return arkFinalPreparationNetwork.preparationPositions[Math.max(0, mission24.activeArkPreparationIndex)];
+    case 'integratePleyadianNetwork':
+      return arkFinalPreparationNetwork.pleyadianNodePositions[Math.max(0, mission24.activePleyadianNodeIndex)];
+    case 'prepareCivilianShelters':
+      return arkFinalPreparationNetwork.civilianShelterPosition;
+    case 'assembleAlliedForces':
+      return arkFinalPreparationNetwork.alliedAssemblyPosition;
+    case 'revisitStartingSector':
+      return arkFinalPreparationNetwork.startingSectorPositions[Math.max(0, mission24.activeStartingSectorIndex)];
+    case 'runDefenseRehearsal':
+      return arkFinalPreparationNetwork.rehearsalPosition;
+    case 'detectFinalFleet':
+      return arkFinalPreparationNetwork.finalFleetPosition;
+    case 'enterFinalFormation':
+      return arkFinalPreparationNetwork.formationPosition;
+    default:
+      return mothership.group.position;
+  }
+}
+
+function getMission24StationLabel(): string {
+  switch (mission24.step) {
+    case 'decodeReturnRoute': return 'COMUNICACIONES // BASE NEREIDA';
+    case 'prepareLaunch':
+    case 'boardShip':
+    case 'ignitionSequence': return 'NAVE DE RECONOCIMIENTO';
+    case 'lowAtmosphereAscent': return 'CORREDOR // ATMOSFERA BAJA';
+    case 'cloudLayerCrossing': return 'CAPA DE NUBES';
+    case 'midAtmosphereAscent': return 'VECTOR ORBITAL';
+    case 'upperAtmosphereAscent': return 'ALTA ATMOSFERA';
+    case 'vacuumTransition': return 'LIMITE ATMOSFERICO';
+    case 'orbitalInsertion': return 'BANDA DE INSERCION';
+    case 'stabilizeOrbit': return 'ORBITA E-01';
+    case 'approachArk':
+    case 'arriveAtOrigin': return 'ARCA EPSILON';
+    case 'assessArkDamage': return MISSION24_ARK_SYSTEM_LABELS[Math.max(0, mission24.activeArkSystemIndex)];
+    case 'restoreEnclaveLinks': return MISSION24_ENCLAVE_LABELS[Math.max(0, mission24.activeEnclaveLinkIndex)];
+    case 'prepareArkSystems': return MISSION24_ARK_PREPARATION_LABELS[Math.max(0, mission24.activeArkPreparationIndex)];
+    case 'integratePleyadianNetwork': return `NODO PLEYADIANO ${Math.max(1, mission24.activePleyadianNodeIndex + 1)}`;
+    case 'prepareCivilianShelters': return 'MODULOS CIVILES';
+    case 'assembleAlliedForces': return 'FORMACION ALIADA';
+    case 'revisitStartingSector': return MISSION24_STARTING_SECTOR_LABELS[Math.max(0, mission24.activeStartingSectorIndex)];
+    case 'runDefenseRehearsal': return 'CAMPO DE ENSAYO';
+    case 'detectFinalFleet': return 'FIRMA DE FLOTA';
+    case 'enterFinalFormation': return 'POSICION DE FORMACION';
+    default: return 'ARCA EPSILON';
+  }
+}
+
+function syncMission24Visuals(): void {
+  coalitionCapitalPresence.group.visible = false;
+  threeFrontCommandNetwork.group.visible = false;
+  coalitionLogisticsPlatform.group.visible = false;
+  coalitionJumpBeacon.group.visible = false;
+  if (mission21ResponsePanel.visible) mission21ResponsePanel.setVisible(false);
+  if (mission22CommandPanel.visible) mission22CommandPanel.setVisible(false);
+  if (mission23ChoicePanel.visible) mission23ChoicePanel.setVisible(false);
+  arkFinalPreparationNetwork.setOrigin(mothership.group.position);
+  mission24VisualState.visible = mission24.started && mission24StepAtLeast('assessArkDamage');
+  mission24VisualState.assessedSystems = mission24.state.arkDamageAssessments;
+  mission24VisualState.restoredLinks = mission24.state.enclaveLinksRestored;
+  mission24VisualState.preparedSystems = mission24.state.arkSystemsPrepared;
+  mission24VisualState.integratedPleyadianNodes = mission24.state.pleyadianNodesIntegrated;
+  mission24VisualState.sheltersPrepared = mission24.state.civilianSheltersPrepared;
+  mission24VisualState.alliedForcesAssembled = mission24.state.alliedForcesAssembled;
+  mission24VisualState.visitedSectorPoints = mission24.state.startingSectorPointsVisited;
+  mission24VisualState.rehearsalActive = mission24.step === 'runDefenseRehearsal' && mission24RehearsalEngaged;
+  mission24VisualState.finalFleetDetected = mission24.state.finalFleetDetected;
+  mission24VisualState.finalFormation = mission24.step === 'enterFinalFormation' || mission24.completed;
+  arkFinalPreparationNetwork.setState(mission24VisualState);
+}
+
+function startMission24IfReady(): boolean {
+  if (mission24.started || !mission23.completed) return false;
+  if (!inSurfacePhase) enterSurfacePhase(false);
+  if (!mission24.start(mission23.snapshot())) return false;
+  mission24AnnouncedBeats.clear();
+  mission24OrbitalEnvironmentActive = false;
+  mission24RehearsalEngaged = false;
+  sleepMission24LegacyVisuals();
+  mission21ResponsePanel.setVisible(false);
+  mission22CommandPanel.setVisible(false);
+  mission23ChoicePanel.setVisible(false);
+  syncMission24Visuals();
+  triggerDialogue('m24_start', 'mission24-start');
+  showPhaseBanner('MISION 24: REGRESO AL ORIGEN', 'La ruta enemiga conduce al sector inicial del Arca');
+  missionText.textContent = 'Regresa a Base Nereida y decodifica la ruta recuperada con E.';
+  saveProgress();
+  return true;
+}
+
+function enterMission24OrbitalEnvironment(): void {
+  if (mission24OrbitalEnvironmentActive) return;
+  mission24OrbitalEnvironmentActive = true;
+  inSurfacePhase = false;
+  inBasin = false;
+  planetaryWorld.deactivate();
+  surfaceResourceSystem.group.visible = false;
+  landingZone.group.visible = false;
+  surfaceCharacter.setVisible(false);
+  shipAccessLift.group.visible = false;
+  playerModeSystem.forceShip(false, cameraModeSystem.mode === 'cockpit');
+  scene.background = SPACE_BACKGROUND.clone();
+  scene.fog = new THREE.FogExp2(SPACE_FOG, 0.00012);
+  scene.environmentIntensity = 0.34;
+  ambient.intensity = 0.42;
+  keyStar.intensity = 2.4;
+  coldRim.intensity = 1.2;
+  redDeadStar.intensity = 0.45;
+  starfield.group.visible = true;
+  nebula.group.visible = true;
+  planets.group.visible = false;
+  asteroidField.group.visible = false;
+  cinematicDust.points.visible = true;
+  mothership.group.visible = mission24StepAtLeast('approachArk');
+  candidatePlanet.group.visible = false;
+  orbitalMarker.group.visible = false;
+  shieldEffect.mesh.visible = true;
+  atmosphericAscentEffect.hideAtmosphere();
+  setControlHints('space');
+  requestCameraFollowSync('mission24-vacuum');
+}
+
+function commitMission24Step(dialogueId: string, banner: string, subtitle: string): void {
+  if (dialogueId) triggerDialogue(dialogueId, `mission24-${mission24.step}`);
+  if (banner) showPhaseBanner(banner, subtitle);
+  syncMission24Visuals();
+  saveProgress();
+  updateStarMap();
+}
+
+function performMission24Interaction(position: THREE.Vector3): boolean {
+  if (!mission24.started || mission24.completed) return false;
+  const target = getMission24StationPosition();
+  const distance = position.distanceTo(target);
+  if (mission24.step === 'decodeReturnRoute') {
+    if (distance > mission24Tuning.baseRange) {
+      missionText.textContent = `Comunicaciones de Base Nereida a ${Math.round(distance)} m.`;
+      return true;
+    }
+    if (mission24.decodeReturnRoute()) {
+      scannerPulse.trigger(position, true);
+      commitMission24Step('m24_route_decoded', 'RUTA AL ORIGEN DECODIFICADA', 'Coincidencia con el sector inicial del Arca');
+      missionText.textContent = 'Aterriza junto a la base, desciende con F e inspecciona la nave con E.';
+    }
+    return true;
+  }
+  if (mission24.step === 'prepareLaunch') {
+    if (!playerModeSystem.onFootActive) {
+      missionText.textContent = 'Estaciona la nave y desciende fisicamente con F para inspeccionarla.';
+      return true;
+    }
+    if (distance > mission24Tuning.shipPreparationRange) {
+      missionText.textContent = `Nave a ${Math.round(distance)} m. Acercate para preparar el ascenso.`;
+      return true;
+    }
+    if (mission24.prepareLaunch()) {
+      scannerPulse.trigger(ship.position, true);
+      commitMission24Step('m24_launch_prepared', 'NAVE PREPARADA', 'Motores // escudo termico // navegacion // comunicaciones');
+      missionText.textContent = 'Todos los sistemas responden. Vuelve a la nave con F.';
+    }
+    return true;
+  }
+  if (mission24.step === 'boardShip') {
+    missionText.textContent = 'Vuelve a la nave con F para iniciar el lanzamiento.';
+    return true;
+  }
+  if (mission24.step === 'ignitionSequence') {
+    if (!playerModeSystem.insideShip || playerModeSystem.transitionActive) {
+      missionText.textContent = 'Completa el embarque antes de iniciar el encendido.';
+      return true;
+    }
+    if (mission24.armIgnition()) {
+      void sfxManager.play('shipEngine', 0.72);
+      triggerDialogue('m24_countdown', 'mission24-countdown');
+      missionText.textContent = 'Secuencia de lanzamiento iniciada: 5...';
+    }
+    return true;
+  }
+  if (mission24.step === 'arriveAtOrigin') {
+    if (distance > mission24Tuning.arkInteractionRange) {
+      missionText.textContent = `Arca Epsilon a ${Math.round(distance)} m.`;
+      return true;
+    }
+    if (mission24.confirmArrival()) {
+      commitMission24Step('m24_ark_arrival', 'REGRESO AL ORIGEN', 'La Arca Epsilon conserva su posicion y estructura original');
+      missionText.textContent = 'Escanea los cinco sistemas exteriores marcados con E.';
+    }
+    return true;
+  }
+  if (distance > mission24Tuning.stationRange) {
+    missionText.textContent = `${getMission24StationLabel()} a ${Math.round(distance)} m.`;
+    return true;
+  }
+  if (mission24.step === 'assessArkDamage') {
+    const index = mission24.activeArkSystemIndex;
+    if (index >= 0 && mission24.assessArkSystem(index)) {
+      scannerPulse.trigger(target, true);
+      if (mission24.state.arkDamageAssessed) commitMission24Step('m24_ark_assessed', 'EVALUACION COMPLETA', 'Cinco sistemas diagnosticados');
+      else saveProgress();
+    }
+    return true;
+  }
+  if (mission24.step === 'restoreEnclaveLinks') {
+    const index = mission24.activeEnclaveLinkIndex;
+    if (index >= 0 && mission24.restoreEnclaveLink(index)) {
+      scannerPulse.trigger(target, true);
+      if (mission24.state.allEnclaveLinksRestored) commitMission24Step('m24_links_restored', 'ENLACES RESTAURADOS', 'Aurora // Nereida // Arca // red Pleyadiana');
+      else saveProgress();
+    }
+    return true;
+  }
+  if (mission24.step === 'prepareArkSystems') {
+    const index = mission24.activeArkPreparationIndex;
+    if (index >= 0 && mission24.prepareArkSystem(index)) {
+      scannerPulse.trigger(target, true);
+      if (mission24.state.allArkSystemsPrepared) commitMission24Step('m24_ark_prepared', 'ARCA PREPARADA', 'Escudo // motores // bateria principal');
+      else saveProgress();
+    }
+    return true;
+  }
+  if (mission24.step === 'integratePleyadianNetwork') {
+    const index = mission24.activePleyadianNodeIndex;
+    if (index >= 0 && mission24.integratePleyadianNode(index)) {
+      scannerPulse.trigger(target, true);
+      if (mission24.state.pleyadianNetworkIntegrated) commitMission24Step('m24_pleyadian_integrated', 'RED PLEYADIANA INTEGRADA', 'Pulso final bloqueado hasta M25');
+      else saveProgress();
+    }
+    return true;
+  }
+  if (mission24.step === 'prepareCivilianShelters' && mission24.prepareCivilianShelters()) {
+    commitMission24Step('m24_shelters_ready', 'REFUGIOS PREPARADOS', 'Sectores sellados // soporte vital // evacuacion');
+    return true;
+  }
+  if (mission24.step === 'assembleAlliedForces' && mission24.assembleAlliedForces()) {
+    commitMission24Step('m24_allies_assembled', 'FUERZAS ALIADAS REUNIDAS', 'Aurora // Nereida // Arca // Pleyadianos');
+    return true;
+  }
+  if (mission24.step === 'revisitStartingSector') {
+    const index = mission24.activeStartingSectorIndex;
+    if (index >= 0 && mission24.visitStartingSectorPoint(index)) {
+      scannerPulse.trigger(target, true);
+      if (mission24.state.startingSectorRevisited) commitMission24Step('m24_sector_revisited', 'RECORRIDO COMPLETADO', 'El lugar donde comenzo la expedicion');
+      else saveProgress();
+    }
+    return true;
+  }
+  if (mission24.step === 'runDefenseRehearsal') {
+    mission24RehearsalEngaged = true;
+    syncMission24Visuals();
+    missionText.textContent = `Ensayo defensivo ${Math.round(mission24.rehearsalProgress)}%. Mantiene posicion.`;
+    return true;
+  }
+  if (mission24.step === 'detectFinalFleet' && mission24.detectFinalFleet()) {
+    commitMission24Step('m24_final_fleet', 'FLOTA ENEMIGA DETECTADA', 'Firma distante // no atacable // sin combate');
+    return true;
+  }
+  if (mission24.step === 'enterFinalFormation') {
+    if (distance > mission24Tuning.formationRange) {
+      missionText.textContent = `Posicion de formacion a ${Math.round(distance)} m.`;
+      return true;
+    }
+    if (mission24.enterFinalFormation()) {
+      syncMission24Visuals();
+      triggerDialogue('m24_final_line', 'mission24-final-line');
+      showPhaseBanner('MISION 24 COMPLETADA', 'M25 desbloqueada // no iniciada');
+      missionText.textContent = 'Volvimos al lugar donde empez\u00f3 todo. Esta vez, el Arca no est\u00e1 sola.';
+      saveProgress();
+      updateStarMap();
+    }
+    return true;
+  }
+  return true;
+}
+
+function updateMission24Systems(delta: number, elapsed: number): void {
+  const sequenceDelta = mission24LastSequenceElapsed < 0
+    ? delta
+    : Math.max(0, elapsed - mission24LastSequenceElapsed);
+  mission24LastSequenceElapsed = elapsed;
+  startMission24IfReady();
+  if (!mission24.started) return;
+  syncMission24Visuals();
+  arkFinalPreparationNetwork.update(delta, elapsed);
+  mission24AscentHud.setVisible(mission24.ascentActive || mission24.step === 'stabilizeOrbit');
+  mission24AscentHud.update(atmosphericAscent.metrics);
+  if (mission24.completed) return;
+
+  if (mission24.step === 'boardShip' && playerModeSystem.insideShip && !playerModeSystem.transitionActive) {
+    if (mission24.confirmBoarded()) {
+      commitMission24Step('m24_boarded', 'PILOTO A BORDO', 'Compuertas cerradas // sistemas de vuelo activos');
+      missionText.textContent = 'Pulsa E para iniciar la secuencia de encendido.';
+    }
+  }
+  if (mission24.step === 'ignitionSequence') {
+    const result = mission24.updateIgnition(sequenceDelta, playerModeSystem.insideShip && !playerModeSystem.transitionActive);
+    if (result === 'running') {
+      const remaining = Math.max(1, Math.ceil(mission24Tuning.ignitionSeconds * (1 - mission24.ignitionProgress / 100)));
+      transientWarning = `LANZAMIENTO // ${remaining}`;
+      cameraShake = Math.max(cameraShake, 0.025 + mission24.ignitionProgress * 0.00045);
+      missionText.textContent = `Secuencia de lanzamiento: ${remaining}...`;
+    } else if (result === 'cancelled') {
+      missionText.textContent = 'Cuenta regresiva cancelada. Embarca y reinicia con E.';
+    } else if (result === 'complete') {
+      atmosphericAscent.begin(ship.position, smoothYaw);
+      atmosphericAscentEffect.activate(ship.position);
+      triggerDialogue('m24_liftoff', 'mission24-liftoff');
+      showPhaseBanner('DESPEGUE DE E-01', 'Mantiene Space para ascender por el corredor');
+      void sfxManager.play('shipThrust', 0.68);
+      saveProgress();
+    }
+  }
+
+  const clearance = atmosphericAscent.metrics.worldClearance;
+  if (mission24.atmosphericAscentActive) {
+    atmosphericAscentEffect.update(elapsed, atmosphericAscent.metrics);
+    const sky = THREE.MathUtils.clamp(atmosphericAscent.metrics.starOpacity, 0, 1);
+    if (scene.background instanceof THREE.Color) scene.background.copy(BASIN_BACKGROUND).lerp(SPACE_BACKGROUND, sky);
+    if (scene.fog instanceof THREE.FogExp2) {
+      scene.fog.color.copy(BASIN_BACKGROUND).lerp(SPACE_FOG, sky);
+      scene.fog.density = THREE.MathUtils.lerp(0.0024, 0.00008, sky);
+    }
+    cameraShake = Math.max(cameraShake, 0.018 + atmosphericAscent.metrics.wind * (mission24.step === 'cloudLayerCrossing' ? 0.14 : 0.07));
+    transientWarning = `${atmosphericAscent.metrics.phase} // ALT ${atmosphericAscent.metrics.altitude} m // ESTAB ${atmosphericAscent.metrics.orbitalStability}%`;
+  }
+
+  if (mission24.step === 'lowAtmosphereAscent' && clearance >= mission24Tuning.lowAtmosphereTop && mission24.completeAscentPhase('lowAtmosphereAscent')) {
+    commitMission24Step('m24_clouds', 'CAPA DE NUBES', 'Visibilidad reducida // navegacion por instrumentos');
+  } else if (mission24.step === 'cloudLayerCrossing' && clearance >= mission24Tuning.cloudLayerTop && mission24.completeAscentPhase('cloudLayerCrossing')) {
+    commitMission24Step('m24_mid_atmosphere', 'SOBRE LAS NUBES', 'Inclina la trayectoria con W');
+  } else if (mission24.step === 'midAtmosphereAscent' && clearance >= mission24Tuning.midAtmosphereTop && mission24.completeAscentPhase('midAtmosphereAscent')) {
+    commitMission24Step('m24_upper_atmosphere', 'ALTA ATMOSFERA', 'El viento disminuye // aparecen las estrellas');
+  } else if (mission24.step === 'upperAtmosphereAscent' && clearance >= mission24Tuning.upperAtmosphereTop && mission24.completeAscentPhase('upperAtmosphereAscent')) {
+    commitMission24Step('', 'LIMITE ATMOSFERICO', 'Mantiene el vector hasta el vacio');
+  } else if (mission24.step === 'vacuumTransition' && clearance >= mission24Tuning.vacuumAltitude && mission24.completeAscentPhase('vacuumTransition')) {
+    enterMission24OrbitalEnvironment();
+    void sfxManager.play('confirm', 0.58);
+    triggerDialogue('m24_vacuum', 'mission24-vacuum');
+    showPhaseBanner('VACIO CONFIRMADO', 'Usa W para completar la insercion orbital');
+    saveProgress();
+  }
+
+  if (mission24.step === 'orbitalInsertion') {
+    const ready = atmosphericAscent.insertionReady(velocity);
+    transientWarning = `INSERCION // H ${atmosphericAscent.metrics.horizontalSpeed} // V ${atmosphericAscent.metrics.verticalSpeed} // ${Math.round(mission24.insertionProgress)}%`;
+    if (mission24.updateOrbitalInsertion(sequenceDelta, ready)) {
+      triggerDialogue('m24_orbit_insertion', 'mission24-orbit-insertion');
+      showPhaseBanner('INSERCION ORBITAL COMPLETA', 'Estabilizando navegacion y comunicaciones');
+      saveProgress();
+    }
+  } else if (mission24.step === 'stabilizeOrbit') {
+    atmosphericAscent.updateOrbitStabilization(delta, ship, velocity);
+    const levelResponse = 1 - Math.exp(-delta * 2.8);
+    pitch = THREE.MathUtils.lerp(pitch, 0, levelResponse);
+    smoothPitch = THREE.MathUtils.lerp(smoothPitch, 0, levelResponse);
+    bankRoll = THREE.MathUtils.lerp(bankRoll, 0, levelResponse);
+    spaceThrustPitch = THREE.MathUtils.lerp(spaceThrustPitch, 0, levelResponse);
+    if (mission24.updateOrbitStabilization(sequenceDelta, atmosphericAscent.orbitStable(velocity))) {
+      mothership.group.visible = true;
+      atmosphericAscentEffect.setVisible(false);
+      triggerDialogue('m24_ark_located', 'mission24-ark-located');
+      showPhaseBanner('ARCA EPSILON LOCALIZADA', 'Vuela fisicamente hasta el sector inicial');
+      mission24AscentHud.setVisible(false);
+      saveProgress();
+      updateStarMap();
+    }
+  } else if (mission24.step === 'approachArk') {
+    const distance = ship.position.distanceTo(mothership.group.position);
+    transientWarning = `REGRESO AL ARCA // ${Math.round(distance)} m`;
+    if (distance <= mission24Tuning.arkApproachRange && mission24.reachArk()) {
+      triggerDialogue('m24_origin_reached', 'mission24-origin-reached');
+      showPhaseBanner('SECTOR INICIAL', 'Confirma la llegada junto al Arca con E');
+      saveProgress();
+    }
+  } else if (mission24.step === 'runDefenseRehearsal' && mission24RehearsalEngaged) {
+    const inRange = ship.position.distanceTo(arkFinalPreparationNetwork.rehearsalPosition) <= mission24Tuning.stationRange * 1.4;
+    transientWarning = `ENSAYO HOLOGRAFICO // ${Math.round(mission24.rehearsalProgress)}%`;
+    if (mission24.updateDefenseRehearsal(sequenceDelta, inRange)) {
+      mission24RehearsalEngaged = false;
+      commitMission24Step('m24_rehearsal_complete', 'ENSAYO COMPLETADO', 'Defensa viable // consumo Pleyadiano extremo');
+    }
+  }
+}
+
+function getMission24Progress(): number {
+  if (!mission24.started) return 0;
+  if (mission24.completed) return 100;
+  return Math.min(99, mission24.stepNumber / 24 * 100);
+}
+
+function setMission24Guidance(nextAction: string, key = '', blockedReason = ''): Mission03ObjectiveGuidance {
+  mission24ObjectiveGuidance.nextAction = nextAction;
+  mission24ObjectiveGuidance.key = key;
+  mission24ObjectiveGuidance.blockedReason = blockedReason;
+  return mission24ObjectiveGuidance;
+}
+
+function getMission24ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission24.started || mission24.completed) return setMission24Guidance('');
+  const distance = getActivePlayerPosition().distanceTo(getMission24StationPosition());
+  if (mission24.step === 'decodeReturnRoute') return setMission24Guidance(distance <= mission24Tuning.baseRange ? 'Decodifica la ruta con E.' : `Regresa a Base Nereida (${Math.round(distance)} m).`, distance <= mission24Tuning.baseRange ? 'E' : 'WASD');
+  if (mission24.step === 'prepareLaunch') {
+    if (!playerModeSystem.onFootActive) return setMission24Guidance('Estaciona y desciende con F.', 'F', velocity.length() >= 2.2 ? 'Deten la nave antes de abrir el elevador.' : 'Inspeccion exterior requerida.');
+    return setMission24Guidance(distance <= mission24Tuning.shipPreparationRange ? 'Prepara la nave con E.' : `Acercate a la nave (${Math.round(distance)} m).`, distance <= mission24Tuning.shipPreparationRange ? 'E' : 'WASD');
+  }
+  if (mission24.step === 'boardShip') return setMission24Guidance('Vuelve a la nave con F.', 'F');
+  if (mission24.step === 'ignitionSequence') return setMission24Guidance(mission24.ignitionProgress > 0 ? `Cuenta regresiva ${Math.round(mission24.ignitionProgress)}%.` : 'Inicia la secuencia con E.', mission24.ignitionProgress > 0 ? '' : 'E');
+  if (mission24.atmosphericAscentActive) return setMission24Guidance(`${mission24.stepDefinition.nextAction} Altitud ${atmosphericAscent.metrics.altitude} m.`, mission24.step === 'midAtmosphereAscent' || mission24.step === 'upperAtmosphereAscent' ? 'SPACE + W' : 'SPACE');
+  if (mission24.step === 'orbitalInsertion') return setMission24Guidance(
+    `Gana velocidad horizontal: ${atmosphericAscent.metrics.horizontalSpeed} m/s. Suelta Space para estabilizar el vector vertical.`,
+    'W'
+  );
+  if (mission24.step === 'stabilizeOrbit') return setMission24Guidance(`Estabilidad orbital ${atmosphericAscent.metrics.orbitalStability}%.`, 'WASD');
+  if (mission24.step === 'approachArk') return setMission24Guidance(`Regresa al Arca (${Math.round(distance)} m).`, 'WASD');
+  if (mission24.step === 'runDefenseRehearsal' && mission24RehearsalEngaged) return setMission24Guidance(`Mantiene posicion: ensayo ${Math.round(mission24.rehearsalProgress)}%.`, '');
+  return setMission24Guidance(distance <= mission24Tuning.stationRange ? mission24.stepDefinition.nextAction : `${mission24.stepDefinition.nextAction} ${Math.round(distance)} m.`, distance <= mission24Tuning.stationRange ? 'E' : 'WASD');
+}
+
+function commitMission24DebugMutation(): Mission24Snapshot {
+  if (mission24StepAtLeast('orbitalInsertion')) enterMission24OrbitalEnvironment();
+  if (mission24StepAtLeast('approachArk')) mothership.group.visible = true;
+  syncMission24Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  updateStarMap();
+  return mission24.snapshot();
+}
+
+function restoreMission24DebugCheckpoint(step: Mission24StepId): Mission24Snapshot {
+  mission24.forceTo(step);
+  if (mission24StepAtLeast('lowAtmosphereAscent')) {
+    if (!atmosphericAscentEffect.isBuilt) atmosphericAscentEffect.activate(ship.position);
+    const ground = inSurfacePhase
+      ? planetaryWorld.getHeightAt(ship.position.x, ship.position.z)
+      : atmosphericAscent.launchOrigin.y - SURFACE_SHIP_TUNING.PARK_HEIGHT;
+    atmosphericAscent.restoreCheckpoint(mission24.step, ship, velocity, ground);
+  }
+  requestCameraFollowSync('mission24-debug-checkpoint');
+  return commitMission24DebugMutation();
+}
+
+function isPlayerInRelayRange(): boolean {
+  return getActivePlayerPosition().distanceTo(pleyadanRelayBeacon.interactionPosition) <= resonadorAtlasDefinition.relayRange;
+}
+
+function isShipExitAvailable(): boolean {
+  return inSurfacePhase && playerModeSystem.insideShip && !playerModeSystem.transitionActive && velocity.length() < 2.2;
+}
+
+function isShipAccessAvailable(): boolean {
+  if (isShipExitAvailable()) return true;
+  if (!inSurfacePhase || !playerModeSystem.onFootActive || playerModeSystem.transitionActive) return false;
+  return getBoardingProximity().available;
+}
+
+function getNearestOnFootInteraction(): OnFootInteraction | undefined {
+  if (!inSurfacePhase || !playerModeSystem.onFootActive) return undefined;
+  const playerPosition = surfaceCharacter.group.position;
+  const interactions: OnFootInteraction[] = [];
+  if (mission24.started && !mission24.completed && mission24.step === 'prepareLaunch') {
+    interactions.push({
+      id: 'mission24-ship-inspection',
+      label: 'preparar la nave para el ascenso',
+      kind: 'aurora',
+      distance: playerPosition.distanceTo(ship.position)
+    });
+  }
+  const boardingProximity = getBoardingProximity();
+  interactions.push({
+    id: 'surface-scout-ship',
+    label: 'SUBIR A LA NAVE',
+    kind: 'ship',
+    distance: boardingProximity.horizontal
+  });
+
+  if (!colonyManager.state.habitatOnline) {
+    interactions.push({
+      id: 'nereida-landing',
+      label: 'desplegar Módulo Hábitat Nereida-01',
+      kind: 'landing',
+      distance: playerPosition.distanceTo(HABITAT_SITE_LOCAL)
+    });
+  } else if (planetaryWorld.colonyModule.group.visible) {
+    interactions.push({
+      id: 'habitat-mod',
+      label: mission08.started && !mission08.completed && mission08.stepDefinition.target === 'base'
+        ? mission08.stepDefinition.nextAction
+        : mission06.started && !mission06.completed && mission06.stepDefinition.target === 'base'
+        ? mission06.stepDefinition.nextAction
+        : mission05.started && mission05.currentStep.target === 'base'
+        ? mission05.currentStep.nextAction
+        : mission04.started && (mission04.currentStep.target === 'base' || mission04.currentStep.target === 'communications' || mission04.currentStep.target === 'orbitalSensor')
+        ? mission04.currentStep.nextAction
+        : mission03.started && mission03.currentStep.target !== 'relay' && mission03.currentStep.target !== 'resonator'
+        ? mission03.currentStep.nextAction
+        : !colonyManager.state.surfaceSitesRevealed
+        ? 'ejecutar barrido geológico'
+        : colonyManager.state.resourceAnalysisReady && !colonyManager.state.baseSystemsReady
+          ? 'analizar muestras de campo'
+          : colonyManager.state.baseSystemsReady && !colonyManager.state.baseNereidaOperational
+            ? 'confirmar Base Nereida operativa'
+            : 'consultar Hábitat Nereida-01',
+      kind: 'habitat',
+      distance: Math.max(0, playerPosition.distanceTo(planetaryWorld.colonyModule.group.position) - 5.9)
+    });
+  }
+
+  const activeCloakingIndex = getActiveCloakingProjectorIndex();
+  if (mission06.started && activeCloakingIndex >= 0) {
+    interactions.push({
+      id: `cloaking-projector-${activeCloakingIndex}`,
+      label: `calibrar ${CLOAKING_PROJECTOR_NAMES[activeCloakingIndex]}`,
+      kind: 'defense',
+      distance: playerPosition.distanceTo(cloakingProjectors[activeCloakingIndex].group.position)
+    });
+  }
+
+  const activeAtlasNodeIndex = getActiveAtlasEchoNodeIndex();
+  if (mission07.started && activeAtlasNodeIndex >= 0) {
+    const node = atlasEchoNodes[activeAtlasNodeIndex];
+    interactions.push({
+      id: node.definition.id,
+      label: `escanear ${node.definition.name}`,
+      kind: 'atlas',
+      distance: playerPosition.distanceTo(node.interactionPosition)
+    });
+  } else if (mission07.started && mission07.step === 'activateArchive') {
+    interactions.push({
+      id: atlasSeedArchiveDefinition.id,
+      label: 'activar Archivo Semilla Atlas',
+      kind: 'atlas',
+      distance: playerPosition.distanceTo(atlasSeedArchive.interactionPosition)
+    });
+  }
+
+  const activeFractureFocusIndex = getActiveFractureFocusIndex();
+  if (mission08.started && activeFractureFocusIndex >= 0) {
+    const focus = signalFractureNodes[activeFractureFocusIndex];
+    interactions.push({
+      id: focus.definition.id,
+      label: `estabilizar ${focus.definition.name}`,
+      kind: 'atlas',
+      distance: playerPosition.distanceTo(focus.interactionPosition)
+    });
+  }
+
+  // Mission 10: the survey stakes, then the clearing, then the module. One
+  // target at a time so the valley never competes with itself for E.
+  if (mission10.started && !mission10.completed) {
+    const activeSampleIndex = getActiveAuroraSampleIndex();
+    if (activeSampleIndex >= 0) {
+      const probe = auroraSurveyProbes[activeSampleIndex];
+      interactions.push({
+        id: probe.definition.id,
+        label: `escanear ${probe.definition.name}`,
+        kind: 'aurora',
+        distance: playerPosition.distanceTo(probe.interactionPosition)
+      });
+    } else if (mission10.step === 'markSite' || mission10.step === 'returnToClearing') {
+      interactions.push({
+        id: auroraSettlementSiteDefinition.id,
+        label: 'marcar el sitio de Aurora-01',
+        kind: 'aurora',
+        distance: playerPosition.distanceTo(getAuroraSettlementSite())
+      });
+    } else if (mission10.step === 'deployModule' || mission10.step === 'stabilizeModule') {
+      interactions.push({
+        id: 'aurora-module',
+        label: mission10.step === 'deployModule' ? 'desplegar Módulo Aurora-01' : 'supervisar soporte vital',
+        kind: 'aurora',
+        distance: playerPosition.distanceTo(auroraHabitatModule.interactionPosition)
+      });
+    }
+  }
+
+  // Mission 15: one sabotage station at a time, matching the current step.
+  if (mission15.started && !mission15.completed) {
+    const sabotageLabels: Record<string, string> = {
+      routineTask: 'revisar el depósito de suministros',
+      habitatEmergency: 'llegar a la puerta de Aurora-02',
+      restoreDoorPower: 'reenergizar la puerta',
+      detectCoordinatedFailure: 'cruzar los registros de fallos',
+      findEnergyParasite: 'rastrear el parásito de energía',
+      disableEnergyParasite: 'aislar las líneas energéticas',
+      findLifeSupportParasite: 'rastrear el parásito de soporte vital',
+      disableLifeSupportParasite: 'cerrar las válvulas de presión',
+      findCommsParasite: 'rastrear el parásito de comunicaciones',
+      disableCommsParasite: 'bloquear la secuencia corrupta',
+      centralOverload: 'purgar la sobrecarga del núcleo',
+      analyzeParasite: 'analizar el nodo recuperado'
+    };
+    const sabotageLabel = sabotageLabels[mission15.step];
+    if (sabotageLabel) {
+      interactions.push({
+        id: `mission15-${mission15.step}`,
+        label: sabotageLabel,
+        kind: 'aurora',
+        distance: playerPosition.distanceTo(getMission15StationPosition())
+      });
+    }
+  }
+
+  // Mission 14: one trace station at a time, matching the current step.
+  if (mission14.started && !mission14.completed) {
+    const traceLabels: Record<string, string> = {
+      inspectPower: 'inspeccionar el nodo energético',
+      inspectComms: 'inspeccionar la torre de comunicaciones',
+      inspectHabitat: 'inspeccionar el módulo principal',
+      analyzeSignature: 'analizar la firma en la terminal',
+      purgePowerNode: 'sintonizar la portadora contaminada',
+      purgeCommsNode: 'bloquear los pulsos corruptos',
+      locateHiddenNode: 'rastrear el tercer nodo',
+      extractSample: 'extraer la muestra de la Coalición',
+      reverseTriangulate: 'reconstruir el destino de los paquetes',
+      traceClosure: 'supervisar la purga'
+    };
+    const traceLabel = traceLabels[mission14.step];
+    if (traceLabel) {
+      interactions.push({
+        id: `mission14-${mission14.step}`,
+        label: traceLabel,
+        kind: 'aurora',
+        distance: playerPosition.distanceTo(getMission14StationPosition())
+      });
+    }
+  }
+
+  // Mission 13: one storm station at a time, matching the current step.
+  if (mission13.started && !mission13.completed) {
+    const stormLabels: Record<string, string> = {
+      stormAlert: 'confirmar la alerta de tormenta',
+      secureGenerator: 'estabilizar el nodo energético',
+      anchorAntennaFirst: 'sujetar el primer anclaje',
+      anchorAntennaSecond: 'sujetar el segundo anclaje',
+      activateAntenna: 'reactivar la torre de comunicaciones',
+      returnToHabitat: 'volver al módulo principal',
+      chargeShield: 'cargar el campo protector',
+      stormSubsiding: 'supervisar el campo protector'
+    };
+    const label = stormLabels[mission13.step];
+    if (label) {
+      interactions.push({
+        id: `mission13-${mission13.step}`,
+        label,
+        kind: 'aurora',
+        distance: playerPosition.distanceTo(getMission13StationPosition())
+      });
+    }
+  }
+
+  // Mission 12: one station at a time, matching the current step.
+  if (mission12.started && !mission12.completed) {
+    const crewLabels: Record<string, string> = {
+      requestAuthorization: 'solicitar autorización de descenso',
+      prepareLifeSupport: 'supervisar el soporte vital',
+      configureHabitation: 'configurar el refugio humano',
+      markLandingZone: 'marcar la zona de aterrizaje',
+      guideCapsuleDescent: 'guiar el descenso de la cápsula',
+      confirmDisembark: 'confirmar el desembarco',
+      startLoadCycle: 'iniciar el ciclo de soporte vital',
+      recalibrate: 'recalibrar el soporte vital',
+      verifyStability: 'verificar la estabilidad del núcleo',
+      recordFirstNight: 'registrar la primera noche humana'
+    };
+    const label = crewLabels[mission12.step];
+    if (label) {
+      interactions.push({
+        id: `mission12-${mission12.step}`,
+        label,
+        kind: 'aurora',
+        distance: playerPosition.distanceTo(getMission12StationPosition())
+      });
+    }
+  }
+
+  // Mission 11: one station at a time, matching the current step.
+  if (mission11.started && !mission11.completed) {
+    const stationLabels: Record<string, string> = {
+      diagnoseCore: 'ejecutar diagnóstico de Aurora-01',
+      markSecondSite: 'marcar el sitio de Aurora-02',
+      deploySecondModule: 'desplegar el Módulo Aurora-02',
+      connectEnergyLink: 'acoplar el enlace energético',
+      installWaterFilter: 'instalar el microfiltro',
+      calibrateWaterFlow: 'supervisar la calibración de flujo',
+      prepareCultivationBed: 'preparar la cama de cultivo',
+      startBioTrial: 'activar el bioensayo',
+      assessImpact: 'evaluar el impacto ambiental',
+      confirmCore: 'confirmar el Núcleo Aurora'
+    };
+    const label = stationLabels[mission11.step];
+    if (label) {
+      interactions.push({
+        id: `mission11-${mission11.step}`,
+        label,
+        kind: 'aurora',
+        distance: playerPosition.distanceTo(getMission11StationPosition())
+      });
+    }
+  }
+
+  if (mission04.started && (mission04.step === 'deployBeacon' || mission04.step === 'synchronizeNetwork')) {
+    const beacon = getActiveDefenseBeacon();
+    interactions.push({
+      id: beacon.site.id,
+      label: mission04.step === 'deployBeacon' ? `activar ${beacon.site.name}` : 'supervisar sincronizacion defensiva',
+      kind: 'defense',
+      distance: playerPosition.distanceTo(beacon.interactionPosition)
+    });
+  }
+
+  if (
+    mission03.started &&
+    mission03.state.communicationCalibrated &&
+    (mission03.currentStep.target === 'relay' || mission03.currentStep.target === 'resonator')
+  ) {
+    interactions.push({
+      id: mission03.state.relayBeaconPlaced ? 'pleyadan-relay' : 'resonador-atlas',
+      label: mission03.step === 'relayBeacon' ? 'colocar baliza de enlace' : 'consultar Resonador Atlas',
+      kind: 'relay',
+      distance: playerPosition.distanceTo(pleyadanRelayBeacon.interactionPosition)
+    });
+  }
+
+  for (const node of surfaceResourceSystem.nodes) {
+    if (node.status === 'unknown' || node.status === 'sampled' || node.status === 'analyzed') continue;
+    interactions.push({
+      id: node.definition.id,
+      label: `tomar muestra en ${node.definition.name}`,
+      kind: 'resource',
+      resourceType: node.definition.type,
+      distance: playerPosition.distanceTo(node.interactionPosition)
+    });
+  }
+
+  return interactions.sort((a, b) => a.distance - b.distance)[0];
+}
+
+/**
+ * Prompt contextual de interacción: aparece solo cuando pulsar E hará algo
+ * concreto aquí y ahora, con la acción nombrada.
+ */
+function updateInteractPrompt(): void {
+  let label = '';
+  let key = 'E';
+  nearestInteractionTarget = '';
+  nearestInteractionDistance = Number.POSITIVE_INFINITY;
+  nearestInteractionAction = 'none';
+
+  if (inSurfacePhase) {
+    if (playerModeSystem.onFootActive) {
+      const nearestInteraction = getNearestOnFootInteraction();
+      if (nearestInteraction) {
+        nearestInteractionTarget = nearestInteraction.id;
+        nearestInteractionDistance = nearestInteraction.distance;
+        nearestInteractionAction = nearestInteraction.kind === 'ship' ? 'shipAccess' : 'scan';
+        const interactionRange = nearestInteraction.kind === 'ship' ? BOARDING_HORIZONTAL_RANGE : nearestInteraction.kind === 'landing' ? 10 : nearestInteraction.kind === 'resource' ? 12 : nearestInteraction.kind === 'relay' ? MISSION03_RELAY_INTERACTION_RANGE : nearestInteraction.kind === 'defense' ? mission04Tuning.beaconInteractionRange : nearestInteraction.kind === 'atlas' && nearestInteraction.id === atlasSeedArchiveDefinition.id ? mission07Tuning.archiveActivationRange : nearestInteraction.kind === 'atlas' ? mission07Tuning.nodeScanRange : 6.5;
+        if (nearestInteraction.distance <= interactionRange) {
+          label = nearestInteraction.label;
+          key = nearestInteraction.kind === 'ship' ? 'F' : 'E';
+        }
+      }
+    } else if (playerModeSystem.transitionActive) {
+      label = '';
+    } else if (mission24.started && !mission24.completed) {
+      const mission24Distance = ship.position.distanceTo(getMission24StationPosition());
+      if (mission24.step === 'decodeReturnRoute' && mission24Distance <= mission24Tuning.baseRange) {
+        label = 'decodificar ruta recuperada';
+      } else if (mission24.step === 'prepareLaunch' && isShipExitAvailable()) {
+        label = 'descender para inspeccionar la nave';
+        key = 'F';
+      } else if (mission24.step === 'ignitionSequence') {
+        label = 'iniciar secuencia de lanzamiento';
+      }
+    } else if (mission08.started && !mission08.completed) {
+      const baseDistance = ship.position.distanceTo(planetaryWorld.colonyModule.group.position);
+      const fractureDistance = ship.position.distanceTo(getSignalFractureCenter());
+      const activeFocusIndex = getActiveFractureFocusIndex();
+      if (mission08.step === 'analyzeTrace' && baseDistance <= mission08Tuning.baseInteractionRange) {
+        label = 'analizar rastro de escaneo';
+      } else if ((mission08.step === 'returnToBase' || mission08.step === 'signalPurge') && baseDistance <= mission08Tuning.baseInteractionRange) {
+        label = mission08.step === 'signalPurge' ? 'mantener purga de señal' : 'ejecutar purga de señal';
+      } else if (mission08.step === 'travelToFracture' && fractureDistance < 60 && isShipExitAvailable()) {
+        label = 'descender en la Grieta de Señal';
+        key = 'F';
+        nearestInteractionTarget = signalFractureDefinition.id;
+        nearestInteractionAction = 'shipAccess';
+      } else if (activeFocusIndex >= 0) {
+        const focus = signalFractureNodes[activeFocusIndex];
+        const focusDistance = ship.position.distanceTo(focus.interactionPosition);
+        if (focusDistance < 60 && isShipExitAvailable()) {
+          label = `descender junto al ${focus.definition.name}`;
+          key = 'F';
+          nearestInteractionTarget = focus.definition.id;
+          nearestInteractionAction = 'shipAccess';
+        }
+      }
+    } else if (mission07.started && !mission07.completed) {
+      const baseDistance = ship.position.distanceTo(planetaryWorld.colonyModule.group.position);
+      const fractureDistance = ship.position.distanceTo(atlasSeedArchive.interactionPosition);
+      const activeAtlasNodeIndex = getActiveAtlasEchoNodeIndex();
+      if (mission07.step === 'analyzeSignal' && baseDistance <= mission07Tuning.baseInteractionRange) {
+        label = 'analizar señal subterránea';
+      } else if (mission07.step === 'travelToFracture' && fractureDistance < 60 && isShipExitAvailable()) {
+        label = 'descender en la Fractura Atlas';
+        key = 'F';
+        nearestInteractionTarget = atlasFractureDefinition.id;
+        nearestInteractionAction = 'shipAccess';
+      } else if (activeAtlasNodeIndex >= 0) {
+        const node = atlasEchoNodes[activeAtlasNodeIndex];
+        const nodeDistance = ship.position.distanceTo(node.interactionPosition);
+        if (nodeDistance < 60 && isShipExitAvailable()) {
+          label = `descender junto a ${node.definition.name}`;
+          key = 'F';
+          nearestInteractionTarget = node.definition.id;
+          nearestInteractionAction = 'shipAccess';
+        }
+      } else if (mission07.step === 'activateArchive') {
+        if (fractureDistance < 60 && isShipExitAvailable()) {
+          label = 'descender junto al Archivo Semilla Atlas';
+          key = 'F';
+          nearestInteractionTarget = atlasSeedArchiveDefinition.id;
+          nearestInteractionAction = 'shipAccess';
+        }
+      }
+    } else if (mission06.started && !mission06.completed) {
+      const baseDistance = ship.position.distanceTo(planetaryWorld.colonyModule.group.position);
+      const cloakingIndex = getActiveCloakingProjectorIndex();
+      if ((mission06.step === 'analyzeResidue' || mission06.step === 'calibrateMatrix') && baseDistance <= mission06Tuning.baseInteractionRange) {
+        label = mission06.step === 'calibrateMatrix' ? 'calibrar Matriz de Ocultamiento' : 'analizar residuos de interferencia';
+      } else if (cloakingIndex >= 0) {
+        const projectorDistance = ship.position.distanceTo(cloakingProjectors[cloakingIndex].group.position);
+        if (projectorDistance <= mission06Tuning.projectorInteractionRange) {
+          label = `calibrar ${CLOAKING_PROJECTOR_NAMES[cloakingIndex]}`;
+        } else if (projectorDistance < 60 && isShipExitAvailable()) {
+          label = `descender junto al ${CLOAKING_PROJECTOR_NAMES[cloakingIndex]}`;
+          key = 'F';
+          nearestInteractionTarget = `cloaking-projector-${cloakingIndex}`;
+          nearestInteractionAction = 'shipAccess';
+        }
+      } else if (mission06.step === 'syncMatrix' && baseDistance <= mission06Tuning.baseInteractionRange) {
+        label = mission06SyncEngaged ? 'mantener sincronización del campo' : 'sincronizar campo de ocultamiento';
+      }
+    } else if (mission05.started) {
+      const probeDistance = ship.position.distanceTo(silentProbe.interactionPosition);
+      const echoDistance = ship.position.distanceTo(getActiveMission05EchoPosition());
+      const baseDistance = ship.position.distanceTo(planetaryWorld.colonyModule.group.position);
+      if (mission05.step === 'gainScanAltitude' || mission05.step === 'orbitalScan') {
+        const ready = getMission04OrbitalScanClearance() >= mission05Tuning.minimumScanAltitude;
+        label = ready ? 'realizar barrido orbital' : 'ascender hasta altura de escaneo';
+        key = ready ? 'E' : 'Space';
+      } else if (mission05.step === 'atlasRecalibration') {
+        label = 'recalibrar sensores con frecuencia Atlas';
+      } else if (mission05.step === 'trackEcho' && echoDistance <= mission05Tuning.echoScanRange) {
+        label = `analizar eco de interferencia ${mission05.state.activeEchoIndex + 1}`;
+      } else if (mission05.step === 'counterSignal' && probeDistance <= mission05Tuning.counterSignalRange) {
+        label = mission05.counterSignalActive ? 'mantener contrasenal' : 'emitir contrasenal defensiva';
+      } else if (mission05.step === 'returnToBase' && baseDistance <= mission05Tuning.baseInteractionRange) {
+        label = 'confirmar informe hostil indirecto';
+      }
+    } else if (mission04.started) {
+      const activeBeacon = getActiveDefenseBeacon();
+      const beaconDistance = ship.position.distanceTo(activeBeacon.interactionPosition);
+      const baseDistance = ship.position.distanceTo(planetaryWorld.colonyModule.group.position);
+      if (
+        (mission04.currentStep.target === 'base' ||
+          mission04.currentStep.target === 'communications' ||
+          mission04.currentStep.target === 'orbitalSensor') &&
+        baseDistance < mission04Tuning.baseInteractionRange
+      ) {
+        label = mission04.currentStep.nextAction;
+      } else if (mission04.step === 'deployBeacon' && beaconDistance < 42 && isShipExitAvailable()) {
+        label = `descender junto a ${activeBeacon.site.name}`;
+        key = 'F';
+        nearestInteractionTarget = activeBeacon.site.id;
+        nearestInteractionAction = 'shipAccess';
+      } else if (mission04.step === 'orbitalScan') {
+        label = getMission04OrbitalScanClearance() >= mission04Tuning.orbitalScanAltitude
+          ? 'realizar escaneo orbital'
+          : 'ascender hasta altura de barrido';
+        key = getMission04OrbitalScanClearance() >= mission04Tuning.orbitalScanAltitude ? 'E' : 'Space';
+      }
+    } else if (mission03.started) {
+      const target = mission03.currentStep.target;
+      const baseDistance = ship.position.distanceTo(planetaryWorld.colonyModule.group.position);
+      const relayDistance = ship.position.distanceTo(pleyadanRelayBeacon.interactionPosition);
+      if ((target === 'base' || target === 'communications') && baseDistance < MISSION03_BASE_RANGE) {
+        label = mission03.currentStep.nextAction;
+      } else if ((target === 'relay' || target === 'resonator') && relayDistance < 42 && isShipExitAvailable()) {
+        label = 'descender junto al Resonador Atlas';
+        key = 'F';
+        nearestInteractionTarget = mission03.state.relayBeaconPlaced ? 'pleyadan-relay' : 'resonador-atlas';
+        nearestInteractionAction = 'shipAccess';
+      }
+    } else if (!colonyManager.state.habitatOnline) {
+      if (ship.position.distanceTo(HABITAT_SITE_LOCAL) < 42) {
+        label = 'Desplegar Módulo Hábitat Nereida-01';
+      }
+    } else if (
+      !colonyManager.state.surfaceSitesRevealed ||
+      (colonyManager.state.resourceAnalysisReady && !colonyManager.state.baseSystemsReady) ||
+      (colonyManager.state.baseSystemsReady && !colonyManager.state.baseNereidaOperational)
+    ) {
+      if (ship.position.distanceTo(planetaryWorld.colonyModule.group.position) < 52) {
+        label = !colonyManager.state.surfaceSitesRevealed
+          ? 'Ejecutar barrido geológico'
+          : colonyManager.state.resourceAnalysisReady && !colonyManager.state.baseSystemsReady
+            ? 'Analizar muestras de campo'
+            : 'Confirmar Base Nereida operativa';
+      }
+    } else {
+      const nearest = surfaceResourceSystem.getNearestUnscannedDistance(ship.position);
+      if (Number.isFinite(nearest.distance) && nearest.distance < 130) {
+        label = nearest.status === 'located' ? `Descender y muestrear ${nearest.name}` : `Localizar ${nearest.name}`;
+        nearestInteractionAction = 'scan';
+      } else if (isShipExitAvailable()) {
+        label = 'descender de la nave';
+        key = 'F';
+        nearestInteractionTarget = 'surface-scout-ship';
+        nearestInteractionAction = 'shipAccess';
+      }
+    }
+    if (!label && playerModeSystem.insideShip && colonyManager.state.habitatOnline && isShipExitAvailable()) {
+      label = 'descender de la nave';
+      key = 'F';
+      nearestInteractionTarget = 'surface-scout-ship';
+      nearestInteractionAction = 'shipAccess';
+    }
+  } else {
+    const step = missionManager.step;
+    if (mission24.started && !mission24.completed) {
+      const distance = ship.position.distanceTo(getMission24StationPosition());
+      if (distance <= mission24Tuning.stationRange && !mission24.ascentActive && mission24.step !== 'stabilizeOrbit' && mission24.step !== 'approachArk') {
+        label = mission24.stepDefinition.nextAction;
+      }
+    } else if (step === 'scannerTutorial' || step === 'briefing') {
+      label = 'Activar escáner de largo alcance';
+    } else if (
+      (step === 'scanOrbitalMarker' || step === 'decodeDescentCorridor') &&
+      orbitalMarker.distanceTo(ship.position) <= orbitalMarkerSystem.scanRadius
+    ) {
+      label = 'Escanear Marcador Atlas';
+    } else if (
+      (step === 'followSignal' || step === 'scanPlanet' || step === 'analyzeHabitability') &&
+      !habitabilitySystem.complete &&
+      candidatePlanet.inScanRange(ship.position)
+    ) {
+      label = 'Escanear Biosfera E-01';
+    } else if (
+      (step === 'landingApproach' || step === 'touchdown') &&
+      landingZone.canTouchDown(ship.position, velocity.length() * 12)
+    ) {
+      label = 'Confirmar aterrizaje';
+    } else if (step === 'transmitData' && mothership.isInSafeZone(ship.position)) {
+      label = 'Transmitir reporte a la Arca';
+    } else {
+      const closest = getClosestPoint(false);
+      if (closest && ship.position.distanceTo(closest.object.position) <= closest.scanRadius) {
+        label = `Escanear ${closest.name}`;
+      }
+    }
+  }
+
+  if (label && nearestInteractionAction === 'none') nearestInteractionAction = 'scan';
+  interactKey.textContent = key;
+  interactLabel.textContent = label;
+  interactPrompt.classList.toggle('is-active', label.length > 0);
+  interactPrompt.setAttribute('aria-hidden', String(label.length === 0));
+}
+
+function getClosestPoint(includeScanned = true): InterestPoint | undefined {
+  return pointsOfInterest
+    .filter((point) => includeScanned || !point.scanned)
+    .map((point) => ({ point, distance: ship.position.distanceTo(point.object.position) }))
+    .sort((a, b) => a.distance - b.distance)[0]?.point;
+}
+
+function updateDiscoveryList(): void {
+  const discovered = pointsOfInterest.filter((point) => point.scanned);
+  const recent = discovered.slice(-3).map((point) => `<li>${point.name}</li>`).join('');
+  discoveryList.innerHTML = `<li>${discovered.length}/${pointsOfInterest.length} señales integradas</li>${recent}`;
+  const missionRecent = missionDiscoveries.slice(-2).map((name) => `<li>${name}</li>`).join('');
+  discoveryList.innerHTML = `<li>${discovered.length + missionDiscoveries.length}/${pointsOfInterest.length + 2} senales integradas</li>${recent}${missionRecent}`;
+}
+
+function applyReward(reward: Partial<ResourceState>): void {
+  for (const [key, value] of Object.entries(reward) as [keyof ResourceState, number][]) {
+    resources[key] = clampResource(resources[key] + value);
+    if (key === 'memory') {
+      resourceInventory.addMemoryData(value);
+    }
+  }
+}
+
+function getCurrentPhase(): SaveGameData['currentPhase'] {
+  if (mission24.atmosphericAscentActive || mission24.step === 'orbitalInsertion') return 'descent';
+  if (mission24.orbitalFlightActive) return 'space';
+  if (inSurfacePhase) {
+    return colonyManager.state.operational ? 'colonization' : 'surface';
+  }
+  if (descentSystem.state.phase !== 'idle' && descentSystem.state.phase !== 'corridorLocked') {
+    return 'descent';
+  }
+  return 'space';
+}
+
+// --- Mission 01 prologue: departure from Arca Epsilon ----------------------
+
+/**
+ * Parks the scout on the Ark's launch cradle.
+ *
+ * The ship becomes a child of the platform anchor, so it inherits the Ark's
+ * drift and slow yaw for free — no per-frame syncing, and no chance of the
+ * hull sliding off a station that is itself moving. The cradle's +Z points
+ * outward down the corridor and the hull's forward axis is -Z, so the ship is
+ * turned to face the exit.
+ *
+ * The look angles are rebased at the same time: `ship.rotation` is rewritten
+ * from `smoothPitch`/`smoothYaw` every frame, so unless those match the pose
+ * we just set, the first frame would snap the ship straight back off the pad.
+ */
+function dockShipToArk(): boolean {
+  const anchor = mothership.getLaunchAnchor();
+  if (!anchor) return false;
+  anchor.add(ship);
+  ship.position.set(0, 0, 0);
+  // Face down the corridor: hull forward (-Z) onto the cradle's outward +Z.
+  yaw = Math.PI;
+  smoothYaw = yaw;
+  pitch = 0;
+  smoothPitch = pitch;
+  bankRoll = 0;
+  ship.rotation.set(0, Math.PI, 0);
+  velocity.set(0, 0, 0);
+  arkDockingAssembly.ensureBuilt(anchor);
+  return true;
+}
+
+/**
+ * Releases the ship back into world space at exactly the pose it already has.
+ *
+ * `Object3D.attach` is what keeps this seamless: it recomputes the local
+ * transform against the new parent so the world matrix is untouched — no jump
+ * in position, orientation or scale. The look angles are then rebased out of
+ * the resulting world rotation, otherwise the next frame would reinterpret the
+ * docked Euler angles as world angles and spin the hull by the Ark's own
+ * rotation.
+ */
+function undockShipFromArk(): void {
+  if (ship.parent === scene) return;
+  scene.attach(ship);
+  // `ship.rotation` is now expressed in world space: adopt it verbatim so the
+  // per-frame `ship.rotation.set(...)` is a no-op on the handover frame.
+  pitch = ship.rotation.x;
+  smoothPitch = pitch;
+  yaw = ship.rotation.y;
+  smoothYaw = yaw;
+  bankRoll = ship.rotation.z;
+}
+
+/** Opens the prologue on a brand-new game. */
+function beginArkDeparture(): void {
+  if (!arkDepartureEnabled) {
+    // Automated run without an explicit opt-in: skip straight to open space,
+    // exactly as the game opened before this prologue existed.
+    arkDeparture.markLegacySaveAsCompleted();
+    return;
+  }
+  arkDeparture.start();
+  arkDepartureAnnouncedBeats.clear();
+  arkDepartureTitleTimer = arkDepartureTuning.titleSeconds;
+  if (!dockShipToArk()) {
+    // The Ark model had not finished loading. Without a cradle there is
+    // nothing to dock to, so the prologue stands down rather than stranding
+    // the player: M01 proceeds exactly as it did before.
+    arkDeparture.markLegacySaveAsCompleted();
+    return;
+  }
+  speakArkDepartureBeat(ARK_DEPARTURE_DIALOGUE.introduction, 'prologue-intro');
+}
+
+/**
+ * Ends the prologue immediately and puts the ship back in world space.
+ *
+ * Called by anything that moves the ship by world coordinate — entering the
+ * surface phase, loading a later save, debug jumps that skip ahead. Idempotent
+ * and safe to call when the prologue never started.
+ */
+function standDownArkDeparture(): void {
+  if (!arkDeparture.started || arkDeparture.completed) {
+    // Still detach if a dock somehow happened without the sequence running.
+    if (ship.parent !== scene) undockShipFromArk();
+    return;
+  }
+  arkDeparture.markLegacySaveAsCompleted();
+  undockShipFromArk();
+  arkDockingAssembly.dispose();
+  mothership.setClampOpen(1);
+  mothership.setPlatformPower(0);
+}
+
+/** Brief chapter card. Purely additive text: never blocks camera or input. */
+function showArkDepartureTitle(): void {
+  missionText.textContent =
+    `${ARK_DEPARTURE_TITLE.game} // ${ARK_DEPARTURE_TITLE.chapter} — ${ARK_DEPARTURE_TITLE.mission}`;
+}
+
+/** Each commander beat fires once; the latch survives dialogue re-entry. */
+function speakArkDepartureBeat(dialogueId: string, triggerId: string): void {
+  if (arkDepartureAnnouncedBeats.has(dialogueId)) return;
+  arkDepartureAnnouncedBeats.add(dialogueId);
+  triggerDialogue(dialogueId, triggerId);
+}
+
+/**
+ * The interaction key during the prologue: opens the pre-flight checklist,
+ * then releases the clamps. Returns true when it consumed the press, so the
+ * long-range scan cannot be run from inside the cradle.
+ */
+function handleArkDepartureInteraction(): boolean {
+  if (!arkDeparture.started || arkDeparture.completed) return false;
+  if (arkDeparture.step === 'dockedAtArk' || arkDeparture.step === 'commanderIntroduction') {
+    arkDeparture.advanceIntroduction();
+    speakArkDepartureBeat(ARK_DEPARTURE_DIALOGUE.context, 'prologue-context');
+    return true;
+  }
+  if (arkDeparture.step === 'missionContext') {
+    arkDeparture.advanceContext();
+    speakArkDepartureBeat(ARK_DEPARTURE_DIALOGUE.firstTask, 'prologue-first-task');
+    speakArkDepartureBeat(ARK_DEPARTURE_DIALOGUE.preflight, 'prologue-preflight');
+    return true;
+  }
+  if (arkDeparture.step === 'preflightCheck') {
+    arkDeparture.beginPreflight();
+    return true;
+  }
+  if (arkDeparture.step === 'readyForRelease') {
+    if (arkDeparture.beginClampRelease()) playTone(320, 0.16);
+    return true;
+  }
+  // Undocking and clearing the corridor: the key belongs to the game again,
+  // but the scan itself only makes sense outside the perimeter anyway.
+  return false;
+}
+
+/**
+ * Per-frame prologue driver. Cheap by construction: a handful of scalar
+ * updates, one squared-distance read and no allocation.
+ */
+function updateArkDeparture(delta: number, elapsed: number): void {
+  if (!arkDeparture.started) return;
+
+  if (arkDepartureTitleTimer > 0) {
+    arkDepartureTitleTimer = Math.max(0, arkDepartureTitleTimer - delta);
+  }
+
+  if (!arkDeparture.completed) {
+    if (arkDeparture.runPreflight(delta)) {
+      if (arkDeparture.step === 'readyForRelease') {
+        playTone(560, 0.14);
+        speakArkDepartureBeat(ARK_DEPARTURE_DIALOGUE.situation, 'prologue-situation');
+      }
+    }
+    if (arkDeparture.updateClampRelease(delta)) {
+      // Clamps fully open: hand the hull back to world space at the exact pose
+      // it already occupies, then let the pilot fly it off the pad.
+      undockShipFromArk();
+      speakArkDepartureBeat(ARK_DEPARTURE_DIALOGUE.clampsReleased, 'prologue-clamps-released');
+      playTone(240, 0.22);
+    }
+  }
+
+  // Live distance to the cradle drives the corridor and the safe-distance
+  // handover. Measured against the anchor itself, not the Ark's origin, so a
+  // kilometre-class hull does not skew it.
+  const anchor = mothership.getLaunchAnchor();
+  if (anchor) {
+    anchor.getWorldPosition(arkDepartureScratch);
+    const distance = arkDepartureScratch.distanceTo(ship.getWorldPosition(arkDepartureAnchorWorld));
+    if (arkDeparture.updateSeparation(distance)) {
+      // Corridor cleared: normal flight, weapons back, dressing released.
+      speakArkDepartureBeat(ARK_DEPARTURE_DIALOGUE.farewell, 'prologue-farewell');
+      arkDockingAssembly.dispose();
+      mothership.setPlatformPower(0);
+    }
+  }
+
+  // Docked: hold the hull still. The clamps are shut, so no input translates.
+  if (arkDeparture.translationLocked) {
+    velocity.set(0, 0, 0);
+  } else if (!arkDeparture.completed) {
+    // Inside the corridor the main engines stay throttled: manoeuvring
+    // thrusters only. Capping speed expresses that without touching the
+    // shared flight model.
+    const cap = settings.thrust * arkDeparture.thrustLimit;
+    const speed = velocity.length();
+    if (speed > cap) velocity.multiplyScalar(cap / speed);
+  }
+
+  mothership.setClampOpen(arkDeparture.clampProgress);
+  mothership.setPlatformPower(arkDeparture.platformPower);
+  arkDockingAssembly.update(arkDeparture.clampProgress, !arkDeparture.completed, elapsed);
+}
+
+/**
+ * Counts objects in the scene carrying a given name. Diagnostics only, called
+ * from the debug hook rather than the frame loop: it walks the graph, so it
+ * has no business running every frame.
+ */
+function countSceneObjectsByName(name: string): number {
+  let total = 0;
+  scene.traverse((object) => {
+    if (object.name === name) total += 1;
+  });
+  return total;
+}
+
+/** Snapshot for the save file. */
+function getArkDepartureSaveState(): ArkDepartureSnapshot {
+  return arkDeparture.snapshot();
+}
+
+/**
+ * Restores the prologue from a save.
+ *
+ * The compatibility rule lives here: a save written before this feature has
+ * no `arkDepartureStarted` field at all. That pilot already launched — they
+ * may be in orbit, on the surface, or ten missions deep — so the sequence is
+ * marked complete and inert. They keep their saved ship position, never get
+ * dragged back to the hangar, and never hear the introduction again.
+ */
+function restoreArkDeparture(save: SaveGameData): void {
+  arkDepartureAnnouncedBeats.clear();
+  arkDepartureTitleTimer = 0;
+  arkDockingAssembly.resetForRebuild();
+
+  if (save.arkDepartureStarted === undefined) {
+    arkDeparture.markLegacySaveAsCompleted();
+    mothership.setClampOpen(1);
+    mothership.setPlatformPower(0);
+    return;
+  }
+
+  arkDeparture.restore({
+    arkDepartureStep: save.arkDepartureStep ?? 'inactive',
+    arkDepartureStarted: save.arkDepartureStarted ?? false,
+    commanderIntroPlayed: save.commanderIntroPlayed ?? false,
+    missionContextPlayed: save.missionContextPlayed ?? false,
+    preflightComplete: save.preflightComplete ?? false,
+    clampsReleased: save.clampsReleased ?? false,
+    undockingStarted: save.undockingStarted ?? false,
+    arkCleared: save.arkCleared ?? false,
+    arkDepartureCompleted: save.arkDepartureCompleted ?? false
+  });
+
+  // Lines already heard stay heard: latch them so the restored session never
+  // replays a beat the pilot has seen.
+  if (arkDeparture.state.commanderIntroPlayed) {
+    arkDepartureAnnouncedBeats.add(ARK_DEPARTURE_DIALOGUE.introduction);
+  }
+  if (arkDeparture.state.missionContextPlayed) {
+    arkDepartureAnnouncedBeats.add(ARK_DEPARTURE_DIALOGUE.context);
+    arkDepartureAnnouncedBeats.add(ARK_DEPARTURE_DIALOGUE.firstTask);
+    arkDepartureAnnouncedBeats.add(ARK_DEPARTURE_DIALOGUE.preflight);
+  }
+  if (arkDeparture.state.preflightComplete) {
+    arkDepartureAnnouncedBeats.add(ARK_DEPARTURE_DIALOGUE.situation);
+  }
+  if (arkDeparture.state.clampsReleased) {
+    arkDepartureAnnouncedBeats.add(ARK_DEPARTURE_DIALOGUE.clampsReleased);
+  }
+  if (arkDeparture.state.arkCleared) {
+    arkDepartureAnnouncedBeats.add(ARK_DEPARTURE_DIALOGUE.farewell);
+  }
+
+  if (arkDeparture.docked) {
+    // Still clamped: put the hull back on the cradle rather than trusting a
+    // saved world position that the drifting Ark has since moved away from.
+    dockShipToArk();
+  } else {
+    // Already free — including a save taken mid-release, which restores with
+    // the clamps open and the ship stationary at its saved pose.
+    undockShipFromArk();
+    velocity.set(0, 0, 0);
+  }
+  mothership.setClampOpen(arkDeparture.clampProgress);
+  mothership.setPlatformPower(arkDeparture.platformPower);
+}
+
+function getCurrentAudioMissionId(): string {
+  if (mission24.started) return 'mission-24';
+  if (mission23.started && !mission23.completed) return 'mission-23';
+  if (mission22.started && !mission22.completed) return 'mission-22';
+  if (mission21.started && !mission21.completed) return 'mission-21';
+  // M18-M20 are not gated on the surface phase: the first fire starts on the
+  // ground and finishes in the ship, and the battle for the Ark is orbital.
+  if (mission20.started && !mission20.completed) return 'mission-20';
+  if (mission19.started && !mission19.completed) return 'mission-19';
+  if (mission18.started && !mission18.completed) return 'mission-18';
+  if (inSurfacePhase && mission15.started && !mission15.completed) return 'mission-15';
+  if (inSurfacePhase && mission14.started && !mission14.completed) return 'mission-14';
+  if (inSurfacePhase && mission13.started && !mission13.completed) return 'mission-13';
+  if (inSurfacePhase && mission12.started && !mission12.completed) return 'mission-12';
+  if (inSurfacePhase && mission11.started && !mission11.completed) return 'mission-11';
+  if (inSurfacePhase && mission10.started && !mission10.completed) return 'mission-10';
+  if (inSurfacePhase && mission09.started && !mission09.completed) return 'mission-09';
+  if (inSurfacePhase && mission08.started && !mission08.completed) return 'mission-08';
+  if (inSurfacePhase && mission07.started) return 'mission-07';
+  if (inSurfacePhase && mission06.started && !mission06.completed) return 'mission-06';
+  if (inSurfacePhase && mission05.started) return 'mission-05';
+  if (inSurfacePhase && mission04.started) return 'mission-04';
+  if (inSurfacePhase && mission03.started) return 'mission-03';
+  if (inSurfacePhase) return 'mission-02';
+  return 'mission-01';
+}
+
+function getCurrentAudioMissionStep(): string {
+  if (mission24.started) return mission24.step;
+  if (mission23.started && !mission23.completed) return mission23.step;
+  if (mission22.started && !mission22.completed) return mission22.step;
+  if (mission21.started && !mission21.completed) return mission21.step;
+  if (mission20.started && !mission20.completed) return mission20.step;
+  if (mission19.started && !mission19.completed) return mission19.step;
+  if (mission18.started && !mission18.completed) return mission18.step;
+  if (inSurfacePhase && mission15.started && !mission15.completed) return mission15.step;
+  if (inSurfacePhase && mission14.started && !mission14.completed) return mission14.step;
+  if (inSurfacePhase && mission13.started && !mission13.completed) return mission13.step;
+  if (inSurfacePhase && mission12.started && !mission12.completed) return mission12.step;
+  if (inSurfacePhase && mission11.started && !mission11.completed) return mission11.step;
+  if (inSurfacePhase && mission10.started && !mission10.completed) return mission10.step;
+  if (inSurfacePhase && mission09.started && !mission09.completed) return mission09.step;
+  if (inSurfacePhase && mission08.started && !mission08.completed) return mission08.step;
+  if (inSurfacePhase && mission07.started) return mission07.step;
+  if (inSurfacePhase && mission06.started && !mission06.completed) return mission06.step;
+  if (inSurfacePhase && mission05.started) return mission05.step;
+  if (inSurfacePhase && mission04.started) return mission04.step;
+  if (inSurfacePhase && mission03.started) return mission03.step;
+  if (inSurfacePhase) return surfaceMission.currentStep.id;
+  return missionManager.step;
+}
+
+function getScannedResourceFlags(): SaveGameData['scannedResources'] {
+  const scannedByType = {
+    water: colonyManager.state.waterFound,
+    minerals: colonyManager.state.mineralsFound,
+    energy: colonyManager.state.energyFound || colonyManager.state.energySourceFound,
+    organic: colonyManager.state.organicFound,
+    ancient: colonyManager.state.ancientResidueFound
+  };
+
+  for (const node of surfaceResourceSystem.nodes) {
+    if (node.scanned) {
+      scannedByType[node.definition.type] = true;
+    }
+  }
+
+  return scannedByType;
+}
+
+function buildSaveGameData(): Omit<SaveGameData, 'version' | 'savedAt'> {
+  const currentObjectiveDisplay = getCurrentObjectiveDisplay();
+  const descentSafety = descentSafetyGate.state;
+  return {
+    currentPhase: getCurrentPhase(),
+    currentMissionId: mission24.started
+      ? mission24.missionId
+      : inSurfacePhase
+      ? mission23.started ? mission23.missionId : mission22.started ? mission22.missionId : mission21.started ? mission21.missionId : mission20.started ? mission20.missionId : mission19.started ? mission19.missionId : mission18.started ? mission18.missionId : mission17.started ? mission17.missionId : mission16.started ? mission16.missionId : mission15.started ? mission15.missionId : mission14.started ? mission14.missionId : mission13.started ? mission13.missionId : mission12.started ? mission12.missionId : mission11.started ? mission11.missionId : mission10.started ? mission10.missionId : mission09.started ? mission09.missionId : mission08.started ? mission08.missionId : mission07.started ? mission07.missionId : mission06.started ? mission06.missionId : mission05.started ? mission05.missionId : mission04.started ? mission04.missionId : mission03.started ? mission03.missionId : surfaceMission.missionId
+      : 'mission-01-search-home',
+    currentMissionStep: mission24.started
+      ? mission24.step
+      : inSurfacePhase
+      ? mission23.started ? mission23.step : mission22.started ? mission22.step : mission21.started ? mission21.step : mission20.started ? mission20.step : mission19.started ? mission19.step : mission18.started ? mission18.step : mission17.started ? mission17.step : mission16.started ? mission16.step : mission15.started ? mission15.step : mission14.started ? mission14.step : mission13.started ? mission13.step : mission12.started ? mission12.step : mission11.started ? mission11.step : mission10.started ? mission10.step : mission09.started ? mission09.step : mission08.started ? mission08.step : mission07.started ? mission07.step : mission06.started ? mission06.step : mission05.started ? mission05.step : mission04.started ? mission04.step : mission03.started ? mission03.step : surfaceMission.currentStep.id
+      : missionManager.step,
+    e01Discovered: missionManager.step !== 'scannerTutorial' && missionManager.step !== 'briefing',
+    atlasMarkerScanned: descentSafety.atlasMarkerScanned,
+    descentCorridorDecoded: descentSafety.atlasCorridorDecoded || descentSystem.state.phase !== 'idle',
+    orbitalScanComplete: habitabilitySystem.complete,
+    habitabilityScore: habitabilitySystem.report?.viability ?? 0,
+    orbitalScanData: habitabilitySystem.completedOrbitalData,
+    descentAuthorized: descentSafety.descentAuthorized,
+    missingDescentRequirements: descentSafety.missingDescentRequirements,
+    descentBlockedReason: descentSafety.descentBlockedReason,
+    nereidaLandingCompleted: descentSystem.state.phase === 'landed' || inSurfacePhase,
+    habitatModuleDeployed: colonyManager.state.habitatOnline,
+    scannedResources: getScannedResourceFlags(),
+    surfaceSitesRevealed: colonyManager.state.surfaceSitesRevealed,
+    resourceSiteStatuses: {
+      water: colonyManager.state.waterStatus,
+      minerals: colonyManager.state.mineralStatus,
+      energy: colonyManager.state.energyStatus
+    },
+    colonyReadiness: colonyManager.state.colonizationReadiness,
+    baseNereidaOperational: colonyManager.state.baseNereidaOperational || colonyManager.state.operational,
+    currentObjective: currentObjectiveDisplay.objective,
+    lastKnownPhase: inSurfacePhase ? 'surface' : descentSystem.state.phase,
+    playerApproxPosition: [Math.round(ship.position.x), Math.round(ship.position.y), Math.round(ship.position.z)],
+    playerMode: playerModeSystem.onFootActive ? 'onFoot' : 'ship',
+    characterPosition: [
+      Number(surfaceCharacter.group.position.x.toFixed(2)),
+      Number(surfaceCharacter.group.position.y.toFixed(2)),
+      Number(surfaceCharacter.group.position.z.toFixed(2))
+    ],
+    shipSurfacePosition: [
+      Number(ship.position.x.toFixed(2)),
+      Number(ship.position.y.toFixed(2)),
+      Number(ship.position.z.toFixed(2))
+    ],
+    // Mid-lift snapshots resolve to the nearest complete, load-safe state:
+    // inside the ship with the access system retracted.
+    insideShip: playerModeSystem.transitionActive ? true : playerModeSystem.insideShip,
+    characterUnlocked: inSurfacePhase,
+    rampState: playerModeSystem.onFootActive ? 'deployed' : 'retracted',
+    shipCameraMode: previousShipCameraPreference,
+    colony: colonyManager.getColonyStatus(),
+    inventory: resourceInventory.getSnapshot(),
+    tutorialCompleted: tutorialManager.snapshot(),
+    playedDialogueIds: dialogueManager.snapshotPlayed(),
+    lastCriticalDialogueId: dialogueManager.getState().lastCriticalDialogueId,
+    ...mission03.snapshot(),
+    ...mission04.snapshot(),
+    ...mission05.snapshot(),
+    ...mission06.snapshot(),
+    ...mission07.snapshot(),
+    ...mission08.snapshot(),
+    ...mission09.snapshot(),
+    ...mission10.snapshot(),
+    ...mission11.snapshot(),
+    ...mission12.snapshot(),
+    ...mission13.snapshot(),
+    ...mission14.snapshot(),
+    ...mission15.snapshot(),
+    ...mission16.snapshot(),
+    ...mission17.snapshot(),
+    ...mission18.snapshot(),
+    ...mission19.snapshot(),
+    ...mission20.snapshot(),
+    ...mission21.snapshot(),
+    ...mission22.snapshot(),
+    ...mission23.snapshot(),
+    ...mission24.snapshot(),
+    ...getArkDepartureSaveState(),
+    translationState: signalTranslation.state,
+    translationProgress: signalTranslation.progress,
+    translatedFragments: signalTranslation.translatedFragments
+  };
+}
+
+function saveProgress(): SaveGameData {
+  upgradeSystem.updateUnlocks(resourceInventory.state, colonyManager.state.colonizationReadiness);
+  return saveSystem.saveGame(buildSaveGameData());
+}
+
+function restoreSurfaceResourceNodes(save: SaveGameData): void {
+  surfaceResourceSystem.setupNodes((x, z) => planetaryWorld.getHeightAt(x, z));
+  if (save.resourceSiteStatuses) {
+    colonyManager.restore({
+      waterStatus: save.resourceSiteStatuses.water,
+      mineralStatus: save.resourceSiteStatuses.minerals,
+      energyStatus: save.resourceSiteStatuses.energy,
+      surfaceSitesRevealed: save.surfaceSitesRevealed ?? true
+    });
+  }
+  surfaceResourceSystem.syncFromColony(colonyManager);
+}
+
+function applySaveGame(save: SaveGameData): void {
+  launched = true;
+  hud.classList.add('is-active');
+  bootScreen.classList.add('is-hidden');
+
+  colonyManager.restore({
+    ...save.colony,
+    surfaceSitesRevealed: save.surfaceSitesRevealed ?? save.colony.surfaceSitesRevealed,
+    waterStatus: save.resourceSiteStatuses?.water ?? save.colony.waterStatus,
+    mineralStatus: save.resourceSiteStatuses?.minerals ?? save.colony.mineralStatus,
+    energyStatus: save.resourceSiteStatuses?.energy ?? save.colony.energyStatus
+  });
+  resourceInventory.restore(save.inventory);
+  tutorialManager.restore(save.tutorialCompleted);
+  dialogueManager.restore(save.playedDialogueIds, save.lastCriticalDialogueId);
+  mission03.restore({
+    mission03Started: save.mission03Started ?? false,
+    mission03Step: save.mission03Step ?? 'inactive',
+    communicationCalibrated: save.communicationCalibrated ?? false,
+    communicationCalibrationProgress: save.communicationCalibrationProgress ?? 0,
+    relayBeaconPlaced: save.relayBeaconPlaced ?? false,
+    relaySynchronized: save.relaySynchronized ?? false,
+    signalStability: save.signalStability ?? 0,
+    mission03SignalState: save.mission03SignalState ?? 'inactive',
+    pleyadanContactEstablished: save.pleyadanContactEstablished ?? false,
+    atlasTranslationMatrixUnlocked: save.atlasTranslationMatrixUnlocked ?? false,
+    galacticThreatKnown: save.galacticThreatKnown ?? false,
+    orbitalDefenseRequired: save.orbitalDefenseRequired ?? false,
+    mission04Unlocked: save.mission04Unlocked ?? false,
+    mission03Completed: save.mission03Completed ?? false
+  });
+  mission04.restore({
+    mission04Started: save.mission04Started ?? false,
+    mission04Step: save.mission04Step ?? 'inactive',
+    defenseLinkCalibrated: save.defenseLinkCalibrated ?? false,
+    defenseLinkCalibrationProgress: save.defenseLinkCalibrationProgress ?? 0,
+    orbitalSensorActivated: save.orbitalSensorActivated ?? false,
+    defensiveBeaconsPlaced: save.defensiveBeaconsPlaced ?? defenseBeaconSites.map(() => false),
+    defenseNetworkSynchronized: save.defenseNetworkSynchronized ?? false,
+    defenseSyncProgress: save.defenseSyncProgress ?? 0,
+    defenseNetworkState: save.defenseNetworkState ?? 'offline',
+    activeDefenseBeaconTarget: save.activeDefenseBeaconTarget ?? 0,
+    threatSignatureDetected: save.threatSignatureDetected ?? false,
+    mission04Completed: save.mission04Completed ?? false,
+    mission05Unlocked: save.mission05Unlocked ?? false
+  });
+  mission05.restore({
+    mission05Started: save.mission05Started ?? false,
+    mission05Step: save.mission05Step ?? 'inactive',
+    probeDetected: save.probeDetected ?? false,
+    probeState: save.probeState ?? 'hidden',
+    interferenceActive: save.interferenceActive ?? false,
+    activeEchoIndex: save.activeEchoIndex ?? -1,
+    echoesResolved: save.echoesResolved ?? 0,
+    counterSignalProgress: save.counterSignalProgress ?? 0,
+    probeRetreated: save.probeRetreated ?? false,
+    firstHostileContactConfirmed: save.firstHostileContactConfirmed ?? false,
+    mission05Completed: save.mission05Completed ?? false,
+    mission06Unlocked: save.mission06Unlocked ?? false
+  });
+  mission06.restore({
+    mission06Started: save.mission06Started ?? false,
+    mission06Step: save.mission06Step ?? 'inactive',
+    interferenceResidueAnalyzed: save.interferenceResidueAnalyzed ?? false,
+    cloakingMatrixCalibrated: save.cloakingMatrixCalibrated ?? false,
+    cloakingProjectorsPlaced: save.cloakingProjectorsPlaced ?? [false, false, false],
+    cloakingProjectorsCalibrated: save.cloakingProjectorsCalibrated ?? [false, false, false],
+    cloakingSyncProgress: save.cloakingSyncProgress ?? 0,
+    cloakingFieldOnline: save.cloakingFieldOnline ?? false,
+    nereidaSignatureReduced: save.nereidaSignatureReduced ?? false,
+    mission06Completed: save.mission06Completed ?? false,
+    mission07Unlocked: save.mission07Unlocked ?? false
+  });
+  mission07.restore({
+    mission07Started: save.mission07Started ?? false,
+    mission07Step: save.mission07Step ?? 'inactive',
+    subsurfaceSignalAnalyzed: save.subsurfaceSignalAnalyzed ?? false,
+    atlasFractureRevealed: save.atlasFractureRevealed ?? false,
+    atlasEchoNodesScanned: save.atlasEchoNodesScanned ?? [false, false, false],
+    atlasSeedArchiveUnlocked: save.atlasSeedArchiveUnlocked ?? false,
+    atlasSeedArchiveActivated: save.atlasSeedArchiveActivated ?? false,
+    seedWorldRevealed: save.seedWorldRevealed ?? false,
+    mission07Completed: save.mission07Completed ?? false,
+    mission08Unlocked: save.mission08Unlocked ?? false
+  });
+  mission08.restore({
+    mission08Started: save.mission08Started ?? false,
+    mission08Step: save.mission08Step ?? 'inactive',
+    fractureTraceAnalyzed: save.fractureTraceAnalyzed ?? false,
+    signalFractureRevealed: save.signalFractureRevealed ?? false,
+    fractureNodesStabilized: save.fractureNodesStabilized ?? [false, false, false],
+    signalPurgeProgress: save.signalPurgeProgress ?? 0,
+    signalFractureContained: save.signalFractureContained ?? false,
+    coalitionTraceResidual: save.coalitionTraceResidual ?? false,
+    mission08Completed: save.mission08Completed ?? false,
+    mission09Unlocked: save.mission09Unlocked ?? false
+  });
+  mission08PurgeEngaged = mission08.step === 'signalPurge';
+  mission09.restore({
+    mission09Started: save.mission09Started ?? false,
+    mission09Step: save.mission09Step ?? 'inactive',
+    residualTraceAnalyzed: save.residualTraceAnalyzed ?? false,
+    auroraRouteDecoded: save.auroraRouteDecoded ?? false,
+    auroraRouteBeaconsScanned: save.auroraRouteBeaconsScanned ?? [false, false, false, false, false],
+    currentAuroraSector: save.currentAuroraSector ?? 0,
+    auroraSignalStrength: save.auroraSignalStrength ?? 1,
+    auroraHorizonScanned: save.auroraHorizonScanned ?? false,
+    auroraSectorDiscovered: save.auroraSectorDiscovered ?? false,
+    auroraLongRangeTravelCompleted: save.auroraLongRangeTravelCompleted ?? false,
+    mission09Completed: save.mission09Completed ?? false,
+    mission10Unlocked: save.mission10Unlocked ?? false
+  });
+  mission10.restore({
+    mission10Started: save.mission10Started ?? false,
+    mission10Step: save.mission10Step ?? 'inactive',
+    auroraInitialSurveyComplete: save.auroraInitialSurveyComplete ?? false,
+    auroraWaterAnalyzed: save.auroraWaterAnalyzed ?? false,
+    auroraSoilAnalyzed: save.auroraSoilAnalyzed ?? false,
+    auroraAtmosphereAnalyzed: save.auroraAtmosphereAnalyzed ?? false,
+    auroraBioSafetyChecked: save.auroraBioSafetyChecked ?? false,
+    auroraSettlementSiteMarked: save.auroraSettlementSiteMarked ?? false,
+    auroraModuleDeployed: save.auroraModuleDeployed ?? false,
+    auroraModuleOperational: save.auroraModuleOperational ?? false,
+    auroraStabilizationProgress: save.auroraStabilizationProgress ?? 0,
+    mission10Completed: save.mission10Completed ?? false,
+    mission11Unlocked: save.mission11Unlocked ?? false
+  });
+  mission10DeployStartedAt = mission10.state.auroraModuleDeployed ? -Infinity : Number.POSITIVE_INFINITY;
+  mission11.restore({
+    mission11Started: save.mission11Started ?? false,
+    mission11Step: save.mission11Step ?? 'inactive',
+    auroraCoreDiagnosticComplete: save.auroraCoreDiagnosticComplete ?? false,
+    auroraSecondModuleSiteMarked: save.auroraSecondModuleSiteMarked ?? false,
+    auroraSecondModuleDeployed: save.auroraSecondModuleDeployed ?? false,
+    auroraEnergyLinkOnline: save.auroraEnergyLinkOnline ?? false,
+    auroraEnergyLinkProgress: save.auroraEnergyLinkProgress ?? 0,
+    auroraWaterFilterInstalled: save.auroraWaterFilterInstalled ?? false,
+    auroraWaterFlowCalibrated: save.auroraWaterFlowCalibrated ?? false,
+    auroraWaterFlowProgress: save.auroraWaterFlowProgress ?? 0,
+    auroraCultivationBedPrepared: save.auroraCultivationBedPrepared ?? false,
+    auroraBioTrialStarted: save.auroraBioTrialStarted ?? false,
+    auroraImpactAssessmentComplete: save.auroraImpactAssessmentComplete ?? false,
+    auroraImpactAssessmentProgress: save.auroraImpactAssessmentProgress ?? 0,
+    auroraCoreOperational: save.auroraCoreOperational ?? false,
+    mission11Completed: save.mission11Completed ?? false,
+    mission12Unlocked: save.mission12Unlocked ?? false
+  });
+  mission11DeployStartedAt = mission11.state.auroraSecondModuleDeployed ? -Infinity : Number.POSITIVE_INFINITY;
+  mission12.restore({
+    mission12Started: save.mission12Started ?? false,
+    mission12Step: save.mission12Step ?? 'inactive',
+    auroraFirstCrewAuthorized: save.auroraFirstCrewAuthorized ?? false,
+    auroraLifeSupportHumanReady: save.auroraLifeSupportHumanReady ?? false,
+    auroraHabitationConfigured: save.auroraHabitationConfigured ?? false,
+    auroraLandingZoneMarked: save.auroraLandingZoneMarked ?? false,
+    auroraCrewCapsuleLanded: save.auroraCrewCapsuleLanded ?? false,
+    auroraFirstCrewDisembarked: save.auroraFirstCrewDisembarked ?? false,
+    auroraHumanLoadCycleStarted: save.auroraHumanLoadCycleStarted ?? false,
+    auroraHumanLoadProgress: save.auroraHumanLoadProgress ?? 0,
+    auroraHumanLoadRecalibrated: save.auroraHumanLoadRecalibrated ?? false,
+    auroraRecalibrationProgress: save.auroraRecalibrationProgress ?? 0,
+    auroraInhabitedCoreStable: save.auroraInhabitedCoreStable ?? false,
+    auroraFirstNightRecorded: save.auroraFirstNightRecorded ?? false,
+    mission12Completed: save.mission12Completed ?? false,
+    mission13Unlocked: save.mission13Unlocked ?? false
+  });
+  // A capsule mid-descent replays its descent; a landed one stays landed.
+  mission12DescentElapsed = mission12.state.auroraCrewCapsuleLanded ? -1 : -1;
+  auroraNightBlend = mission12.state.auroraFirstNightRecorded ? 1 : 0;
+  mission13.restore({
+    mission13Started: save.mission13Started ?? false,
+    mission13Step: save.mission13Step ?? 'inactive',
+    auroraStormAlertAcknowledged: save.auroraStormAlertAcknowledged ?? false,
+    auroraGeneratorSecured: save.auroraGeneratorSecured ?? false,
+    auroraGeneratorProgress: save.auroraGeneratorProgress ?? 0,
+    auroraAntennaAnchorsSecured: save.auroraAntennaAnchorsSecured ?? [false, false],
+    auroraAntennaOnline: save.auroraAntennaOnline ?? false,
+    auroraShieldCharge: save.auroraShieldCharge ?? 0,
+    auroraShieldOnline: save.auroraShieldOnline ?? false,
+    auroraStormPeakReached: save.auroraStormPeakReached ?? false,
+    mission13Completed: save.mission13Completed ?? false,
+    mission14Unlocked: save.mission14Unlocked ?? false
+  });
+  mission14.restore({
+    mission14Started: save.mission14Started ?? false,
+    mission14Step: save.mission14Step ?? 'inactive',
+    coalitionTraceInspections: save.coalitionTraceInspections ?? [false, false, false],
+    coalitionSignatureAnalyzed: save.coalitionSignatureAnalyzed ?? false,
+    coalitionPowerNodePurged: save.coalitionPowerNodePurged ?? false,
+    coalitionCommsNodePurged: save.coalitionCommsNodePurged ?? false,
+    coalitionHiddenNodeLocated: save.coalitionHiddenNodeLocated ?? false,
+    coalitionTraceSampleRecovered: save.coalitionTraceSampleRecovered ?? false,
+    coalitionReverseTriangulationComplete: save.coalitionReverseTriangulationComplete ?? false,
+    mission14Completed: save.mission14Completed ?? false,
+    mission15Unlocked: save.mission15Unlocked ?? false
+  });
+  mission15.restore({
+    mission15Started: save.mission15Started ?? false,
+    mission15Step: save.mission15Step ?? 'inactive',
+    auroraRoutineComplete: save.auroraRoutineComplete ?? false,
+    auroraModuleSealed: save.auroraModuleSealed ?? false,
+    auroraModuleReleased: save.auroraModuleReleased ?? false,
+    auroraCoordinatedFailureConfirmed: save.auroraCoordinatedFailureConfirmed ?? false,
+    auroraParasiteStates: save.auroraParasiteStates ?? ['hidden', 'hidden', 'hidden'],
+    auroraCommsSequence: save.auroraCommsSequence ?? [2, 0, 3, 1],
+    auroraCommsSequenceStep: save.auroraCommsSequenceStep ?? 0,
+    auroraCommsSequenceCompleted: save.auroraCommsSequenceCompleted ?? false,
+    auroraCentralOverloadResolved: save.auroraCentralOverloadResolved ?? false,
+    auroraParasiteAnalyzed: save.auroraParasiteAnalyzed ?? false,
+    mission15Completed: save.mission15Completed ?? false,
+    mission16Unlocked: save.mission16Unlocked ?? false
+  });
+  mission16.restore({
+    mission16Started: save.mission16Started ?? false,
+    mission16Step: save.mission16Step ?? 'inactive',
+    alertReceived: save.alertReceived ?? false,
+    linkFrequenciesCalibrated: save.linkFrequenciesCalibrated ?? 0,
+    tripleLinkEstablished: save.tripleLinkEstablished ?? false,
+    atlasKeyRecovered: save.atlasKeyRecovered ?? false,
+    pleyadianSeedRevealed: save.pleyadianSeedRevealed ?? false,
+    protocolsUnlocked: save.protocolsUnlocked ?? [false, false, false],
+    nodesSynchronized: save.nodesSynchronized ?? [false, false, false],
+    simulationComplete: save.simulationComplete ?? false,
+    defensePlansRecovered: save.defensePlansRecovered ?? false,
+    mission16Completed: save.mission16Completed ?? false,
+    mission17Unlocked: save.mission17Unlocked ?? false
+  });
+  // The revelation is one-shot; a reload into or past that step must never
+  // replay it. Re-arm it only if the mission has not yet consumed it.
+  mission16SeedWorldAnnounced = mission16.state.pleyadianSeedRevealed || mission16.step !== 'revealSeedWorld';
+  mission17.restore({
+    mission17Started: save.mission17Started ?? false,
+    mission17Step: save.mission17Step ?? 'inactive',
+    councilReviewed: save.councilReviewed ?? false,
+    energyCircuitsBalanced: save.energyCircuitsBalanced ?? 0,
+    energyReserveOnline: save.energyReserveOnline ?? false,
+    sensorsDeployed: save.sensorsDeployed ?? [false, false, false],
+    sensorsCalibrated: save.sensorsCalibrated ?? false,
+    shieldEmittersInstalled: save.shieldEmittersInstalled ?? [false, false, false],
+    alertChannelsVerified: save.alertChannelsVerified ?? 0,
+    alertNetworkOnline: save.alertNetworkOnline ?? false,
+    evacMarkersSet: save.evacMarkersSet ?? 0,
+    evacuationRoutesMarked: save.evacuationRoutesMarked ?? false,
+    defenseDrillComplete: save.defenseDrillComplete ?? false,
+    overloadStabilized: save.overloadStabilized ?? false,
+    incomingSignaturesDetected: save.incomingSignaturesDetected ?? false,
+    mission17Completed: save.mission17Completed ?? false,
+    mission18Unlocked: save.mission18Unlocked ?? false
+  });
+  // The incoming-signature beat is one-shot, exactly like the M16 revelation:
+  // a reload into or past that step must never replay it.
+  mission17SignaturesAnnounced =
+    mission17.state.incomingSignaturesDetected || mission17.step !== 'detectIncomingSignatures';
+  mission17OverloadWarnedAt = -Infinity;
+  // The defence layer is rebuilt from the restored step on the next update;
+  // parking it here stops a stale shield/alert level surviving the load.
+  auroraDefenseEffect.setShieldTest(0);
+  auroraDefenseEffect.setAlertLevel(0);
+  auroraDefenseEffect.setSignatureLevel(0);
+  auroraDefenseNetwork.setShieldTestLevel(0);
+  mission18.restore({
+    mission18Started: save.mission18Started ?? false,
+    mission18Step: save.mission18Step ?? 'inactive',
+    emergencyProtocolActive: save.emergencyProtocolActive ?? false,
+    hostilesIdentified: save.hostilesIdentified ?? false,
+    defenseWeaponsAuthorized: save.defenseWeaponsAuthorized ?? false,
+    firstWaveCleared: save.firstWaveCleared ?? false,
+    criticalSystemStabilized: save.criticalSystemStabilized ?? false,
+    interceptComplete: save.interceptComplete ?? false,
+    shieldDefended: save.shieldDefended ?? false,
+    enemyTransmissionSent: save.enemyTransmissionSent ?? false,
+    finalDroneDestroyed: save.finalDroneDestroyed ?? false,
+    wreckageRecovered: save.wreckageRecovered ?? false,
+    nereidaTargetConfirmed: save.nereidaTargetConfirmed ?? false,
+    dronesDestroyed: save.dronesDestroyed ?? 0,
+    mission18Completed: save.mission18Completed ?? false,
+    mission19Unlocked: save.mission19Unlocked ?? false
+  });
+  // Combat never survives a load: the sky is cleared and the current wave is
+  // relaunched from its stable start by the next update. No drone is ever
+  // duplicated, and a wave already cleared is never re-flown because the
+  // restored step has moved past it.
+  coalitionDrones.clearAll();
+  mission18TurretCooldowns.fill(0);
+  mission18WarnedAt = -Infinity;
+  mission19.restore({
+    mission19Started: save.mission19Started ?? false,
+    mission19Step: save.mission19Step ?? 'inactive',
+    emergencyCallConfirmed: save.emergencyCallConfirmed ?? false,
+    arrivedAtNereida: save.arrivedAtNereida ?? false,
+    airspaceCleared: save.airspaceCleared ?? false,
+    landedAtNereida: save.landedAtNereida ?? false,
+    defensesRestored: save.defensesRestored ?? [false, false, false],
+    groundIncursionRepelled: save.groundIncursionRepelled ?? false,
+    atlasProtected: save.atlasProtected ?? false,
+    operationalPriority: save.operationalPriority ?? 'none',
+    counterattackActivated: save.counterattackActivated ?? false,
+    dataLeakConfirmed: save.dataLeakConfirmed ?? false,
+    nereidaWreckageRecovered: save.nereidaWreckageRecovered ?? false,
+    auroraLinkRepaired: save.auroraLinkRepaired ?? false,
+    arkTargetConfirmed: save.arkTargetConfirmed ?? false,
+    intrudersDestroyed: save.intrudersDestroyed ?? 0,
+    mission19Completed: save.mission19Completed ?? false,
+    mission20Unlocked: save.mission20Unlocked ?? false
+  });
+  mission20.restore({
+    mission20Started: save.mission20Started ?? false,
+    mission20Step: save.mission20Step ?? 'inactive',
+    ascentComplete: save.ascentComplete ?? false,
+    arkReached: save.arkReached ?? false,
+    arkLinksRestored: save.arkLinksRestored ?? [false, false, false],
+    arkFirstWaveCleared: save.arkFirstWaveCleared ?? false,
+    jammerLocated: save.jammerLocated ?? false,
+    jammerDisabled: save.jammerDisabled ?? false,
+    enginesDefended: save.enginesDefended ?? false,
+    civilianModulesProtected: save.civilianModulesProtected ?? false,
+    dataBreachStopped: save.dataBreachStopped ?? false,
+    arkCounterattackActive: save.arkCounterattackActive ?? false,
+    finalWaveCleared: save.finalWaveCleared ?? false,
+    arkStabilized: save.arkStabilized ?? false,
+    capitalSignatureDetected: save.capitalSignatureDetected ?? false,
+    dataSiphoned: save.dataSiphoned ?? 0,
+    hostilesDestroyed: save.hostilesDestroyed ?? 0,
+    mission20Completed: save.mission20Completed ?? false,
+    mission21Unlocked: save.mission21Unlocked ?? false
+  });
+  mission21.restore({
+    mission21Started: save.mission21Started ?? false,
+    mission21Step: save.mission21Step ?? 'inactive',
+    transmissionChannelsAligned: save.transmissionChannelsAligned ?? [false, false, false],
+    transmissionDecoded: save.transmissionDecoded ?? false,
+    capitalShipDetected: save.capitalShipDetected ?? false,
+    capitalSignatureAnalyzed: save.capitalSignatureAnalyzed ?? false,
+    ultimatumReceived: save.ultimatumReceived ?? false,
+    coalitionResponseTone: save.coalitionResponseTone ?? 'none',
+    enclaveChannelsRestored: save.enclaveChannelsRestored ?? [false, false, false],
+    demonstrationObserved: save.demonstrationObserved ?? false,
+    attackRoutesClassified: save.attackRoutesClassified ?? [false, false, false],
+    pleyadianNetworkActivated: save.pleyadianNetworkActivated ?? false,
+    simultaneousAssaultDetected: save.simultaneousAssaultDetected ?? false,
+    mission21Completed: save.mission21Completed ?? false,
+    mission22Unlocked: save.mission22Unlocked ?? false
+  });
+  mission22.restore({
+    mission22Started: save.mission22Started ?? false,
+    mission22Step: save.mission22Step ?? 'inactive',
+    auroraIntegrity: save.auroraIntegrity ?? 84,
+    nereidaIntegrity: save.nereidaIntegrity ?? 80,
+    orbitalIntegrity: save.orbitalIntegrity ?? 76,
+    mission22InitialEnergyFront: save.mission22InitialEnergyFront ?? 'none',
+    mission22InitialDefenseFront: save.mission22InitialDefenseFront ?? 'none',
+    mission22InitialCommsFront: save.mission22InitialCommsFront ?? 'none',
+    auroraFrontDefended: save.auroraFrontDefended ?? false,
+    nereidaFrontDefended: save.nereidaFrontDefended ?? false,
+    orbitalRelaysProtected: save.orbitalRelaysProtected ?? [false, false, false],
+    crossFrontCrisisManaged: save.crossFrontCrisisManaged ?? false,
+    mission22SupportPriority: save.mission22SupportPriority ?? 'none',
+    jointNetworkRestored: save.jointNetworkRestored ?? false,
+    coordinationNodesDetected: save.coordinationNodesDetected ?? [false, false, false],
+    finalPressureSurvived: save.finalPressureSurvived ?? false,
+    mission22Completed: save.mission22Completed ?? false,
+    mission23Unlocked: save.mission23Unlocked ?? false
+  });
+  mission23.restore({
+    mission23Started: save.mission23Started ?? false,
+    mission23Step: save.mission23Step ?? 'inactive',
+    mission23TargetOrder: save.mission23TargetOrder ?? [],
+    jointForcesSynchronized: save.jointForcesSynchronized ?? false,
+    jammerTriangulationReadings: save.jammerTriangulationReadings ?? [false, false, false],
+    jammerNodeDestroyed: save.jammerNodeDestroyed ?? false,
+    platformDefensesDisabled: save.platformDefensesDisabled ?? false,
+    platformEnergyDisabled: save.platformEnergyDisabled ?? false,
+    mission23PlatformMethod: save.mission23PlatformMethod ?? 'none',
+    logisticsPlatformDestroyed: save.logisticsPlatformDestroyed ?? false,
+    jumpBeaconAnchorsDisabled: save.jumpBeaconAnchorsDisabled ?? [false, false, false],
+    jumpBeaconDestroyed: save.jumpBeaconDestroyed ?? false,
+    escapeCompleted: save.escapeCompleted ?? false,
+    enemyRouteRecovered: save.enemyRouteRecovered ?? false,
+    returnToArkConfirmed: save.returnToArkConfirmed ?? false,
+    mission23Completed: save.mission23Completed ?? false,
+    mission24Unlocked: save.mission24Unlocked ?? false
+  });
+  mission24.restore({
+    mission24Started: save.mission24Started ?? false,
+    mission24Step: save.mission24Step ?? 'inactive',
+    returnRouteDecoded: save.returnRouteDecoded ?? false,
+    launchPrepared: save.launchPrepared ?? false,
+    shipBoardedForReturn: save.shipBoardedForReturn ?? false,
+    ignitionComplete: save.ignitionComplete ?? false,
+    takeoffComplete: save.takeoffComplete ?? false,
+    lowAtmosphereComplete: save.lowAtmosphereComplete ?? false,
+    cloudLayerComplete: save.cloudLayerComplete ?? false,
+    midAtmosphereComplete: save.midAtmosphereComplete ?? false,
+    upperAtmosphereComplete: save.upperAtmosphereComplete ?? false,
+    vacuumTransitionComplete: save.vacuumTransitionComplete ?? false,
+    orbitalInsertionComplete: save.orbitalInsertionComplete ?? false,
+    orbitStabilized: save.orbitStabilized ?? false,
+    mission24ArkReached: save.mission24ArkReached ?? false,
+    arkDamageAssessments: save.arkDamageAssessments ?? [false, false, false, false, false],
+    arkDamageAssessed: save.arkDamageAssessed ?? false,
+    enclaveLinksRestored: save.enclaveLinksRestored ?? [false, false, false, false],
+    allEnclaveLinksRestored: save.allEnclaveLinksRestored ?? false,
+    arkSystemsPrepared: save.arkSystemsPrepared ?? [false, false, false],
+    allArkSystemsPrepared: save.allArkSystemsPrepared ?? false,
+    pleyadianNodesIntegrated: save.pleyadianNodesIntegrated ?? [false, false, false],
+    pleyadianNetworkIntegrated: save.pleyadianNetworkIntegrated ?? false,
+    civilianSheltersPrepared: save.civilianSheltersPrepared ?? false,
+    alliedForcesAssembled: save.alliedForcesAssembled ?? false,
+    startingSectorPointsVisited: save.startingSectorPointsVisited ?? [false, false, false],
+    startingSectorRevisited: save.startingSectorRevisited ?? false,
+    defenseRehearsalComplete: save.defenseRehearsalComplete ?? false,
+    finalFleetDetected: save.finalFleetDetected ?? false,
+    finalFormationEntered: save.finalFormationEntered ?? false,
+    mission24Completed: save.mission24Completed ?? false,
+    mission25Unlocked: save.mission25Unlocked ?? false
+  });
+  mission24AnnouncedBeats.clear();
+  mission24RehearsalEngaged = false;
+  restoreArkDeparture(save);
+  mission24OrbitalEnvironmentActive = false;
+  mission23AnnouncedBeats.clear();
+  mission23SupportCooldown = 0;
+  mission23ChoicePanel.setVisible(false);
+  coalitionLogisticsPlatform.resetEncounterHealth();
+  coalitionJumpBeacon.resetEncounterHealth();
+  syncMission23Visuals();
+  mission22AnnouncedBeats.clear();
+  if (mission22.started) {
+    const waveOwner: Record<string, string> = {
+      'wave:aurora': 'defendAuroraFront',
+      'wave:nereida': 'defendNereidaFront',
+      'wave:orbital': 'defendOrbitalFront',
+      'wave:final': 'surviveFinalPressure'
+    };
+    for (const key of Object.keys(waveOwner)) {
+      if (waveOwner[key] !== mission22.step) mission22AnnouncedBeats.add(key);
+    }
+  }
+  mission22DefenseCooldowns.fill(0);
+  mission21AnnouncedBeats.clear();
+  if (mission21.started) {
+    // Save data and played dialogue ids are authoritative after restore. Replaying
+    // either reveal would duplicate the capital arrival or Coalition ultimatum.
+    mission21AnnouncedBeats.add('capital-reveal');
+    mission21AnnouncedBeats.add('ultimatum');
+  }
+  // Orbital combat never survives a load: the sky is cleared and the current
+  // wave relaunches from its stable start on the next update.
+  coalitionJammer.clear();
+  mission20WarnedAt = -Infinity;
+  mission20AnnouncedBeats.clear();
+  if (mission20.started) {
+    const step = mission20.step;
+    // Re-arm only the beat belonging to the restored step, so consumed
+    // dialogue never replays and waves already fought never relaunch.
+    for (const beat of ['jammer', 'engines', 'modules', 'breach', 'capital']) {
+      const owner: Record<string, string> = {
+        jammer: 'locateJammer',
+        engines: 'defendEngines',
+        modules: 'protectCivilianModules',
+        breach: 'stopDataBreach',
+        capital: 'detectCapitalSignature'
+      };
+      if (owner[beat] !== step) mission20AnnouncedBeats.add(beat);
+    }
+    for (const waveStep of [
+      'firstOrbitalWave', 'disableJammer', 'defendEngines',
+      'protectCivilianModules', 'stopDataBreach', 'finalOrbitalWave'
+    ]) {
+      if (waveStep !== step) mission20AnnouncedBeats.add(`wave:${waveStep}`);
+    }
+  }
+  // Ground combat never survives a load: the field is cleared and the current
+  // wave is relaunched from its stable start by the next update.
+  coalitionBreachDrones.clearAll();
+  mission19DefenseCooldowns.fill(0);
+  mission19WarnedAt = -Infinity;
+  mission19AnnouncedBeats.clear();
+  if (mission19.started) {
+    const step = mission19.step;
+    // Re-arm only the beats that belong to the restored step, so a consumed
+    // dialogue never replays and the current step's beat still fires.
+    if (step !== 'landAtNereida') mission19AnnouncedBeats.add('arrival');
+    if (step !== 'protectAtlas') mission19AnnouncedBeats.add('breach');
+    if (step !== 'activateCounterattack') mission19AnnouncedBeats.add('counter');
+    if (step !== 'detectDataLeak') mission19AnnouncedBeats.add('leak');
+    // Waves already fought must not relaunch on load.
+    if (step !== 'clearAirspace') mission19AnnouncedBeats.add('wave:air');
+    if (step !== 'repelGroundIncursion') mission19AnnouncedBeats.add('wave:ground');
+  }
+  // One-shot beats already consumed must never replay. Re-arm only the beats
+  // belonging to the step being restored into.
+  mission18AnnouncedBeats.clear();
+  if (mission18.started) {
+    const step = mission18.step;
+    if (step !== 'defendCriticalSystem') mission18AnnouncedBeats.add('breach');
+    if (step !== 'boardShip') mission18AnnouncedBeats.add('board');
+    if (step !== 'defendShield') mission18AnnouncedBeats.add('shieldwave');
+    if (step !== 'pursueFinalDrone') mission18AnnouncedBeats.add('runner');
+  }
+  // The Pleyadian protocol layer is rebuilt from the restored step on the next
+  // update; parking it here stops a stale intensity surviving the load.
+  pleyadianProtocolEffect.setIntensity(0);
+  pleyadianProtocolEffect.setSimulationActive(false);
+  // The sabotage layer is rebuilt from the restored step on the next update;
+  // parking it here stops a stale stress level surviving the load.
+  coalitionSabotageEffect.setStress(0);
+  coalitionSabotageEffect.setOverload(0);
+  mission15OverloadWarnedAt = -Infinity;
+  // The contamination layer is rebuilt from the restored step on the next
+  // update; parking it here stops a stale intensity surviving the load.
+  coalitionTraceEffect.setIntensity(0);
+  mission14ExtractionLostAt = -Infinity;
+  auroraStormFogBoost = 0;
+  // Release anything the previous session left running and mark the phases
+  // already cleared, so their completion stingers never replay on load. The
+  // ambience itself is rebuilt by the next update from the restored phase.
+  mission13Audio.restore(mission13.step, mission13.completed);
+  mission09HadWeakSignalWarning = mission09.state.auroraSignalStrength < 0.35;
+  // The travel staging is derived, not saved: it rebuilds itself from the
+  // restored position on the next frame. Legs already lived through are
+  // marked as announced so a reload never replays their comms.
+  auroraTravelDirector.reset();
+  announcedAuroraLegs.clear();
+  if (mission09.state.auroraSectorDiscovered) {
+    for (const leg of ['departure', 'ashPlains', 'atlasCanyons', 'stormPlateau', 'preReveal']) {
+      announcedAuroraLegs.add(leg);
+    }
+  }
+  signalTranslation.restore({
+    state: save.translationState,
+    progress: save.translationProgress,
+    translatedFragments: save.translatedFragments
+  });
+  lastTranslatedFragmentCount = signalTranslation.translatedFragments;
+  previousShipCameraPreference = save.shipCameraMode ?? 'external';
+  cameraModeSystem.setMode(previousShipCameraPreference);
+
+  if (save.currentMissionId === 'mission-01-search-home') {
+    missionManager.restore(save.currentMissionStep);
+    const stepsAfterHabitability = [
+      'scanOrbitalMarker',
+      'decodeDescentCorridor',
+      'approachPlanet',
+      'atmosphericEntry',
+      'landingApproach',
+      'touchdown',
+      'firstFoothold',
+      'transmitData',
+      'missionComplete'
+    ];
+    if (stepsAfterHabitability.includes(save.currentMissionStep)) {
+      habitabilitySystem.forceComplete();
+      habitabilityReportShown = true;
+      renderHabitabilityReport();
+    }
+  }
+  const restoredReport = habitabilitySystem.report;
+  descentSafetyGate.restore({
+    e01Detected: save.e01Discovered,
+    orbitalScanComplete: save.orbitalScanComplete ?? Boolean(restoredReport || save.atlasMarkerScanned),
+    habitabilityScore: save.habitabilityScore ?? restoredReport?.viability ?? (save.atlasMarkerScanned ? 70 : 0),
+    atlasMarkerScanned: save.atlasMarkerScanned,
+    atlasCorridorDecoded: save.descentCorridorDecoded,
+    descentBlockedReason: save.descentBlockedReason ?? ''
+  });
+  if (save.descentCorridorDecoded) {
+    orbitalMarkerSystem.forceDecoded();
+    descentSystem.lockCorridor();
+    buildCorridorPips();
+  }
+  if (save.lastKnownPhase === 'entry' || save.currentMissionStep === 'atmosphericEntry') {
+    descentSystem.beginEntry();
+  } else if (
+    save.lastKnownPhase === 'cloudBreak' ||
+    save.lastKnownPhase === 'landingApproach' ||
+    save.currentMissionStep === 'landingApproach' ||
+    save.currentMissionStep === 'touchdown'
+  ) {
+    descentSystem.state.phase = 'cloudBreak';
+    descentSystem.state.entryProgress = 100;
+    descentSystem.state.heat = 38;
+    descentSystem.state.stability = 88;
+    descentSystem.state.altitude = 980;
+    descentSystem.beginLandingApproach();
+    enterBasinApproach();
+  }
+  if (save.nereidaLandingCompleted && descentSystem.state.phase !== 'landed') {
+    descentSystem.completeLanding();
+  }
+  if (
+    save.currentPhase === 'surface' ||
+    save.currentPhase === 'colonization' ||
+    (mission24.started && !mission24StepAtLeast('orbitalInsertion'))
+  ) {
+    enterSurfacePhase(false);
+    colonyManager.restore({
+      ...save.colony,
+      surfaceSitesRevealed: save.surfaceSitesRevealed ?? save.colony.surfaceSitesRevealed,
+      waterStatus: save.resourceSiteStatuses?.water ?? save.colony.waterStatus,
+      mineralStatus: save.resourceSiteStatuses?.minerals ?? save.colony.mineralStatus,
+      energyStatus: save.resourceSiteStatuses?.energy ?? save.colony.energyStatus
+    });
+    resourceInventory.restore(save.inventory);
+    restoreSurfaceResourceNodes(save);
+    if (save.habitatModuleDeployed) {
+      const habitatPosition = HABITAT_SITE_LOCAL.clone();
+      habitatPosition.y = planetaryWorld.getHeightAt(habitatPosition.x, habitatPosition.z);
+      planetaryWorld.colonyModule.deployAt(habitatPosition);
+    }
+    if (save.currentMissionId === mission03.missionId || save.currentMissionId === mission04.missionId || save.currentMissionId === mission05.missionId || save.currentMissionId === mission06.missionId || save.currentMissionId === mission07.missionId || save.currentMissionId === mission08.missionId || save.currentMissionId === mission09.missionId) {
+      surfaceMission.updateFromColonyState(colonyManager.state);
+    } else {
+      surfaceMission.restore(save.currentMissionStep, colonyManager.state);
+    }
+    syncMission03Visuals();
+    syncMission04Visuals();
+    syncMission05Visuals();
+    syncMission07Visuals();
+    syncMission08Visuals();
+    syncMission09Visuals();
+    syncMission10Visuals();
+    syncMission11Visuals();
+    syncMission12Visuals();
+    syncMission13Visuals();
+    syncMission14Visuals();
+    syncMission15Visuals();
+    syncMission16Visuals();
+    syncMission17Visuals();
+    syncMission18Visuals();
+    syncMission19Visuals();
+    syncMission20Visuals();
+    syncMission21Visuals();
+    syncMission22Visuals();
+    if (mission09.state.auroraSectorDiscovered) planetaryWorld.setRevealProgress(1);
+    colonyPanel.update(colonyManager.state);
+  }
+
+  const savedShipPosition = save.shipSurfacePosition ?? save.playerApproxPosition;
+  ship.position.set(...savedShipPosition);
+  // Escape physics are intentionally not persisted. A load during the M23
+  // evacuation always resumes at its stable post-collapse checkpoint instead
+  // of inheriting a position that could instantly complete or fail the run.
+  if (mission23.step === 'escapeDistortion' && !mission23.state.escapeCompleted) {
+    ship.position.copy(coalitionJumpBeacon.position).add(mission23Scratch.set(0, 35, 240));
+  }
+  velocity.set(0, 0, 0);
+  if (mission24.started) {
+    atmosphericAscent.begin(ship.position, smoothYaw);
+    if (mission24StepAtLeast('lowAtmosphereAscent')) {
+      const restoreGround = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+      atmosphericAscent.restoreCheckpoint(mission24.step, ship, velocity, restoreGround);
+      atmosphericAscentEffect.activate(ship.position);
+      if (mission24StepAtLeast('orbitalInsertion')) enterMission24OrbitalEnvironment();
+      else atmosphericAscentEffect.update(clock.elapsedTime, atmosphericAscent.metrics);
+    }
+    mothership.group.visible = mission24StepAtLeast('approachArk');
+    sleepMission24LegacyVisuals();
+    syncMission24Visuals();
+  }
+  if (inSurfacePhase && save.playerMode === 'onFoot' && save.characterUnlocked) {
+    // Correct only parked legacy saves; saves made while flying remain exact.
+    settleParkedShipOnTerrain(false);
+  } else {
+    parkedShipResolved = false;
+  }
+  shipAltitudeHoldY = inSurfacePhase ? ship.position.y : undefined;
+  shipPreviousY = ship.position.y;
+  previousVerticalInput = 0;
+  if (inSurfacePhase && save.playerMode === 'onFoot' && save.characterUnlocked) {
+    const savedCharacter = save.characterPosition ?? [ship.position.x + 6, ship.position.y, ship.position.z];
+    // The pilot is valid inside any settled area, so a save taken on foot in
+    // the Aurora valley restores where it was left rather than snapping the
+    // pilot back to Base Nereida.
+    const savedAnchor = getSurfaceBoundaryAnchorFor(savedCharacter[0], savedCharacter[2]);
+    const validCharacterPosition =
+      savedCharacter.every(Number.isFinite) &&
+      Math.hypot(savedCharacter[0] - savedAnchor.x, savedCharacter[2] - savedAnchor.z) <= 870;
+    const x = validCharacterPosition ? savedCharacter[0] : ship.position.x + 6;
+    const z = validCharacterPosition ? savedCharacter[2] : ship.position.z;
+    const groundY = planetaryWorld.getHeightAt(x, z) + 0.04;
+    surfaceCharacter.placeAt(new THREE.Vector3(x, groundY, z), smoothYaw);
+    orientOnFootCameraAwayFromShip(surfaceCharacter.group.position);
+    surfaceCharacter.setVisible(true);
+    playerModeSystem.forceOnFoot();
+    snapOnFootCameraNextFrame = true;
+    transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+    shipAccessLift.state = 'deployed';
+    liftRideState = 'exitingShipComplete';
+    boardingAnimationState = 'idle';
+    characterOnLift = false;
+    characterFootLockActive = false;
+    liftProgress = 1;
+    shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
+    hud.classList.remove('cockpit-active');
+    setControlHints('foot');
+    if (!validCharacterPosition) {
+      saveSystem.lastWarning = 'La posición guardada del piloto no era segura; fue restaurado junto a la nave.';
+    }
+  } else {
+    playerModeSystem.forceShip(inSurfacePhase, cameraModeSystem.mode === 'cockpit');
+    surfaceCharacter.setVisible(false);
+    shipAccessLift.state = 'retracted';
+    shipAccessLift.group.visible = false;
+    liftRideState = 'enteringShipComplete';
+    boardingAnimationState = 'idle';
+    characterOnLift = false;
+    characterFootLockActive = false;
+    liftProgress = 0;
+  }
+  requestCameraFollowSync('save-load');
+  upgradeSystem.updateUnlocks(resourceInventory.state, colonyManager.state.colonizationReadiness);
+  lastDialogueObjectiveKey = '';
+  missionText.textContent = `Progreso cargado: ${save.currentObjective}`;
+  updateHud(Number.POSITIVE_INFINITY);
+  updateStarMap();
+}
+
+function getWeaponTargets(): WeaponTarget[] {
+  if (mission24.started) return [];
+  const live = threats.map((threat) => threat.target).filter((target) => target.health > 0);
+  // M18 drones are ordinary WeaponTargets, so the ship's existing lasers,
+  // missiles, lock-on, impacts and explosions all work on them unchanged —
+  // there is no second combat system.
+  if (mission18.started && !mission18.completed) {
+    for (const target of coalitionDrones.targets) {
+      if (target.health > 0) live.push(target);
+    }
+  }
+  // M19 reuses the same contract for both the air wave (scout drones) and the
+  // ground incursion, so the ship's guns work on either without new code.
+  if (mission19.started && !mission19.completed) {
+    for (const target of coalitionDrones.targets) {
+      if (target.health > 0 && !live.includes(target)) live.push(target);
+    }
+    for (const target of coalitionBreachDrones.targets) {
+      if (target.health > 0) live.push(target);
+    }
+  }
+  if (mission22.started && !mission22.completed) {
+    for (const target of coalitionDrones.targets) {
+      if (target.health > 0 && !live.includes(target)) live.push(target);
+    }
+    for (const target of coalitionBreachDrones.targets) {
+      if (target.health > 0 && !live.includes(target)) live.push(target);
+    }
+  }
+  if (mission23.started && !mission23.completed) {
+    for (const target of coalitionDrones.targets) {
+      if (target.health > 0 && !live.includes(target)) live.push(target);
+    }
+    if (mission23.step === 'destroyJammerNode' && coalitionDrones.activeCount === 0 && coalitionJammer.alive) {
+      live.push(coalitionJammer.target);
+    }
+    if (mission23StepUsesPlatform() && coalitionDrones.activeCount === 0) {
+      coalitionLogisticsPlatform.appendWeaponTargets(live);
+    }
+    if (mission23.step === 'disableBeaconAnchors' && coalitionDrones.activeCount === 0) {
+      coalitionJumpBeacon.appendWeaponTargets(live);
+    }
+  }
+  return live;
+}
+
+// ---------------------------------------------------------------------------
+// Audio: local generated assets plus lightweight UI confirmation tones.
+// ---------------------------------------------------------------------------
+
+function startAudio(): void {
+  try {
+    void audioManager.unlock();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!audioContext) {
+      audioContext = new AudioContextClass();
+      fallbackAudioGain = audioContext.createGain();
+      fallbackAudioGain.connect(audioContext.destination);
+      syncFallbackAudioGain();
+    }
+  } catch {
+    // Audio is a garnish: never block the game on it.
+  }
+}
+
+function syncFallbackAudioGain(): void {
+  if (!audioContext || !fallbackAudioGain) return;
+  const settings = audioManager.getSettings();
+  const target = settings.muted ? 0 : settings.master * settings.sfx;
+  fallbackAudioGain.gain.setTargetAtTime(target, audioContext.currentTime, 0.025);
+}
+
+function playTone(frequency: number, duration = 0.18): void {
+  if (!audioContext) return;
+  const oscillator = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.value = frequency;
+  gain.gain.value = 0.001;
+  gain.gain.exponentialRampToValueAtTime(0.032, audioContext.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+  oscillator.connect(gain).connect(fallbackAudioGain ?? audioContext.destination);
+  oscillator.start();
+  oscillator.stop(audioContext.currentTime + duration + 0.02);
+}
+
+const debugMusicStates: Record<string, MusicTrackId> = {
+  menu: 'music-main-theme',
+  start: 'music-main-theme',
+  space: 'music-space-exploration',
+  'deep-space': 'music-deep-space',
+  orbit: 'music-orbit-atlas',
+  atlas: 'music-atlas-mystery',
+  atmosphere: 'music-atmospheric-entry',
+  surface: 'music-surface-nereida',
+  base: 'music-surface-nereida',
+  calm: 'music-calm-exploration',
+  pleyadan: 'music-first-contact',
+  defense: 'music-defense-network',
+  probe: 'music-shadow-orbit'
+};
+
+function getAudioDebugState(): AudioDebugState {
+  return {
+    settings: audioManager.getSettings(),
+    currentMusicState: musicManager.requestedTrack?.replace('music-', '') ?? 'silent',
+    currentMusicTrack: musicManager.currentTrack ?? 'none',
+    requestedMusicTrack: musicManager.requestedTrack ?? 'none',
+    activeMusicLayers: musicManager.activeLayers,
+    pendingMusicTrack: musicManager.pendingTrack ?? 'none',
+    musicBedStartCount: musicManager.bedStartCount,
+    musicDucked: musicManager.duckingActive,
+    engine: engineAudio.getSnapshot(),
+    missingAudioAssets: audioManager.missingAssetIds,
+    missingMusicAssets: audioManager.missingMusicAssetIds
+  };
+}
+
+function setDebugMusicState(state: string): string {
+  const normalized = state.trim().toLowerCase();
+  if (normalized === 'auto') {
+    musicManager.setDebugTrack(null);
+    return 'auto';
+  }
+  const direct = musicTrackIds.find((track) => track === normalized);
+  const track = direct ?? debugMusicStates[normalized];
+  if (!track) return musicManager.requestedTrack ?? 'none';
+  musicManager.setDebugTrack(track);
+  return track;
+}
+
+async function previewAudioAsset(id: SfxTrackId, durationMs = 2200): Promise<boolean> {
+  await audioManager.unlock();
+  const playback = await audioManager.play(id, { loop: true, volume: 0.72, fadeInSeconds: 0.12 });
+  if (!playback) return false;
+  window.setTimeout(() => playback.stop(0.35), durationMs);
+  return true;
+}
+
+async function playDebugSfx(id: string): Promise<boolean> {
+  const asset = sfxTrackIds.find((candidate) => candidate === id);
+  if (!asset) return false;
+  await audioManager.unlock();
+  return Boolean(await audioManager.play(asset, { loop: false, volume: 0.78, fadeInSeconds: 0.03 }));
+}
+
+function triggerLiftLockTremor(): void {
+  liftLockTremorRemaining = 0.3;
+  void sfxManager.play('liftLock', 0.75);
+}
+
+function applyLiftLockTremor(delta: number): void {
+  if (liftLockTremorRemaining <= 0) return;
+  const strength = 0.045 * (liftLockTremorRemaining / 0.3);
+  camera.position.x += (Math.random() - 0.5) * strength;
+  camera.position.y += (Math.random() - 0.5) * strength;
+  liftLockTremorRemaining = Math.max(0, liftLockTremorRemaining - delta);
+}
+
+function fireLaser(): void {
+  if (!launched || resources.energy < 2) return;
+  const fired = weaponSystem.fireLaser(ship, getWeaponTargets());
+  if (fired) {
+    resources.energy = clampResource(resources.energy - 1.4);
+    cameraShake = Math.max(cameraShake, 0.035);
+    playTone(1180, 0.06);
+  } else {
+    missionManager.setHint(weaponSystem.state.lastMessage);
+    playTone(260, 0.08);
+  }
+}
+
+function fireMissile(): void {
+  if (!launched || resources.energy < 4) return;
+  const fired = weaponSystem.fireMissile(ship, getWeaponTargets());
+  if (fired) {
+    resources.energy = clampResource(resources.energy - 3.8);
+    cameraShake = Math.max(cameraShake, 0.1);
+    playTone(160, 0.18);
+    window.setTimeout(() => playTone(90, 0.22), 120);
+  } else {
+    missionManager.setHint(weaponSystem.state.lastMessage);
+    playTone(220, 0.12);
+  }
+}
+
+let phaseBannerTimer: number | undefined;
+
+/** Big transient phase callout: the player always knows what just changed. */
+function showPhaseBanner(title: string, subtitle: string): void {
+  phaseBannerTitle.textContent = title;
+  phaseBannerSubtitle.textContent = subtitle;
+  phaseBanner.classList.add('is-active');
+  if (phaseBannerTimer) window.clearTimeout(phaseBannerTimer);
+  phaseBannerTimer = window.setTimeout(() => phaseBanner.classList.remove('is-active'), 3800);
+}
+
+/**
+ * Cloud break: the ship punches through the deck and Cuenca Nereida is
+ * revealed below. From here the flight continues inside the basin's local
+ * space — the landing physically happens in the world the player will
+ * colonize, so there is no abrupt stage switch later.
+ */
+function enterBasinApproach(): void {
+  if (inBasin) return;
+  inBasin = true;
+  basinRevealStartedAt = clock.elapsedTime;
+
+  planetaryWorld.activate();
+  planetaryWorld.setRevealProgress(0);
+  // The landing pad now lives in the basin itself.
+  landingZone.activate(new THREE.Vector3(0, 1.5, 0), new THREE.Vector3(0, 1, 0));
+  landingZone.setApproachVisibility(0.42);
+
+  // Atmosphere owns the frame. The fog starts thick — the basin is buried
+  // in cloud-break haze — and thins over the next seconds so ridges and
+  // plateau emerge gradually instead of popping in.
+  scene.background = BASIN_BACKGROUND.clone();
+  scene.fog = new THREE.FogExp2(0x7f9d8c, 0.0046);
+  scene.environmentIntensity = 0.22;
+  keyStar.intensity = 0;
+  coldRim.intensity = 0;
+  redDeadStar.intensity = 0;
+  ambient.intensity = 0.12;
+  keyStarSprite.visible = false;
+
+  mothership.group.visible = false;
+  candidatePlanet.group.visible = false;
+  orbitalMarker.group.visible = false;
+  starfield.group.visible = false;
+  nebula.group.visible = false;
+  planets.group.visible = false;
+  asteroidField.group.visible = false;
+  cinematicDust.points.visible = false;
+  radiationStorm.group.visible = false;
+  gravityAnomaly.group.visible = false;
+  if (corridorPips) corridorPips.visible = false;
+  for (const point of pointsOfInterest) {
+    point.object.visible = false;
+  }
+  for (const threat of threats) {
+    threat.effect.group.visible = false;
+  }
+  homeMarker.style.display = 'none';
+  habitabilityPanel.classList.remove('is-active');
+  // Daylight turns the fresnel shield into a soap bubble: hide it as soon
+  // as the ship is inside the atmosphere.
+  shieldEffect.mesh.visible = false;
+
+  // High above the basin, nose down toward the pad: ridges and plateau
+  // emerge from the haze as the ship descends.
+  ship.position.set(26, 138, 168);
+  velocity.set(0, -2, -7);
+  yaw = 0.15;
+  pitch = -0.26;
+  smoothYaw = yaw;
+  smoothPitch = pitch;
+  snapBasinCameraFraming();
+
+  showPhaseBanner('CUENCA NEREIDA ADQUIRIDA', 'Reduce velocidad y desciende hacia la plataforma iluminada');
+}
+
+function createCorridorPipTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 64;
+  canvas.height = 64;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Could not create Atlas corridor pip texture.');
+  }
+  const glow = context.createRadialGradient(32, 32, 2, 32, 32, 29);
+  glow.addColorStop(0, 'rgba(220,255,239,0.95)');
+  glow.addColorStop(0.22, 'rgba(125,232,184,0.72)');
+  glow.addColorStop(1, 'rgba(125,232,184,0)');
+  context.fillStyle = glow;
+  context.fillRect(0, 0, 64, 64);
+  context.strokeStyle = 'rgba(220,255,239,0.9)';
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(32, 17);
+  context.lineTo(43, 32);
+  context.lineTo(32, 47);
+  context.lineTo(21, 32);
+  context.closePath();
+  context.stroke();
+  return new THREE.CanvasTexture(canvas);
+}
+
+/**
+ * Approach lights along the decoded Atlas corridor: five small pulsing
+ * pips from the marker toward the entry point over E-01. Subtle diegetic
+ * guidance — never a ring, never a helper curve.
+ */
+function buildCorridorPips(): void {
+  if (corridorPips) return;
+  corridorPips = new THREE.Group();
+  corridorPips.name = 'Corredor Atlas — luces de aproximacion';
+
+  const planetPosition = candidatePlanet.group.position;
+  const entryDirection = orbitalMarker.group.position.clone().sub(planetPosition).normalize();
+  const entryPoint = planetPosition.clone().addScaledVector(entryDirection, candidatePlanet.definition.radius + 96);
+
+  const texture = createCorridorPipTexture();
+  const pipCount = 7;
+  for (let i = 0; i < pipCount; i += 1) {
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      color: 0x7de8b8,
+      transparent: true,
+      opacity: 0.18,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false
+    });
+    const pip = new THREE.Sprite(material);
+    pip.name = `Atlas Corridor Pip ${i + 1}`;
+    pip.position.copy(orbitalMarker.group.position).lerp(entryPoint, (i + 1) / (pipCount + 0.65));
+    pip.scale.setScalar(5.2);
+    corridorPipSprites.push({ sprite: pip, material, index: i });
+    corridorPips.add(pip);
+  }
+  scene.add(corridorPips);
+}
+
+function completeSurfaceTouchdown(): void {
+  if (descentSystem.state.phase !== 'landed') {
+    descentSystem.completeLanding();
+  }
+  surfaceArrivalSystem.secureFoothold(firstLandingZone.name);
+  colonizationPlan.secureSurfaceArrival();
+  missionManager.completeTouchdown();
+  missionText.textContent = surfaceArrivalSystem.state.message;
+  planetaryWorld.revealLandingImpact(SURFACE_LANDING_LOCAL);
+  velocity.multiplyScalar(0.08);
+  resources.energy = clampResource(resources.energy + 8);
+  resources.oxygen = clampResource(resources.oxygen + 5);
+  cameraShake = Math.max(cameraShake, 0.08);
+  triggerDialogue('m01_landing_complete', 'landing-complete');
+  saveProgress();
+  playTone(720, 0.18);
+  window.setTimeout(() => playTone(1040, 0.24), 150);
+}
+
+function completeMissionAtSurface(): void {
+  if (missionCompleteShown) return;
+  missionManager.transmitData();
+  missionCompleteShown = true;
+  missionCompleteTitle.textContent = 'Primer punto de apoyo establecido';
+  missionCompleteText.textContent =
+    'Superficie asegurada en la Cuenca Nereida. Siguiente: desplegar el primer modulo colonial.';
+  missionCompleteOverlay.classList.add('is-active');
+  missionCompleteOverlay.setAttribute('aria-hidden', 'false');
+  missionText.textContent = missionManager.completion;
+  playTone(760, 0.22);
+  window.setTimeout(() => playTone(1120, 0.28), 160);
+}
+
+function updateOnFootCameraOrbit(delta: number): void {
+  const yawDelta = THREE.MathUtils.euclideanModulo(footCameraTargetYaw - footCameraYaw + Math.PI, Math.PI * 2) - Math.PI;
+  const response = 1 - Math.exp(-Math.max(0, delta) * onFootCameraTuning.ORBIT_RESPONSE);
+  footCameraYaw += yawDelta * response;
+  footCameraPitch = THREE.MathUtils.lerp(footCameraPitch, footCameraTargetPitch, response);
+}
+
+function getOnFootCameraBasis(): { forward: THREE.Vector3; right: THREE.Vector3 } {
+  const forward = new THREE.Vector3(-Math.sin(footCameraYaw), 0, -Math.cos(footCameraYaw)).normalize();
+  const right = new THREE.Vector3().crossVectors(forward, WORLD_UP).normalize();
+  return { forward, right };
+}
+
+function orientOnFootCameraAwayFromShip(characterPosition: THREE.Vector3): void {
+  const viewTowardShip = ship.position.clone().sub(characterPosition).setY(0);
+  if (viewTowardShip.lengthSq() < 0.01) return;
+  viewTowardShip.normalize();
+  const safeYaw = Math.atan2(-viewTowardShip.x, -viewTowardShip.z);
+  footCameraYaw = safeYaw;
+  footCameraTargetYaw = safeYaw;
+  footCameraPitch = 0.24;
+  footCameraTargetPitch = footCameraPitch;
+}
+
+function calculateParkedShipTargetY(groundHeight: number): number {
+  playerShip.getHullWorldBounds(parkedShipBounds);
+  if (parkedShipBounds.isEmpty()) return groundHeight + SURFACE_SHIP_TUNING.PARK_HEIGHT;
+  const currentClearance = parkedShipBounds.min.y - groundHeight;
+  return ship.position.y + PARKED_HULL_CLEARANCE - currentClearance;
+}
+
+function refreshParkedShipMetrics(groundHeight: number): void {
+  playerShip.getHullWorldBounds(parkedShipBounds);
+  parkedShipTerrainHeight = groundHeight;
+  parkedShipHullBottom = parkedShipBounds.isEmpty() ? ship.position.y : parkedShipBounds.min.y;
+  parkedShipTerrainSeparation = parkedShipHullBottom - parkedShipTerrainHeight;
+}
+
+function settleParkedShipOnTerrain(force: boolean): boolean {
+  const groundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+  refreshParkedShipMetrics(groundHeight);
+  if (
+    force ||
+    parkedShipTerrainSeparation < -0.08 ||
+    Math.abs(parkedShipTerrainSeparation - PARKED_HULL_CLEARANCE) > PARKED_RESTORE_TOLERANCE
+  ) {
+    ship.position.y += PARKED_HULL_CLEARANCE - parkedShipTerrainSeparation;
+    ship.updateMatrixWorld(true);
+    refreshParkedShipMetrics(groundHeight);
+    shipAltitudeHoldY = ship.position.y;
+    shipPreviousY = ship.position.y;
+    velocity.y = 0;
+    parkedShipResolved = true;
+    return true;
+  }
+  parkedShipResolved = true;
+  return false;
+}
+
+function getBoardingProximity(): {
+  anchor: THREE.Vector3;
+  horizontal: number;
+  vertical: number;
+  available: boolean;
+} {
+  const anchor = shipAccessLift.getBoardingAnchorWorld(boardingAnchorScratch);
+  const player = surfaceCharacter.group.position;
+  const horizontal = Math.hypot(player.x - anchor.x, player.z - anchor.z);
+  const vertical = Math.abs(player.y - anchor.y);
+  return {
+    anchor,
+    horizontal,
+    vertical,
+    available: horizontal <= BOARDING_HORIZONTAL_RANGE && vertical <= BOARDING_VERTICAL_TOLERANCE
+  };
+}
+
+function requestCameraFollowSync(reason: string): void {
+  cameraFollowSnapPending = true;
+  cameraFollowInitialized = false;
+  cameraTargetCurrent.copy(playerModeSystem.onFootActive ? surfaceCharacter.group.position : ship.position);
+  cameraTargetPrevious.copy(cameraTargetCurrent);
+  lastCameraModeTransition = reason;
+}
+
+function requestExitShip(): boolean {
+  if (!isShipExitAvailable() || !playerModeSystem.startExit()) return false;
+  previousShipCameraPreference = cameraModeSystem.mode;
+  lastCameraModeTransition = `${cameraModeSystem.mode}->EXITING_SHIP`;
+  exitShipStartY = ship.position.y;
+  transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+  exitShipTargetY = calculateParkedShipTargetY(transitionGroundHeight);
+  parkedShipResolved = false;
+  velocity.set(0, 0, 0);
+  footCameraYaw = smoothYaw;
+  footCameraPitch = 0.22;
+  footCameraTargetYaw = footCameraYaw;
+  footCameraTargetPitch = footCameraPitch;
+  surfaceCharacter.velocity.set(0, 0, 0);
+  surfaceCharacter.setVisible(false);
+  shipAccessLift.state = 'deploying';
+  liftRideState = 'waitingOnLift';
+  boardingAnimationState = 'waitingOnLift';
+  characterOnLift = false;
+  characterFootLockActive = false;
+  liftProgress = 0;
+  hud.classList.remove('cockpit-active');
+  input.clear();
+  missionText.textContent = 'Acceso ventral desbloqueado. Estabilizando nave y desplegando elevador de superficie.';
+  showPhaseBanner('DESCENSO DE NAVE', 'Elevador ventral desplegándose // control de superficie en espera');
+  void sfxManager.play('hatch', 0.8);
+  void sfxManager.startLoop('liftServo', 0.65);
+  playTone(420, 0.14);
+  window.setTimeout(() => playTone(610, 0.12), 260);
+  return true;
+}
+
+function requestEnterShip(force = false): boolean {
+  if (!inSurfacePhase || !playerModeSystem.onFootActive) return false;
+  const proximity = getBoardingProximity();
+  if (!force && !proximity.available) return false;
+  if (!playerModeSystem.startEnter()) return false;
+  lastCameraModeTransition = `ON_FOOT->${previousShipCameraPreference}`;
+  shipAccessLift.state = 'boarding';
+  liftRideState = 'steppingOntoLift';
+  boardingAnimationState = 'enteringShip';
+  characterOnLift = false;
+  characterFootLockActive = false;
+  liftProgress = 1;
+  surfaceCharacter.velocity.set(0, 0, 0);
+  input.clear();
+  missionText.textContent = 'Embarque iniciado. Elevador ventral ascendiendo hacia la esclusa.';
+  showPhaseBanner('REGRESO A LA NAVE', 'Asegurando piloto y retrayendo acceso ventral');
+  void sfxManager.startLoop('liftServo', 0.65);
+  playTone(510, 0.12);
+  return true;
+}
+
+function updateSurfacePlayer(delta: number): void {
+  if (!inSurfacePhase) return;
+  transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+  if (playerModeSystem.characterVisible) updateOnFootCameraOrbit(delta);
+
+  if (playerModeSystem.transitionActive) {
+    const modeBeforeUpdate = playerModeSystem.mode;
+    const event = playerModeSystem.update(delta);
+    const progress = playerModeSystem.transitionProgress;
+
+    if (modeBeforeUpdate === 'EXITING_SHIP') {
+      const settle = THREE.MathUtils.smoothstep(progress, 0, 0.24);
+      // Settle onto the landing gear, not the flight cushion: the hull lowers
+      // as the pilot steps out and rests parked near the ground.
+      ship.position.y = THREE.MathUtils.lerp(exitShipStartY, exitShipTargetY, settle);
+      const open = THREE.MathUtils.smoothstep(progress, 0.02, 0.27);
+      const exitPath = THREE.MathUtils.smoothstep(progress, 0.22, 0.94);
+      liftProgress = shipAccessLift.getLiftProgressForExitPath(exitPath);
+      shipAccessLift.updateAnchor(
+        ship.position,
+        smoothYaw,
+        transitionGroundHeight,
+        open,
+        liftProgress,
+        clock.elapsedTime
+      );
+      if (exitPath > 0.015) {
+        surfaceCharacter.setVisible(true);
+        characterOnLift = exitPath < 0.76;
+        characterFootLockActive = characterOnLift;
+        surfaceCharacter.group.position.copy(
+          characterOnLift ? shipAccessLift.getPlatformStandPosition() : shipAccessLift.getTransitPoint(exitPath)
+        );
+        surfaceCharacter.group.rotation.y = smoothYaw - Math.PI / 2;
+        surfaceCharacter.grounded = exitPath > 0.96;
+        if (exitPath < 0.18) {
+          liftRideState = 'waitingOnLift';
+          boardingAnimationState = 'waitingOnLift';
+          surfaceCharacter.updateAnimation(delta, 'waitingOnLift');
+        } else if (exitPath < 0.76) {
+          liftRideState = 'ridingLiftDown';
+          boardingAnimationState = 'ridingLiftDown';
+          surfaceCharacter.updateAnimation(delta, 'ridingLiftDown');
+        } else {
+          liftRideState = 'steppingOffLift';
+          boardingAnimationState = 'exitingShip';
+          surfaceCharacter.updateAnimation(delta, 'exitingShip');
+        }
+      }
+    } else {
+      const reversePath = 1 - THREE.MathUtils.smoothstep(progress, 0.04, 0.82);
+      const open = 1 - THREE.MathUtils.smoothstep(progress, 0.82, 1);
+      liftProgress = shipAccessLift.getLiftProgressForExitPath(reversePath);
+      shipAccessLift.updateAnchor(
+        ship.position,
+        smoothYaw,
+        transitionGroundHeight,
+        open,
+        liftProgress,
+        clock.elapsedTime
+      );
+      characterOnLift = reversePath < 0.76;
+      characterFootLockActive = characterOnLift;
+      surfaceCharacter.group.position.copy(
+        characterOnLift ? shipAccessLift.getPlatformStandPosition() : shipAccessLift.getTransitPoint(reversePath)
+      );
+      surfaceCharacter.group.rotation.y = smoothYaw + Math.PI / 2;
+      surfaceCharacter.grounded = reversePath > 0.96;
+      if (reversePath > 0.76) {
+        liftRideState = 'steppingOntoLift';
+        boardingAnimationState = 'enteringShip';
+        surfaceCharacter.updateAnimation(delta, 'enteringShip');
+      } else if (reversePath > 0.18) {
+        liftRideState = 'ridingLiftUp';
+        boardingAnimationState = 'ridingLiftUp';
+        surfaceCharacter.updateAnimation(delta, 'ridingLiftUp');
+      } else {
+        liftRideState = 'waitingOnLift';
+        boardingAnimationState = 'waitingOnLift';
+        surfaceCharacter.updateAnimation(delta, 'waitingOnLift');
+      }
+    }
+
+    if (event === 'exitComplete') {
+      sfxManager.stopLoop('liftServo');
+      void sfxManager.play('hatch', 0.72);
+      triggerLiftLockTremor();
+      settleParkedShipOnTerrain(true);
+      shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
+      const exitPosition = shipAccessLift.getGroundExitPosition();
+      exitPosition.y = planetaryWorld.getHeightAt(exitPosition.x, exitPosition.z) + 0.04;
+      surfaceCharacter.placeAt(exitPosition, smoothYaw - Math.PI / 2);
+      surfaceCharacter.setVisible(true);
+      surfaceCharacter.setAnimation('idle');
+      shipAccessLift.state = 'deployed';
+      liftRideState = 'exitingShipComplete';
+      boardingAnimationState = 'idle';
+      characterOnLift = false;
+      characterFootLockActive = false;
+      liftProgress = 1;
+      shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
+      setControlHints('foot');
+      missionText.textContent = 'Piloto en superficie. Escáner portátil enlazado; la nave permanece disponible para regresar.';
+      showPhaseBanner('PILOTO EN SUPERFICIE', 'E interactúa con el entorno // F vuelve a la nave // Shift para correr');
+      saveProgress();
+      playTone(690, 0.16);
+    } else if (event === 'enterComplete') {
+      sfxManager.stopLoop('liftServo');
+      void sfxManager.play('hatchClose', 0.78);
+      triggerLiftLockTremor();
+      surfaceCharacter.setVisible(false);
+      surfaceCharacter.velocity.set(0, 0, 0);
+      shipAccessLift.state = 'retracted';
+      shipAccessLift.group.visible = false;
+      liftRideState = 'enteringShipComplete';
+      boardingAnimationState = 'idle';
+      characterOnLift = false;
+      characterFootLockActive = false;
+      liftProgress = 0;
+      cameraModeSystem.setMode(previousShipCameraPreference);
+      velocity.set(0, 0, 0);
+      shipAltitudeHoldY = ship.position.y;
+      shipPreviousY = ship.position.y;
+      previousVerticalInput = 0;
+      parkedShipResolved = false;
+      playerModeSystem.syncShipContext(true, previousShipCameraPreference === 'cockpit');
+      requestCameraFollowSync(`ENTERING_SHIP->${previousShipCameraPreference}`);
+      hud.classList.toggle('cockpit-active', previousShipCameraPreference === 'cockpit');
+      setControlHints('surface');
+      missionText.textContent = 'Piloto asegurado. Controles de nave de superficie restablecidos.';
+      saveProgress();
+      playTone(760, 0.14);
+    }
+    return;
+  }
+
+  if (!playerModeSystem.onFootActive) {
+    playerModeSystem.syncShipContext(true, cameraModeSystem.mode === 'cockpit');
+    return;
+  }
+
+  shipAccessLift.state = 'deployed';
+  shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
+  const obstacles = [{ position: ship.position, radius: 5.35 }];
+  if (planetaryWorld.colonyModule.group.visible) {
+    obstacles.push({ position: planetaryWorld.colonyModule.group.position, radius: 6.4 });
+  }
+  const cameraBasis = getOnFootCameraBasis();
+  const boundaryAnchor = getSurfaceBoundaryAnchor();
+  surfaceCharacter.updateMovement(
+    delta,
+    {
+      forward: (input.has('w') ? 1 : 0) - (input.has('s') ? 1 : 0),
+      strafe: (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0),
+      run: input.has('shift'),
+      cameraYaw: footCameraYaw,
+      cameraForward: cameraBasis.forward,
+      cameraRight: cameraBasis.right
+    },
+    // Walk on the visible Aurora valley floor (falls back to analytic terrain
+    // elsewhere), so the character shares the exact ground the colony sits on.
+    (x, z) => auroraSurfaceHeight(x, z),
+    obstacles,
+    isSurfaceBoundarySuspended() ? Number.POSITIVE_INFINITY : SURFACE_SHIP_TUNING.TELEMETRY_RADIUS - 8,
+    boundaryAnchor.x,
+    boundaryAnchor.z
+  );
+  resources.oxygen = clampResource(resources.oxygen - delta * (input.has('shift') ? 0.052 : 0.032));
+}
+
+function performMission03Interaction(position: THREE.Vector3, portableScanner: boolean): boolean {
+  if (!mission03.started) return false;
+  const basePosition = planetaryWorld.colonyModule.group.position;
+  const baseDistance = position.distanceTo(basePosition);
+  const relayDistance = position.distanceTo(pleyadanRelayBeacon.interactionPosition);
+
+  if (mission03.step === 'deepSignal' && baseDistance <= MISSION03_BASE_RANGE) {
+    mission03.reviewSignal();
+    tutorialManager.complete('atlasSignal');
+    triggerDialogue('m03_signal_reviewed', 'mission03-signal-reviewed');
+    triggerDialogue('m03_calibrate_comms', 'mission03-calibration-brief', 1.8);
+    missionText.textContent = 'Portadora aislada parcialmente. Calibra la antena de Base Nereida con E.';
+    saveProgress();
+    return true;
+  }
+
+  if (mission03.step === 'calibrateCommunications' && baseDistance <= MISSION03_BASE_RANGE) {
+    if (mission03.beginCalibration()) {
+      scannerPulse.trigger(basePosition, true);
+      missionText.textContent = 'Calibracion iniciada. Permanece junto al modulo de comunicaciones.';
+      playTone(520, 0.16);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission03.step === 'resonancePoint' && relayDistance <= MISSION03_RESONATOR_REVEAL_RANGE) {
+    mission03.reachResonator();
+    tutorialManager.complete('atlasResonator');
+    missionText.textContent = 'Resonador Atlas confirmado. Desciende con F y coloca la baliza con E.';
+    saveProgress();
+    return true;
+  }
+
+  if (mission03.step === 'relayBeacon' && relayDistance <= MISSION03_RELAY_INTERACTION_RANGE) {
+    if (!portableScanner) {
+      missionText.textContent = 'Instalacion manual requerida. Deten la nave y desciende con F.';
+      return true;
+    }
+    if (mission03.placeRelay()) {
+      pleyadanRelayBeacon.placeRelay();
+      tutorialManager.complete('placeRelay');
+      triggerDialogue('m03_relay_placed', 'mission03-relay-placed');
+      showPhaseBanner('BALIZA DE ENLACE DESPLEGADA', 'Permanece en el rango del Resonador Atlas');
+      missionText.textContent = 'Baliza desplegada. Sincronizacion Atlas-Pleyadana en curso.';
+      playTone(580, 0.18);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission03.step === 'synchronization' && relayDistance <= resonadorAtlasDefinition.relayRange) {
+    missionText.textContent = `Sincronizacion activa: ${Math.round(mission03.state.signalStability)}%. Permanece dentro del rango.`;
+    return true;
+  }
+
+  if (mission03.step === 'returnToBase' && baseDistance <= MISSION03_BASE_RANGE) {
+    if (mission03.beginTranslation()) {
+      signalTranslation.receiveRawSignal();
+      signalTranslation.beginTranslation();
+      lastTranslatedFragmentCount = signalTranslation.translatedFragments;
+      triggerDialogue('m03_translation_started', 'mission03-translation-start');
+      missionText.textContent = 'Matriz Atlas enlazada. Reconstruccion progresiva del mensaje iniciada.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission03.step === 'atlasTranslation' && baseDistance <= MISSION03_BASE_RANGE) {
+    missionText.textContent = `${signalTranslation.latestFragment} // ${Math.round(signalTranslation.progress)}%`;
+    return true;
+  }
+
+  if (mission03.step === 'firstContact' && baseDistance <= MISSION03_BASE_RANGE) {
+    if (mission03.establishContact()) {
+      signalTranslation.establishContact();
+      pleyadanHologram.setActive(true, true);
+      tutorialManager.complete('alienContact');
+      triggerDialogue('m03_pleyadan_contact', 'mission03-contact');
+      triggerDialogue('m03_pleyadan_transmission', 'mission03-transmission', 1.6);
+      missionText.textContent = 'Canal remoto abierto. Proyeccion Pleyadana autenticada.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission03.step === 'warning' && baseDistance <= MISSION03_BASE_RANGE) {
+    if (mission03.deliverWarning()) {
+      signalTranslation.deliverWarning();
+      pleyadanHologram.setActive(true, true);
+      triggerDialogue('m03_pleyadan_identity', 'mission03-identity');
+      triggerDialogue('m03_threat_warning', 'mission03-threat-warning', 1.8);
+      showPhaseBanner('ADVERTENCIA PLEYADANA', 'La Coalicion del Silencio ha detectado la Red Atlas');
+      missionText.textContent = 'Amenaza galactica registrada. Defensa orbital recomendada; no hay ataque en curso.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission03.step === 'prepare' && baseDistance <= MISSION03_BASE_RANGE) {
+    if (mission03.complete()) {
+      triggerDialogue('m03_complete', 'mission03-complete');
+      showPhaseBanner('MISION 03 COMPLETADA', 'Primer contacto establecido // Mision 04 desbloqueada');
+      musicManager.playSting('complete', clock.elapsedTime);
+      missionText.textContent = 'Contacto Pleyadano archivado. La Mision 04 queda disponible, pero no ha comenzado.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function performMission05Interaction(position: THREE.Vector3): boolean {
+  if (!mission05.started) return false;
+  const baseDistance = position.distanceTo(planetaryWorld.colonyModule.group.position);
+  const probeDistance = position.distanceTo(silentProbe.interactionPosition);
+  const activeEchoPosition = getActiveMission05EchoPosition();
+  const echoDistance = position.distanceTo(activeEchoPosition);
+
+  if (mission05.step === 'boardShip') {
+    missionText.textContent = playerModeSystem.insideShip
+      ? 'Nave lista. Asciende con Space hasta la altura de escaneo.'
+      : 'La investigacion requiere la nave. Embarca con F.';
+    return true;
+  }
+
+  if (mission05.step === 'gainScanAltitude') {
+    missionText.textContent = playerModeSystem.insideShip
+      ? `Asciende con Space hasta ${mission05Tuning.minimumScanAltitude} m de altura.`
+      : 'La investigacion orbital requiere la nave. Embarca con F.';
+    return true;
+  }
+
+  if (mission05.step === 'orbitalScan') {
+    if (!playerModeSystem.insideShip) {
+      missionText.textContent = 'El barrido orbital requiere los sensores de la nave. Embarca con F.';
+      return true;
+    }
+    if (getMission04OrbitalScanClearance() < mission05Tuning.minimumScanAltitude) {
+      missionText.textContent = `Altura insuficiente. Asciende con Space hasta ${mission05Tuning.minimumScanAltitude} m.`;
+      playTone(250, 0.1);
+      return true;
+    }
+    if (mission05.detectProbe()) {
+      syncMission05Visuals();
+      scannerPulse.trigger(ship.position, true);
+      triggerDialogue('m05_probe_detected', 'mission05-probe-detected');
+      void sfxManager.play('silentProbe', 0.9);
+      showPhaseBanner('SONDA SILENCIOSA DETECTADA', 'Observacion hostil // no dispare');
+      missionText.textContent = 'Sonda Silenciosa localizada. Acercate sin abrir fuego.';
+      transientWarning = 'SONDA SILENCIOSA // OBSERVACION HOSTIL';
+      playTone(180, 0.28);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission05.step === 'approachProbe') {
+    missionText.textContent = `Sonda Silenciosa a ${Math.round(probeDistance)} m. Acercate sin disparar.`;
+    return true;
+  }
+
+  if (mission05.step === 'atlasRecalibration') {
+    if (!playerModeSystem.insideShip) {
+      missionText.textContent = 'La recalibracion requiere los sensores de la nave. Embarca con F.';
+      return true;
+    }
+    if (mission05.recalibrateAtlasFrequency()) {
+      syncMission05Visuals();
+      scannerPulse.trigger(ship.position, true);
+      triggerDialogue('m05_pleyadan_warning', 'mission05-pleyadan-warning', 0.8);
+      showPhaseBanner('FRECUENCIA ATLAS CALIBRADA', 'Tres ecos de interferencia agregados al mapa');
+      missionText.textContent = 'Frecuencia Atlas estable. Sigue el primer eco y analizalo con E.';
+      playTone(520, 0.16);
+      window.setTimeout(() => playTone(780, 0.2), 150);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission05.step === 'trackEcho') {
+    if (!playerModeSystem.insideShip) {
+      missionText.textContent = 'El seguimiento de ecos requiere la nave. Embarca con F.';
+      return true;
+    }
+    if (echoDistance > mission05Tuning.echoScanRange) {
+      missionText.textContent = `Eco ${mission05.state.activeEchoIndex + 1} a ${Math.round(echoDistance)} m. Acercate para analizarlo.`;
+      playTone(260, 0.1);
+      return true;
+    }
+    const resolvedIndex = mission05.state.activeEchoIndex;
+    if (mission05.resolveEcho(resolvedIndex)) {
+      void sfxManager.play('echoResolved', 0.78);
+      scannerPulse.trigger(activeEchoPosition, true);
+      triggerDialogue('m05_echo_resolved', `mission05-echo-${resolvedIndex + 1}`);
+      syncMission05Visuals();
+      if (mission05.state.echoesResolved >= MISSION05_ECHO_POSITIONS.length) {
+        showPhaseBanner('POSICION DE LA SONDA RECONSTRUIDA', 'Emite una contrasenal defensiva con E');
+        missionText.textContent = 'Sonda reacquirida. Acercate y emite la contrasenal con E.';
+      } else {
+        missionText.textContent = `Eco ${resolvedIndex + 1} resuelto. Sigue el siguiente punto del mapa.`;
+      }
+      playTone(600 + resolvedIndex * 70, 0.14);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission05.step === 'counterSignal') {
+    if (!playerModeSystem.insideShip) {
+      missionText.textContent = 'La contrasenal debe emitirse desde la nave. Embarca con F.';
+      return true;
+    }
+    if (probeDistance > mission05Tuning.counterSignalRange) {
+      missionText.textContent = `Sonda fuera del alcance de contrasenal (${Math.round(probeDistance)} m).`;
+      playTone(250, 0.1);
+      return true;
+    }
+    if (mission05.beginCounterSignal()) {
+      void sfxManager.play('counterSignal', 0.82);
+      scannerPulse.trigger(ship.position, true);
+      triggerDialogue('m05_counter_signal', 'mission05-counter-signal-start');
+      missionText.textContent = 'Contrasenal activa. Permanece dentro del alcance hasta completar la emision.';
+      playTone(460, 0.22);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission05.step === 'returnToBase') {
+    if (baseDistance > mission05Tuning.baseInteractionRange) {
+      missionText.textContent = `Regresa a Base Nereida para confirmar el informe (${Math.round(baseDistance)} m).`;
+      return true;
+    }
+    if (mission05.completeAtBase()) {
+      void sfxManager.play('missionComplete', 0.84);
+      triggerDialogue('m05_complete', 'mission05-complete');
+      showPhaseBanner('MISION 05 COMPLETADA', 'Primer contacto hostil indirecto confirmado');
+      // The probe withdrew: calm relief pad instead of a triumphant sting.
+      musicManager.playSting('resolution', clock.elapsedTime);
+      missionText.textContent = 'E-01 no fue marcado de forma valida. No se detecta una flota enemiga.';
+      playTone(650, 0.2);
+      window.setTimeout(() => playTone(880, 0.24), 170);
+      saveProgress();
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function performMission04Interaction(position: THREE.Vector3, portableScanner: boolean): boolean {
+  if (!mission04.started) return false;
+  const basePosition = planetaryWorld.colonyModule.group.position;
+  const baseDistance = position.distanceTo(basePosition);
+  const activeBeacon = getActiveDefenseBeacon();
+  const beaconDistance = position.distanceTo(activeBeacon.interactionPosition);
+
+  if (mission04.step === 'returnToBase' && baseDistance <= mission04Tuning.baseInteractionRange) {
+    if (mission04.reviewProtocol()) {
+      triggerDialogue('m04_calibrate_link', 'mission04-calibration-brief');
+      missionText.textContent = 'Protocolo recibido. Calibra el enlace defensivo con E.';
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission04.step === 'calibrateDefenseLink' && baseDistance <= mission04Tuning.baseInteractionRange) {
+    if (mission04.beginDefenseLinkCalibration()) {
+      scannerPulse.trigger(basePosition, true);
+      missionText.textContent = 'Calibracion defensiva iniciada. Permanece junto al modulo.';
+      playTone(500, 0.14);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission04.step === 'activateOrbitalSensor' && baseDistance <= mission04Tuning.baseInteractionRange) {
+    if (mission04.activateOrbitalSensor()) {
+      triggerDialogue('m04_sensor_ready', 'mission04-sensor-ready');
+      triggerDialogue('m04_pleyadan_principle', 'mission04-pleyadan-principle', 1.2);
+      showPhaseBanner('SENSOR ORBITAL ACTIVO', 'Tres sitios defensivos agregados al mapa local');
+      missionText.textContent = `Sensor orbital activo. Viaja a ${getActiveDefenseBeacon().site.name}.`;
+      playTone(620, 0.18);
+      syncMission04Visuals();
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission04.step === 'deployBeacon' && beaconDistance <= mission04Tuning.beaconInteractionRange) {
+    if (!portableScanner) {
+      missionText.textContent = 'Instalacion manual requerida. Deten la nave y desciende con F.';
+      return true;
+    }
+    const deployedIndex = mission04.state.activeDefenseBeaconTarget;
+    if (mission04.placeDefenseBeacon(deployedIndex)) {
+      void sfxManager.play('defenseBeacon', 0.82);
+      triggerDialogue('m04_beacon_linked', `mission04-beacon-${deployedIndex + 1}`);
+      scannerPulse.trigger(activeBeacon.interactionPosition, true);
+      playTone(610 + deployedIndex * 55, 0.16);
+      syncMission04Visuals();
+      if (mission04.state.mission04Step === 'synchronizeNetwork') {
+        triggerDialogue('m04_network_sync', 'mission04-network-sync');
+        showPhaseBanner('MALLA DEFENSIVA COMPLETA', 'Permanece dentro del rango para sincronizar');
+        missionText.textContent = 'Tres balizas enlazadas. Permanece dentro del rango de sincronizacion.';
+      } else {
+        missionText.textContent = `Baliza enlazada. Regresa a la nave y viaja a ${getActiveDefenseBeacon().site.name}.`;
+      }
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission04.step === 'synchronizeNetwork' && beaconDistance <= mission04Tuning.synchronizationRange) {
+    missionText.textContent = `Sincronizacion defensiva: ${Math.round(mission04.state.defenseSyncProgress)}%.`;
+    return true;
+  }
+
+  if (mission04.step === 'orbitalScan') {
+    if (!playerModeSystem.insideShip) {
+      missionText.textContent = 'El barrido orbital requiere los sensores de la nave. Embarca con F.';
+      return true;
+    }
+    if (getMission04OrbitalScanClearance() < mission04Tuning.orbitalScanAltitude) {
+      missionText.textContent = `Altura insuficiente. Asciende con Space hasta ${mission04Tuning.orbitalScanAltitude} m.`;
+      playTone(270, 0.1);
+      return true;
+    }
+    if (mission04.detectThreatSignature()) {
+      scannerPulse.trigger(ship.position, true);
+      triggerDialogue('m04_signature_detected', 'mission04-signature-detected');
+      showPhaseBanner('FIRMA ANOMALA DETECTADA', 'Lectura distante // origen no humano');
+      missionText.textContent = 'Firma anomala detectada. Analiza la lectura con E.';
+      transientWarning = 'FIRMA DISTANTE // POSIBLE COALICION DEL SILENCIO';
+      playTone(190, 0.26);
+      saveProgress();
+    }
+    return true;
+  }
+
+  if (mission04.step === 'threatSignature') {
+    if (mission04.complete()) {
+      triggerDialogue('m04_complete', 'mission04-complete');
+      showPhaseBanner('MISION 04 COMPLETADA', 'Red orbital activa // Mision 05 preparada');
+      musicManager.playSting('complete', clock.elapsedTime);
+      missionText.textContent = 'Protocolo defensivo inicial activo. No hay ataque en curso.';
+      playTone(720, 0.2);
+      window.setTimeout(() => playTone(980, 0.24), 150);
+      saveProgress();
+    }
+    return true;
+  }
+
+  return false;
+}
+
+function performSurfaceInteraction(position: THREE.Vector3, portableScanner: boolean): void {
+  if (mission24.started && performMission24Interaction(position)) return;
+  if (mission09.started && performMission09Interaction(position)) return;
+  if (mission10.started && performMission10Interaction(position)) return;
+  if (mission11.started && performMission11Interaction(position)) return;
+  if (mission12.started && performMission12Interaction(position)) return;
+  if (mission23.started && performMission23Interaction(position)) return;
+  if (mission22.started && performMission22Interaction(position)) return;
+  if (mission21.started && performMission21Interaction(position)) return;
+  if (mission20.started && performMission20Interaction(position)) return;
+  if (mission19.started && performMission19Interaction(position)) return;
+  if (mission18.started && performMission18Interaction(position)) return;
+  if (mission17.started && performMission17Interaction(position)) return;
+  if (mission16.started && performMission16Interaction(position)) return;
+  if (mission15.started && performMission15Interaction(position)) return;
+  if (mission14.started && performMission14Interaction(position)) return;
+  if (mission13.started && performMission13Interaction(position)) return;
+  if (mission08.started && performMission08Interaction(position)) return;
+  if (mission07.started && performMission07Interaction(position)) return;
+  // Mission 06 claims the interaction first: base console, projectors, sync.
+  if (mission06.started && performMission06Interaction(position)) return;
+  if (!colonyManager.state.habitatOnline) {
+    const landingDistance = position.distanceTo(HABITAT_SITE_LOCAL);
+    if (landingDistance >= 42) {
+      scannerPulse.trigger(position, false);
+      missionText.textContent = `Despliegue rechazado: dirígete al sitio preparado para Hábitat Nereida-01 (${Math.round(landingDistance)} m).`;
+      playTone(260, 0.12);
+      return;
+    }
+    colonyManager.registerModuleDeployment();
+    const habitatPosition = HABITAT_SITE_LOCAL.clone();
+    habitatPosition.y = planetaryWorld.getHeightAt(habitatPosition.x, habitatPosition.z);
+    planetaryWorld.colonyModule.deployAt(habitatPosition);
+    surfaceMission.updateFromColonyState(colonyManager.state);
+    colonyPanel.update(colonyManager.state);
+    tutorialManager.complete('deployHabitat');
+    triggerDialogue('m02_habitat_deployed', 'habitat-deployed');
+    saveProgress();
+    scannerPulse.trigger(position, true);
+    missionText.textContent = 'Módulo Hábitat Nereida-01 desplegado y anclado al estrato basáltico.';
+    showPhaseBanner('HÁBITAT NEREIDA-01 DESPLEGADO', 'Escanea agua, minerales y energía para activar la base');
+    playTone(560, 0.2);
+    window.setTimeout(() => playTone(880, 0.25), 150);
+    return;
+  }
+
+  const habitatDistance = position.distanceTo(planetaryWorld.colonyModule.group.position);
+  if (performMission05Interaction(position)) return;
+  if (performMission04Interaction(position, portableScanner)) return;
+  if (performMission03Interaction(position, portableScanner)) return;
+  if (!colonyManager.state.surfaceSitesRevealed) {
+    if (habitatDistance >= 52) {
+      scannerPulse.trigger(position, false);
+      missionText.textContent = `El barrido geológico requiere la antena del Hábitat Nereida-01 (${Math.round(habitatDistance)} m).`;
+      playTone(270, 0.12);
+      return;
+    }
+    colonyManager.revealSurfaceSites();
+    surfaceResourceSystem.syncFromColony(colonyManager);
+    surfaceMission.updateFromColonyState(colonyManager.state);
+    colonyPanel.update(colonyManager.state);
+    tutorialManager.complete('surveySites');
+    triggerDialogue('m02_sites_revealed', 'resource-sites-revealed');
+    saveProgress();
+    scannerPulse.trigger(position, true);
+    missionText.textContent = 'Barrido geológico completado. Laguna Nereida, Veta Ferrita y Fisura Geotérmica aparecen como zonas aproximadas en el mapa local.';
+    showPhaseBanner('SITIOS DE EXPLORACIÓN REVELADOS', 'Usa M para planificar la ruta // la nave localiza // el piloto toma muestras');
+    playTone(570, 0.18);
+    window.setTimeout(() => playTone(840, 0.22), 140);
+    return;
+  }
+
+  if (colonyManager.state.resourceAnalysisReady && !colonyManager.state.baseSystemsReady) {
+    if (habitatDistance >= 52) {
+      scannerPulse.trigger(position, false);
+      missionText.textContent = `Muestras registradas. Regresa al Hábitat Nereida-01 para analizarlas (${Math.round(habitatDistance)} m).`;
+      playTone(280, 0.12);
+      return;
+    }
+    if (surfaceResourceSystem.analyzeSamples(colonyManager)) {
+      surfaceMission.updateFromColonyState(colonyManager.state);
+      colonyPanel.update(colonyManager.state);
+      tutorialManager.complete('analyzeSamples');
+      triggerDialogue('m02_samples_analyzed', 'samples-analyzed');
+      saveProgress();
+      scannerPulse.trigger(position, true);
+      missionText.textContent = surfaceResourceSystem.lastScanMessage;
+      showPhaseBanner('ANÁLISIS DE BASE COMPLETADO', 'Agua, minerales y energía validados // Base Nereida lista para activación');
+      playTone(680, 0.2);
+      window.setTimeout(() => playTone(980, 0.24), 150);
+    }
+    return;
+  }
+
+  if (colonyManager.state.baseSystemsReady && !colonyManager.state.baseNereidaOperational) {
+    const baseDistance = habitatDistance;
+    if (baseDistance >= 52) {
+      scannerPulse.trigger(position, false);
+      missionText.textContent = `Sistemas listos. Regresa al Hábitat Nereida-01 para confirmar la base (${Math.round(baseDistance)} m).`;
+      playTone(280, 0.12);
+      return;
+    }
+    if (colonyManager.confirmBaseOperational()) {
+      baseOperationalShown = true;
+      surfaceMission.updateFromColonyState(colonyManager.state);
+      colonyPanel.update(colonyManager.state);
+      tutorialManager.complete('confirmBase');
+      triggerDialogue('m02_base_operational', 'base-operational');
+      saveProgress();
+      scannerPulse.trigger(position, true);
+      missionText.textContent = 'Base Nereida operativa. Telemetría colonial confirmada con la Arca Epsilon.';
+      showPhaseBanner('BASE NEREIDA OPERATIVA', 'Primer punto de apoyo humano establecido en E-01');
+      playTone(720, 0.2);
+      window.setTimeout(() => playTone(1040, 0.26), 150);
+    }
+    return;
+  }
+
+  const scannedResource = surfaceResourceSystem.scanNearby(
+    position,
+    colonyManager,
+    resourceInventory,
+    portableScanner ? 14 : 130,
+    portableScanner
+  );
+  if (scannedResource) {
+    surfaceMission.updateFromColonyState(colonyManager.state);
+    colonyPanel.update(colonyManager.state);
+    upgradeSystem.updateUnlocks(resourceInventory.state, colonyManager.state.colonizationReadiness);
+    triggerResourceDialogue();
+    saveProgress();
+    scannerPulse.trigger(position, true);
+    missionText.textContent = surfaceResourceSystem.lastScanMessage;
+    const lastResource = surfaceResourceSystem.lastScannedResource;
+    if (lastResource?.status === 'sampled') {
+      const tutorialId = lastResource.type === 'water'
+        ? 'sampleWater'
+        : lastResource.type === 'minerals'
+          ? 'sampleMinerals'
+          : lastResource.type === 'energy'
+            ? 'sampleEnergy'
+            : 'scanResources';
+      tutorialManager.complete(tutorialId);
+    }
+    if (colonyManager.state.resourceAnalysisReady) {
+      showPhaseBanner('MUESTRAS DE CAMPO COMPLETAS', 'Regresa al Hábitat Nereida-01 para analizarlas');
+    }
+    playTone(620, 0.18);
+    window.setTimeout(() => playTone(940, 0.22), 140);
+    return;
+  }
+
+  const nearest = surfaceResourceSystem.getNearestUnscannedDistance(position);
+  scannerPulse.trigger(position, false);
+  if (nearest.distance < Number.POSITIVE_INFINITY) {
+    const scannerName = portableScanner ? 'Escáner portátil' : 'Escáner de superficie';
+    missionText.textContent = nearest.status === 'located' && !portableScanner
+      ? `${nearest.name} localizada. Aterriza cerca, usa F para bajar y confirma la muestra con E.`
+      : `${scannerName}: señal de ${nearest.name} detectada a ${Math.round(nearest.distance)} m.`;
+  } else {
+    missionText.textContent = 'Escáner de superficie: no se detectan nuevas firmas geológicas en el radio inmediato.';
+  }
+  playTone(280, 0.12);
+}
+
+function interactOnFoot(): void {
+  if (mission24.started && mission24.step === 'prepareLaunch' && performMission24Interaction(surfaceCharacter.group.position)) {
+    surfaceCharacter.setAnimation('interact');
+    return;
+  }
+  const interaction = getNearestOnFootInteraction();
+  if (!interaction) {
+    missionText.textContent = 'No hay objetos interactivos cerca.';
+    return;
+  }
+  const interactionRange = interaction.kind === 'ship' ? 4.4 : interaction.kind === 'landing' ? 10 : interaction.kind === 'resource' ? 12 : interaction.kind === 'relay' ? MISSION03_RELAY_INTERACTION_RANGE : interaction.kind === 'defense' ? mission04Tuning.beaconInteractionRange : interaction.kind === 'atlas' && interaction.id === atlasSeedArchiveDefinition.id ? mission07Tuning.archiveActivationRange : interaction.kind === 'atlas' ? mission07Tuning.nodeScanRange : interaction.kind === 'aurora' ? (mission15.started && !mission15.completed ? ((mission15.step === 'findEnergyParasite' || mission15.step === 'findLifeSupportParasite' || mission15.step === 'findCommsParasite') ? mission15Tuning.lockRange : mission15Tuning.stationRange) : mission14.started && !mission14.completed ? (mission14.step === 'locateHiddenNode' ? mission14Tuning.lockRange : mission14Tuning.stationRange) : mission13.started && !mission13.completed ? mission13Tuning.stationRange : mission12.started && !mission12.completed ? (mission12.step === 'markLandingZone' || mission12.step === 'guideCapsuleDescent' ? mission12Tuning.landingZoneRange : mission12Tuning.stationRange) : mission11.started && !mission11.completed ? mission11Tuning.stationRange : mission10Tuning.clearingRange) : 6.5;
+  if (interaction.distance > interactionRange) {
+    missionText.textContent = `Objetivo cercano: ${interaction.label} a ${Math.round(interaction.distance)} m. Acércate para interactuar.`;
+    playTone(250, 0.1);
+    return;
+  }
+
+  if (interaction.kind === 'ship') {
+    missionText.textContent = 'Usa F para volver a la nave.';
+    playTone(300, 0.1);
+    return;
+  }
+  surfaceCharacter.setAnimation('interact');
+  performSurfaceInteraction(surfaceCharacter.group.position, true);
+}
+
+// ---------------------------------------------------------------------------
+// Scanner
+// ---------------------------------------------------------------------------
+
+function scan(): void {
+  if (!launched || gamePaused) return;
+  const now = clock.elapsedTime;
+  const scanCooldown = mission15.step === 'disableCommsParasite'
+    ? mission15Tuning.sequenceInputLockSeconds
+    : 1.05;
+  if (now - lastScan < scanCooldown) {
+    return;
+  }
+  lastScan = now;
+  tutorialManager.recordActivity();
+  void sfxManager.play('scanner', 0.72);
+
+  if (inSurfacePhase) {
+    if (playerModeSystem.onFootActive) {
+      interactOnFoot();
+      return;
+    }
+    if (playerModeSystem.transitionActive) {
+      missionText.textContent = 'Secuencia de acceso en curso. Espera a que el elevador complete el recorrido.';
+      return;
+    }
+
+    if (mission24.started && performMission24Interaction(ship.position)) return;
+    if (mission09.started && performMission09Interaction(ship.position)) return;
+    if (mission10.started && performMission10Interaction(ship.position)) return;
+    if (mission11.started && performMission11Interaction(ship.position)) return;
+    if (mission12.started && performMission12Interaction(ship.position)) return;
+    if (mission23.started && performMission23Interaction(ship.position)) return;
+    if (mission22.started && performMission22Interaction(ship.position)) return;
+    if (mission21.started && performMission21Interaction(ship.position)) return;
+    if (mission20.started && performMission20Interaction(ship.position)) return;
+    if (mission19.started && performMission19Interaction(ship.position)) return;
+    if (mission18.started && performMission18Interaction(ship.position)) return;
+    if (mission17.started && performMission17Interaction(ship.position)) return;
+    if (mission16.started && performMission16Interaction(ship.position)) return;
+    if (mission15.started && performMission15Interaction(ship.position)) return;
+    if (mission14.started && performMission14Interaction(ship.position)) return;
+    if (mission13.started && performMission13Interaction(ship.position)) return;
+    if (mission08.started && performMission08Interaction(ship.position)) return;
+    if (mission07.started && performMission07Interaction(ship.position)) return;
+    if (mission06.started && performMission06Interaction(ship.position)) return;
+    if (mission05.started && performMission05Interaction(ship.position)) return;
+    if (mission04.started && performMission04Interaction(ship.position, false)) return;
+
+    const nearestResource = surfaceResourceSystem.getNearestUnscannedDistance(ship.position);
+    const baseNeedsConfirmation = colonyManager.state.baseSystemsReady && !colonyManager.state.baseNereidaOperational;
+    const habitatInteractionPending =
+      !colonyManager.state.surfaceSitesRevealed ||
+      (colonyManager.state.resourceAnalysisReady && !colonyManager.state.baseSystemsReady) ||
+      baseNeedsConfirmation ||
+      (mission03.started &&
+        (mission03.currentStep.target === 'base' || mission03.currentStep.target === 'communications') &&
+        ship.position.distanceTo(planetaryWorld.colonyModule.group.position) < MISSION03_BASE_RANGE);
+    const shipHasNoImmediateMissionInteraction =
+      colonyManager.state.habitatOnline &&
+      nearestResource.distance >= 130 &&
+      !habitatInteractionPending;
+    if (shipHasNoImmediateMissionInteraction && isShipExitAvailable()) {
+      missionText.textContent = 'Usa F para descender de la nave.';
+      playTone(300, 0.1);
+      return;
+    }
+    performSurfaceInteraction(ship.position, false);
+    return;
+  }
+
+  if (mission24.started && performMission24Interaction(ship.position)) return;
+
+  const planetDistance = candidatePlanet.distanceTo(ship.position);
+  const planetInRange = candidatePlanet.inScanRange(ship.position);
+  const markerDistance = orbitalMarker.distanceTo(ship.position);
+  const markerInRange = markerDistance <= orbitalMarkerSystem.scanRadius;
+
+  if (missionManager.step === 'scannerTutorial' || missionManager.step === 'briefing') {
+    if (mothership.isInSafeZone(ship.position)) {
+      const distanceToExit = Math.max(0, mothership.safeZoneRadius - mothership.distanceTo(ship.position));
+      scannerPulse.trigger(ship.position, false);
+      missionManager.setHint(`Abandona el perímetro de seguridad: faltan ${Math.round(distanceToExit)} m.`);
+      missionText.textContent = `Barrido bloqueado por interferencia de la Arca. Sal de la zona segura (${Math.round(distanceToExit)} m) y presiona E.`;
+      transientWarning = 'INTERFERENCIA DE LA ARCA // ABANDONA EL PERÍMETRO SEGURO';
+      playTone(250, 0.12);
+      return;
+    }
+    missionManager.activateScanner();
+    descentSafetyGate.markE01Detected();
+    tutorialManager.complete('scanner');
+    triggerDialogue('m01_e01_detected', 'e01-detected');
+    scannerPulse.trigger(ship.position, true);
+    missionText.textContent = 'Sensores de largo alcance: firma de biosfera detectada. Marcador principal E-01 fijado.';
+    resources.energy = clampResource(resources.energy - 1.4);
+    playTone(520, 0.18);
+    window.setTimeout(() => playTone(760, 0.18), 120);
+    return;
+  }
+
+  if (
+    !habitabilitySystem.complete &&
+    (missionManager.step === 'followSignal' || missionManager.step === 'scanPlanet' || missionManager.step === 'analyzeHabitability')
+  ) {
+    if (planetInRange) {
+      missionManager.startHabitabilityScan();
+      tutorialManager.complete('scanE01');
+      habitabilitySystem.start();
+      triggerDialogue('m01_orbital_scan', 'orbital-scan-started');
+      scannerPulse.trigger(ship.position, true);
+      candidatePlanet.update(0, now, 1, true);
+      missionText.textContent = 'Bloqueo de scanner establecido sobre E-01. Mantente cerca para completar el analisis.';
+      resources.energy = clampResource(resources.energy - 2);
+      playTone(640, 0.22);
+      return;
+    }
+
+    scannerPulse.trigger(ship.position, false);
+    missionManager.setHint(`E-01 fuera de rango. Distancia actual: ${Math.round(planetDistance)} m.`);
+    missionText.textContent = `Scanner: la senal de biosfera es clara, pero estas demasiado lejos. Distancia: ${Math.round(planetDistance)} m.`;
+    resources.energy = clampResource(resources.energy - 1.6);
+    playTone(260, 0.12);
+    return;
+  }
+
+  if (missionManager.step === 'scanOrbitalMarker' || missionManager.step === 'decodeDescentCorridor') {
+    if (markerInRange) {
+      missionManager.startMarkerDecode();
+      descentSafetyGate.markAtlasScanned();
+      tutorialManager.complete('scanAtlas');
+      orbitalMarkerSystem.startScan();
+      orbitalMarker.flashHighlight();
+      scannerPulse.trigger(ship.position, true);
+      missionText.textContent = orbitalMarkerLore.discovery;
+      resources.energy = clampResource(resources.energy - 2);
+      playTone(580, 0.2);
+      window.setTimeout(() => playTone(840, 0.22), 140);
+      return;
+    }
+
+    scannerPulse.trigger(ship.position, false);
+    missionManager.setHint(`Marcador Atlas fuera de rango. Distancia actual: ${Math.round(markerDistance)} m.`);
+    missionText.textContent = `Scanner: ${orbitalMarkerLore.scannerLead} Distancia estimada: ${Math.round(markerDistance)} m.`;
+    resources.energy = clampResource(resources.energy - 1.4);
+    playTone(240, 0.12);
+    return;
+  }
+
+  if (missionManager.step === 'landingApproach' || missionManager.step === 'touchdown') {
+    const speed = velocity.length() * 12;
+    if (landingZone.canTouchDown(ship.position, speed)) {
+      completeSurfaceTouchdown();
+      return;
+    }
+
+    missionManager.setHint(`Reduce velocidad para aterrizar. Velocidad actual: ${Math.round(speed)} m/s.`);
+    missionText.textContent = 'Asistencia de aterrizaje: permanece dentro de la Cuenca Nereida y reduce velocidad.';
+    playTone(260, 0.12);
+    return;
+  }
+
+  if (missionManager.step === 'firstFoothold') {
+    completeMissionAtSurface();
+    return;
+  }
+
+  if (missionManager.step === 'transmitData') {
+    if (mothership.isInSafeZone(ship.position)) {
+      scannerPulse.trigger(ship.position, true);
+      const report = habitabilitySystem.report;
+      if (report) {
+        colonizationPlan.unlock(report);
+      }
+      missionManager.transmitData();
+      missionCompleteShown = true;
+      missionCompleteOverlay.classList.add('is-active');
+      missionText.textContent = missionManager.completion;
+      playTone(720, 0.22);
+      window.setTimeout(() => playTone(960, 0.28), 160);
+      return;
+    }
+
+    scannerPulse.trigger(ship.position, false);
+    missionText.textContent = 'Transmision rechazada: vuelve a la zona segura de la Arca Epsilon para enviar el reporte.';
+    playTone(220, 0.14);
+    return;
+  }
+
+  const closest = getClosestPoint();
+  const closeEnough = closest ? ship.position.distanceTo(closest.object.position) <= closest.scanRadius : false;
+  scannerPulse.trigger(ship.position, closeEnough);
+
+  if (!closest || !closeEnough) {
+    const nearestUnscanned = getClosestPoint(false);
+    if (nearestUnscanned) {
+      const distance = Math.round(ship.position.distanceTo(nearestUnscanned.object.position));
+      nearestUnscanned.markerMaterial.opacity = 0.62;
+      missionText.textContent = `Escaner: ${nearestUnscanned.scannerLead} Distancia estimada: ${distance} m.`;
+    } else {
+      missionText.textContent = 'Escaner: todas las firmas principales del sector fueron integradas.';
+    }
+    resources.energy = clampResource(resources.energy - 2.2);
+    playTone(220, 0.12);
+    return;
+  }
+
+  if (closest.scanned) {
+    missionText.textContent = `${closest.name}: los datos ya fueron integrados al nucleo de la Arca.`;
+    playTone(330, 0.12);
+    return;
+  }
+
+  closest.scanned = true;
+  closest.markerMaterial.color.setHex(0x8ffff0);
+  closest.markerMaterial.opacity = 0.94;
+  closest.flashHighlight();
+  applyReward(closest.reward);
+  discoveryEffect.trigger(closest.object.position.clone());
+  musicManager.playSting('discovery', clock.elapsedTime);
+  updateDiscoveryList();
+  missionText.textContent = closest.story;
+  cameraShake = Math.max(cameraShake, 0.18);
+  playTone(680, 0.26);
+  window.setTimeout(() => playTone(1020, 0.3), 140);
+}
+
+// ---------------------------------------------------------------------------
+// Simulation
+// ---------------------------------------------------------------------------
+
+function applyInput(delta: number): void {
+  if (mission24.ascentActive && playerModeSystem.insideShip) {
+    mission24AscentInput.thrustUp = input.has(' ');
+    mission24AscentInput.thrustForward = input.has('w');
+    mission24AscentInput.brake = input.has('s');
+    mission24AscentInput.turn = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
+    mission24AscentInput.boost = input.has('shift');
+    const ascentGround = inSurfacePhase
+      ? planetaryWorld.getHeightAt(ship.position.x, ship.position.z)
+      : atmosphericAscent.launchOrigin.y - SURFACE_SHIP_TUNING.PARK_HEIGHT;
+    atmosphericAscent.updateFlight(delta, mission24.step, ship, velocity, ascentGround, mission24AscentInput);
+    pitch = THREE.MathUtils.degToRad(90 - atmosphericAscent.metrics.pitch) * 0.62;
+    smoothPitch = THREE.MathUtils.lerp(smoothPitch, pitch, 1 - Math.exp(-delta * 1.2));
+    shipAltitudeHoldY = ship.position.y;
+    shipPreviousY = ship.position.y;
+    resources.energy = clampResource(resources.energy - delta * (0.18 + atmosphericAscent.metrics.enginePower * 0.004));
+    return;
+  }
+  if (inSurfacePhase) {
+    if (!playerModeSystem.insideShip) return;
+    shipPreviousY = ship.position.y;
+    shipAltitudeResetForce = 0;
+    // Responsive hover-flight: momentum remains visible, but thrust is not
+    // erased every frame by a fixed 60 Hz drag multiplier.
+    const sinYaw = Math.sin(smoothYaw);
+    const cosYaw = Math.cos(smoothYaw);
+    surfaceForward.set(-sinYaw, 0, -cosYaw);
+    surfaceRight.set(cosYaw, 0, -sinYaw);
+    const boosting = input.has('shift');
+    const forwardInput = (input.has('w') ? 1 : 0) - (input.has('s') ? 1 : 0);
+    const strafeInput = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
+    const verticalInput = (input.has(' ') ? 1 : 0) -
+      (input.has('q') || input.has('c') || input.has('control') ? 1 : 0);
+    const hasHorizontalInput = forwardInput !== 0 || strafeInput !== 0;
+    const acceleration = SURFACE_SHIP_TUNING.ACCELERATION * (boosting ? 1.28 : 1) * delta;
+
+    if (forwardInput !== 0) {
+      velocity.addScaledVector(surfaceForward, acceleration * (forwardInput > 0 ? forwardInput : forwardInput * 0.74));
+    }
+    if (strafeInput !== 0) {
+      velocity.addScaledVector(surfaceRight, acceleration * strafeInput * 0.82);
+      yaw -= strafeInput * SURFACE_SHIP_TUNING.TURN_SPEED * delta;
+    }
+    if (verticalInput !== 0) {
+      velocity.addScaledVector(surfaceUp, acceleration * 0.72 * verticalInput);
+    }
+
+    const horizontalDamping = Math.exp(-(hasHorizontalInput ? 1.15 : SURFACE_SHIP_TUNING.DECELERATION) * delta);
+    velocity.x *= horizontalDamping;
+    velocity.z *= horizontalDamping;
+    velocity.y *= Math.exp(-(verticalInput === 0 ? 5.6 : 1.65) * delta);
+
+    let maxHorizontalSpeed: number = boosting ? SURFACE_SHIP_TUNING.BOOST_SPEED : SURFACE_SHIP_TUNING.CRUISE_SPEED;
+    if (colonyManager.state.habitatOnline && planetaryWorld.colonyModule.group.visible) {
+      const baseDistance = ship.position.distanceTo(planetaryWorld.colonyModule.group.position);
+      const baseAssist = 1 - THREE.MathUtils.smoothstep(
+        baseDistance,
+        SURFACE_SHIP_TUNING.BASE_ASSIST_RADIUS * 0.42,
+        SURFACE_SHIP_TUNING.BASE_ASSIST_RADIUS
+      );
+      if (!boosting) {
+        maxHorizontalSpeed = THREE.MathUtils.lerp(
+          SURFACE_SHIP_TUNING.CRUISE_SPEED,
+          SURFACE_SHIP_TUNING.BASE_ASSIST_SPEED,
+          baseAssist
+        );
+      }
+    }
+    const horizSpeed = Math.hypot(velocity.x, velocity.z);
+    if (horizSpeed > maxHorizontalSpeed) {
+      velocity.x = (velocity.x / horizSpeed) * maxHorizontalSpeed;
+      velocity.z = (velocity.z / horizSpeed) * maxHorizontalSpeed;
+    }
+
+    ship.position.addScaledVector(velocity, delta);
+    traveled += velocity.length() * delta * 0.12;
+
+    const ground = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+    shipTerrainY = ground;
+    const minAltitude = ground + SURFACE_SHIP_TUNING.HOVER_HEIGHT;
+    if (ship.position.y < minAltitude) {
+      const terrainCorrection = (minAltitude - ship.position.y) * 0.35;
+      ship.position.y += terrainCorrection;
+      shipAltitudeResetForce = delta > 0 ? terrainCorrection / delta : 0;
+      if (velocity.y < 0) velocity.y = 0;
+      shipAltitudeHoldY = ship.position.y;
+    }
+    if (ship.position.y > 160) {
+      ship.position.y = 160;
+      if (velocity.y > 0) velocity.y = 0;
+      shipAltitudeHoldY = ship.position.y;
+    }
+    if (verticalInput !== 0 || Math.abs(velocity.y) >= 0.025) {
+      shipAltitudeHoldY = ship.position.y;
+    } else {
+      velocity.y = 0;
+      if (previousVerticalInput !== 0 || shipAltitudeHoldY === undefined) {
+        shipAltitudeHoldY = ship.position.y;
+      }
+    }
+    previousVerticalInput = verticalInput;
+
+    // Soft nudge back toward the nearest settled area. Suspended while the
+    // Aurora expedition is in transit: the route deliberately leaves it.
+    const anchor = getSurfaceBoundaryAnchor();
+    const range = Math.hypot(ship.position.x - anchor.x, ship.position.z - anchor.z);
+    if (range > SURFACE_SHIP_TUNING.TELEMETRY_RADIUS && !isSurfaceBoundarySuspended()) {
+      surfaceRight.set(anchor.x - ship.position.x, 0, anchor.z - ship.position.z).normalize();
+      velocity.addScaledVector(surfaceRight, delta * 45);
+    }
+
+    resources.energy = clampResource(resources.energy - velocity.length() * delta * (boosting ? 0.025 : 0.01));
+    resources.oxygen = clampResource(resources.oxygen - delta * 0.026);
+
+    const targetBoostFx = boosting && horizSpeed > 7 ? SURFACE_SHIP_TUNING.BOOST_FX_INTENSITY : 0;
+    surfaceBoostIntensity = THREE.MathUtils.lerp(surfaceBoostIntensity, targetBoostFx, 1 - Math.exp(-delta * 5.5));
+    if (surfaceBoostIntensity > 0.1) {
+      cameraShake = Math.max(cameraShake, 0.025 + surfaceBoostIntensity * 0.018);
+    }
+    return;
+  }
+
+  if (descentSystem.state.phase === 'landed' && !mission24.orbitalFlightActive) {
+    velocity.multiplyScalar(Math.pow(0.68, delta * 60));
+    return;
+  }
+
+  // --- Orbital flight model -------------------------------------------------
+  // The ship is a heavy vessel with real propulsion, not a cursor. Three things
+  // sell that, and none of them change the controls:
+  //
+  //  1. Engines spool. Thrust ramps toward the input instead of snapping, and
+  //     it decays slower than it builds, so releasing W leaves the ship
+  //     coasting under residual thrust rather than stopping dead.
+  //  2. Damping is anisotropic. Along the hull axis there is almost none, so
+  //     momentum carries the way it should in vacuum; laterally the RCS bites
+  //     harder, so sideslip washes out and course corrections read as the ship
+  //     deliberately killing drift.
+  //  3. The hull banks into lateral correction and pitches slightly against
+  //     acceleration, easing rather than snapping.
+  const forward = spaceForward.set(0, 0, -1).applyQuaternion(ship.quaternion);
+  const right = spaceRight.set(1, 0, 0).applyQuaternion(ship.quaternion);
+  const up = spaceUp.set(0, 1, 0);
+  const boosting = input.has('shift');
+
+  const forwardInput = (input.has('w') ? 1 : 0) - (input.has('s') ? 0.64 : 0);
+  const strafeInput = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
+  const verticalInput =
+    (input.has(' ') ? 1 : 0) - (input.has('q') || input.has('c') || input.has('control') ? 1 : 0);
+
+  // Engines take time to build and longer to bleed off: mass, felt.
+  const spoolRate = forwardInput > spaceThrustLevel ? 2.6 : 1.5;
+  spaceThrustLevel += (forwardInput - spaceThrustLevel) * (1 - Math.exp(-delta * spoolRate));
+  // Boost is a separate, slower ramp so it lands as a shove, not a toggle.
+  spaceBoostLevel += ((boosting ? 1 : 0) - spaceBoostLevel) * (1 - Math.exp(-delta * 1.9));
+  const boost = 1 + (settings.boost - 1) * spaceBoostLevel;
+  const acceleration = settings.thrust * boost * delta;
+
+  velocity.addScaledVector(forward, acceleration * spaceThrustLevel);
+  velocity.addScaledVector(right, acceleration * 0.72 * strafeInput);
+  velocity.addScaledVector(up, acceleration * 0.55 * verticalInput);
+
+  if ((mission24.step === 'approachArk' || mission24.step === 'arriveAtOrigin') && forwardInput > 0) {
+    mission24ApproachDirection.copy(mothership.group.position).sub(ship.position);
+    const arkDistance = mission24ApproachDirection.length();
+    if (arkDistance > 0.001) {
+      mission24ApproachDirection.multiplyScalar(1 / arkDistance);
+      const alignment = THREE.MathUtils.clamp(forward.dot(mission24ApproachDirection), 0, 1);
+      const guidance = THREE.MathUtils.lerp(1.15, 0.42, alignment);
+      velocity.addScaledVector(
+        mission24ApproachDirection,
+        settings.thrust * (boosting ? 3.4 : 0.85) * guidance * delta
+      );
+      const approachSpeed = boosting ? 92 : 38;
+      const arrivalScale = THREE.MathUtils.lerp(
+        0.22,
+        1,
+        THREE.MathUtils.smoothstep(arkDistance, mission24Tuning.arkInteractionRange * 0.72, mission24Tuning.arkApproachRange)
+      );
+      const maxApproachSpeed = approachSpeed * arrivalScale;
+      const speed = velocity.length();
+      if (speed > maxApproachSpeed) velocity.multiplyScalar(maxApproachSpeed / speed);
+    }
+  }
+
+  // Split the velocity into "along the hull" and "everything else", then damp
+  // them at different rates. Axial momentum persists; drift is cleaned up.
+  const axialSpeed = velocity.dot(forward);
+  spaceAxial.copy(forward).multiplyScalar(axialSpeed);
+  spaceLateral.copy(velocity).sub(spaceAxial);
+  const axialDamping = Math.exp(-(1 - settings.drag) * 22 * delta);
+  const lateralDamping = Math.exp(-(1 - settings.drag) * 74 * delta);
+  spaceAxial.multiplyScalar(axialDamping);
+  spaceLateral.multiplyScalar(lateralDamping);
+  velocity.copy(spaceAxial).add(spaceLateral);
+
+  ship.position.addScaledVector(velocity, delta);
+  traveled += velocity.length() * delta * 0.12;
+
+  // Attitude: the hull noses up slightly under sustained burn and dips with
+  // vertical thrust. Eased here, then folded into the existing bank system at
+  // the orientation site so there stays exactly one source of hull attitude.
+  const targetPitch = spaceThrustLevel * 0.05 - verticalInput * 0.1;
+  spaceThrustPitch += (targetPitch - spaceThrustPitch) * (1 - Math.exp(-delta * 2.6));
+
+  resources.energy = clampResource(resources.energy - velocity.length() * delta * (boosting ? 0.034 : 0.015));
+  resources.oxygen = clampResource(resources.oxygen - delta * 0.026);
+
+  // Shake tracks how hard the engines are actually working, not the key.
+  if (spaceBoostLevel > 0.25 && velocity.length() > 6) {
+    cameraShake = Math.max(cameraShake, 0.02 + spaceBoostLevel * 0.045);
+  }
+}
+
+function updateSafeZone(delta: number): void {
+  if (inSurfacePhase) {
+    // On the ground the "safe zone" is the base perimeter itself.
+    const activePosition = getActivePlayerPosition();
+    const baseDistance = Math.hypot(activePosition.x, activePosition.z);
+    const nearBase = baseDistance < 60;
+    safeZoneReadout.classList.toggle('is-safe', nearBase);
+    safeZoneReadout.textContent = nearBase ? 'Base Nereida' : `Base a ${Math.round(baseDistance)} m`;
+    if (nearBase && colonyManager.state.habitatOnline) {
+      resources.energy = clampResource(resources.energy + delta * 1.8);
+      resources.oxygen = clampResource(resources.oxygen + delta * 1.4);
+    }
+    return;
+  }
+
+  const inSafeZone = mothership.isInSafeZone(ship.position);
+  safeZoneReadout.classList.toggle('is-safe', inSafeZone);
+  safeZoneReadout.textContent = inSafeZone ? 'Zona segura' : `Retorno ${Math.round(mothership.distanceTo(ship.position))} m`;
+
+  if (!inSafeZone) return;
+
+  resources.energy = clampResource(resources.energy + delta * 2.8);
+  resources.oxygen = clampResource(resources.oxygen + delta * 1.7);
+  if (velocity.length() < 3.2) {
+    resources.hull = clampResource(resources.hull + delta * 0.9);
+  }
+
+  if (clock.elapsedTime - lastDockMessageAt > 9 && mothership.distanceTo(ship.position) < 72 && velocity.length() < 2.8) {
+    lastDockMessageAt = clock.elapsedTime;
+    missionText.textContent = 'Canal de atraque estable. La Arca comparte energia, oxigeno y datos de navegacion.';
+  }
+}
+
+function updateHazards(delta: number): void {
+  transientWarning = '';
+
+  if (mission24.started && !mission24.completed) return;
+
+  if (inSurfacePhase) {
+    // Space hazards are parsecs away now; the basin has its own dangers
+    // (handled with the surface systems) plus the telemetry boundary.
+    const activePosition = getActivePlayerPosition();
+    const boundaryAnchor = getSurfaceBoundaryAnchor();
+    const anchoredRange = Math.hypot(activePosition.x - boundaryAnchor.x, activePosition.z - boundaryAnchor.z);
+    if (anchoredRange > SURFACE_SHIP_TUNING.TELEMETRY_RADIUS && !isSurfaceBoundarySuspended()) {
+      // Once the valley is settled the warning names whichever area the
+      // pilot is drifting away from.
+      transientWarning =
+        boundaryAnchor.lengthSq() > 1
+          ? 'Limite de reconocimiento del Valle Aurora'
+          : 'Limite de telemetria de Base Nereida';
+    }
+    return;
+  }
+
+  const stormDistance = radiationStorm.group.position.distanceTo(ship.position);
+  if (stormDistance <= radiationStorm.radius) {
+    const exposure = 1 - stormDistance / radiationStorm.radius;
+    resources.energy = clampResource(resources.energy - exposure * delta * 6.2);
+    resources.hull = clampResource(resources.hull - exposure * delta * 1.8);
+    transientWarning = 'Radiacion intensa: energia y casco bajo presion';
+    shieldEffect.registerImpact();
+    cameraShake = Math.max(cameraShake, exposure * 0.12);
+  }
+
+  const pull = gravityAnomaly.pullStrength(ship.position);
+  if (pull > 0) {
+    const toCore = gravityAnomaly.group.position.clone().sub(ship.position).normalize();
+    velocity.addScaledVector(toCore, pull * delta * 32);
+    resources.energy = clampResource(resources.energy - pull * delta * 3.6);
+    transientWarning = 'Anomalia gravitacional: trayectoria comprometida';
+    cameraShake = Math.max(cameraShake, pull * 0.16);
+  }
+}
+
+function getForwardVector(): THREE.Vector3 {
+  return new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
+}
+
+function isAlignedWithPlanet(): boolean {
+  const toPlanet = candidatePlanet.group.position.clone().sub(ship.position).normalize();
+  return getForwardVector().dot(toPlanet) > 0.34;
+}
+
+function activateLandingZoneFromShip(): void {
+  if (landingZone.active) return;
+  const surfaceNormal = ship.position.clone().sub(candidatePlanet.group.position).normalize();
+  const landingPosition = candidatePlanet.group.position
+    .clone()
+    .addScaledVector(surfaceNormal, candidatePlanet.definition.radius + 14);
+  landingZone.activate(landingPosition, surfaceNormal);
+}
+
+function updateMission03Systems(delta: number, elapsed: number): void {
+  startMission03IfReady();
+  if (!mission03.started) return;
+
+  syncMission03Visuals();
+  pleyadanRelayBeacon.update(elapsed, mission03.state.signalStability);
+  pleyadanHologram.update(elapsed);
+
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+  const relayDistance = activePosition.distanceTo(pleyadanRelayBeacon.interactionPosition);
+
+  if (
+    mission03.step === 'calibrateCommunications' &&
+    mission03.updateCalibration(delta, baseDistance <= MISSION03_BASE_RANGE)
+  ) {
+    pleyadanRelayBeacon.reveal();
+    tutorialManager.complete('atlasSignal');
+    triggerDialogue('m03_resonator_revealed', 'mission03-resonator-revealed');
+    void sfxManager.play('atlas', 0.82);
+    showPhaseBanner('RESONADOR ATLAS LOCALIZADO', 'Punto de resonancia a 753 m de Base Nereida');
+    missionText.textContent = 'Frecuencia aislada. El mapa local revela el Resonador Atlas.';
+    playTone(650, 0.2);
+    saveProgress();
+  }
+
+  if (mission03.step === 'resonancePoint' && relayDistance <= MISSION03_RESONATOR_REVEAL_RANGE) {
+    mission03.reachResonator();
+    tutorialManager.complete('atlasResonator');
+    missionText.textContent = 'Resonador Atlas alcanzado. Aterriza, desciende con F y coloca la baliza con E.';
+    playTone(570, 0.14);
+    saveProgress();
+  }
+
+  if (mission03.step === 'synchronization') {
+    const inRange = relayDistance <= resonadorAtlasDefinition.relayRange;
+    if (!inRange) {
+      transientWarning = 'INTERFERENCIA ATLAS // REGRESA AL RANGO DE ENLACE';
+      cameraShake = Math.max(cameraShake, 0.04);
+      triggerDialogue('m03_signal_unstable', 'mission03-signal-unstable');
+    }
+    if (mission03.updateSignal(delta, inRange)) {
+      signalTranslation.receiveRawSignal();
+      tutorialManager.complete('stabilizeSignal');
+      triggerDialogue('m03_signal_synchronized', 'mission03-signal-synchronized');
+      showPhaseBanner('SENAL SINCRONIZADA', 'La transmision espera en Base Nereida');
+      missionText.textContent = 'Enlace estabilizado. Regresa a Base Nereida para traducir la transmision.';
+      playTone(720, 0.22);
+      saveProgress();
+    }
+  }
+
+  if (mission03.step === 'atlasTranslation') {
+    const translationCompleted = signalTranslation.update(delta, baseDistance <= MISSION03_BASE_RANGE);
+    if (signalTranslation.translatedFragments !== lastTranslatedFragmentCount) {
+      lastTranslatedFragmentCount = signalTranslation.translatedFragments;
+      missionText.textContent = `${signalTranslation.latestFragment} // ${Math.round(signalTranslation.progress)}%`;
+      playTone(460 + signalTranslation.translatedFragments * 24, 0.08);
+    }
+    if (translationCompleted && mission03.markTranslationStable()) {
+      tutorialManager.complete('translateSignal');
+      triggerDialogue('m03_pleyadan_contact', 'mission03-translation-complete');
+      void sfxManager.play('pleyadanContact', 0.86);
+      showPhaseBanner('TRADUCCION ATLAS ESTABLE', 'Origen identificado: civilizacion Pleyadana');
+      missionText.textContent = 'Matriz de traduccion desbloqueada. Abre el canal remoto con E.';
+      saveProgress();
+    }
+  }
+}
+
+function updateMission04Systems(delta: number, elapsed: number): void {
+  startMission04IfReady();
+  if (!mission04.started) return;
+
+  syncMission04Visuals();
+  defensiveBeacons.forEach((beacon, index) => {
+    beacon.update(
+      elapsed,
+      index === mission04.state.activeDefenseBeaconTarget,
+      mission04.state.defenseNetworkSynchronized
+    );
+  });
+
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+  const activeBeacon = getActiveDefenseBeacon();
+  const beaconDistance = activePosition.distanceTo(activeBeacon.interactionPosition);
+
+  defenseNetworkLinks.update(
+    elapsed,
+    mission04.step === 'synchronizeNetwork',
+    mission04.state.defenseNetworkSynchronized,
+    mission04.step === 'synchronizeNetwork' && beaconDistance > mission04Tuning.synchronizationRange
+  );
+
+  // The signature trace only exists once the orbital sweep has found it —
+  // a dim irregular flicker on the anomaly bearing, nothing more.
+  const signatureVisible =
+    mission04.state.threatSignatureDetected &&
+    !mission05.started &&
+    inSurfacePhase;
+  threatSignatureSprite.visible = signatureVisible;
+  if (signatureVisible) {
+    threatSignatureMaterial.opacity =
+      0.14 + Math.max(0, Math.sin(elapsed * 0.83) * Math.sin(elapsed * 2.31)) * 0.2;
+  }
+
+  if (
+    mission04.step === 'calibrateDefenseLink' &&
+    mission04.updateDefenseLinkCalibration(delta, baseDistance <= mission04Tuning.baseInteractionRange)
+  ) {
+    triggerDialogue('m04_sensor_ready', 'mission04-defense-link-ready');
+    showPhaseBanner('ENLACE DEFENSIVO CALIBRADO', 'Sensor orbital listo para activacion');
+    missionText.textContent = 'Enlace defensivo estable. Activa el sensor orbital con E.';
+    playTone(660, 0.18);
+    saveProgress();
+  }
+
+  if (
+    mission04.step === 'travelToBeacon' &&
+    playerModeSystem.insideShip &&
+    beaconDistance <= mission04Tuning.beaconApproachRange
+  ) {
+    if (mission04.reachActiveBeacon()) {
+      triggerDialogue('m04_deploy_beacon', `mission04-deploy-${mission04.state.activeDefenseBeaconTarget}`);
+      missionText.textContent = `${activeBeacon.site.name} alcanzada. Deten la nave y desciende con F.`;
+      playTone(540, 0.12);
+      saveProgress();
+    }
+  }
+
+  if (mission04.step === 'synchronizeNetwork') {
+    const inRange = beaconDistance <= mission04Tuning.synchronizationRange;
+    if (!inRange) {
+      transientWarning = 'RED DEFENSIVA INESTABLE // REGRESA AL RANGO DE SINCRONIZACION';
+    }
+    if (mission04.updateDefenseSync(delta, inRange)) {
+      void sfxManager.play('defenseNetwork', 0.86);
+      triggerDialogue('m04_orbital_scan', 'mission04-network-synchronized');
+      showPhaseBanner('RED DEFENSIVA SINCRONIZADA', 'Regresa a la nave para el barrido orbital');
+      missionText.textContent = 'Malla defensiva estable. Regresa a la nave y embarca con F.';
+      playTone(740, 0.22);
+      saveProgress();
+    }
+  }
+
+  if (mission04.step === 'returnToShip' && playerModeSystem.insideShip && !playerModeSystem.transitionActive) {
+    if (mission04.confirmReturnedToShip()) {
+      missionText.textContent = `Nave enlazada. Asciende con Space hasta ${mission04Tuning.orbitalScanAltitude} m y escanea con E.`;
+      saveProgress();
+    }
+  }
+
+  if (mission04.step === 'threatSignature') {
+    transientWarning = 'FIRMA DISTANTE // POSIBLE COALICION DEL SILENCIO';
+  }
+}
+
+function updateMission05Systems(delta: number, elapsed: number): void {
+  startMission05IfReady();
+  if (!mission05.started) return;
+
+  syncMission05Visuals();
+  silentProbe.update(delta, elapsed);
+  interferenceField.update(elapsed, mission05.state.activeEchoIndex);
+
+  const probeDistance = ship.position.distanceTo(silentProbe.interactionPosition);
+
+  if (mission05.step === 'boardShip' && playerModeSystem.insideShip && !playerModeSystem.transitionActive) {
+    if (mission05.confirmAboard()) {
+      missionText.textContent = `Nave enlazada. Asciende con Space hasta ${mission05Tuning.minimumScanAltitude} m.`;
+      saveProgress();
+    }
+  }
+
+  if (
+    mission05.step === 'gainScanAltitude' &&
+    playerModeSystem.insideShip &&
+    getMission04OrbitalScanClearance() >= mission05Tuning.minimumScanAltitude
+  ) {
+    if (mission05.reachScanAltitude()) {
+      missionText.textContent = 'Altura de escaneo alcanzada. Realiza el barrido orbital con E.';
+      playTone(590, 0.14);
+      saveProgress();
+    }
+  }
+
+  if (mission05.step === 'approachProbe' && probeDistance <= mission05Tuning.probeApproachRange) {
+    if (mission05.triggerInterference()) {
+      void sfxManager.startLoop('silentProbeInterference', 0.55);
+      syncMission05Visuals();
+      triggerDialogue('m05_interference', 'mission05-interference');
+      triggerDialogue('m05_atlas_frequency', 'mission05-atlas-frequency', 1.1);
+      showPhaseBanner('INTERFERENCIA ACTIVA', 'La sonda desaparecio de los sensores normales');
+      missionText.textContent = 'Guia degradada. Recalibra los sensores con frecuencia Atlas usando E.';
+      transientWarning = 'INTERFERENCIA SILENCIOSA // GUIA INESTABLE';
+      cameraShake = Math.max(cameraShake, 0.08);
+      playTone(145, 0.3);
+      saveProgress();
+    }
+  }
+
+  if (mission05.state.interferenceActive) {
+    transientWarning = mission05.step === 'trackEcho'
+      ? 'INTERFERENCIA ATLAS // SIGUE EL ECO ACTIVO'
+      : 'INTERFERENCIA SILENCIOSA // SENSORES DEGRADADOS';
+  }
+
+  if (mission05.counterSignalActive) {
+    const inRange = probeDistance <= mission05Tuning.counterSignalRange;
+    if (!inRange) transientWarning = 'CONTRASENAL PAUSADA // REGRESA AL ALCANCE DE LA SONDA';
+    if (mission05.updateCounterSignal(delta, inRange)) {
+      sfxManager.stopLoop('silentProbeInterference', 0.5);
+      void sfxManager.play('probeRetreat', 0.84);
+      syncMission05Visuals();
+      scannerPulse.trigger(silentProbe.interactionPosition, true);
+      triggerDialogue('m05_probe_retreat', 'mission05-probe-retreat');
+      showPhaseBanner('MARCA INTERRUMPIDA', 'La Sonda Silenciosa pierde enlace y se retira');
+      missionText.textContent = 'La sonda se retira. Regresa a Base Nereida para confirmar el informe.';
+      playTone(320, 0.2);
+      window.setTimeout(() => playTone(720, 0.25), 180);
+      saveProgress();
+    }
+  }
+
+  if (mission05.state.probeState === 'retreating' && silentProbe.retreatComplete) {
+    mission05.markProbeEscaped();
+    syncMission05Visuals();
+  }
+}
+
+function updateMissionSystems(delta: number, elapsed: number): void {
+  const planetDistance = candidatePlanet.distanceTo(ship.position);
+  const signal = candidatePlanet.signalStrengthFrom(ship.position);
+  const planetInRange = candidatePlanet.inScanRange(ship.position);
+  const markerDistance = orbitalMarker.distanceTo(ship.position);
+  const markerInRange = markerDistance <= orbitalMarkerSystem.scanRadius;
+
+  if (mission24.started) {
+    if (inBasin || inSurfacePhase) planetaryWorld.update(delta, elapsed);
+    updateMission24Systems(delta, elapsed);
+    return;
+  }
+
+  if (launched && missionManager.step === 'followSignal' && planetDistance < candidatePlanet.definition.scanRadius * 1.6) {
+    missionManager.reachPlanetRange();
+    missionText.textContent = 'Comando Arca: E-01 esta dentro del corredor de aproximacion. Acercate y escanea.';
+    playTone(590, 0.16);
+  }
+
+  habitabilitySystem.update(delta, planetInRange, threatDirector.complicationActive);
+
+  if (threatDirector.maybeTriggerHabitabilityComplication(habitabilitySystem.progress)) {
+    missionManager.triggerComplication();
+    transientWarning = 'Pulso defensivo antiguo: mantiene bloqueo de scanner';
+    cameraShake = Math.max(cameraShake, 0.18);
+    playTone(180, 0.28);
+  }
+
+  threatDirector.update(delta);
+  if (inBasin || inSurfacePhase) {
+    planetaryWorld.update(delta, clock.elapsedTime);
+  }
+  if (inSurfacePhase) {
+    surfaceResourceSystem.update(clock.elapsedTime, getActivePlayerPosition());
+    updateMission03Systems(delta, elapsed);
+    updateMission04Systems(delta, elapsed);
+    updateMission05Systems(delta, elapsed);
+    updateMission06Systems(delta);
+    updateMission07Systems(delta, elapsed);
+    updateMission08Systems(delta, elapsed);
+    updateMission09Systems(delta, elapsed);
+    updateMission10Systems(delta, elapsed);
+    updateMission11Systems(delta, elapsed);
+    updateMission12Systems(delta, elapsed);
+    updateMission13Systems(delta, elapsed);
+    updateMission14Systems(delta, elapsed);
+    updateMission15Systems(delta, elapsed);
+    updateMission16Systems(delta, elapsed);
+    updateMission17Systems(delta, elapsed);
+    updateMission18Systems(delta, elapsed);
+    updateMission19Systems(delta, elapsed);
+    updateMission20Systems(delta, elapsed);
+    updateMission21Systems(delta, elapsed);
+    updateMission22Systems(delta, elapsed);
+    updateMission23Systems(delta, elapsed);
+    applyAuroraNightLighting();
+    // Previous frame's fps feeds the auto-quality governor; a rolling average
+    // inside the layer means one stale sample can never trigger a change.
+    updatePremiumVisuals(delta, elapsed, diagnostics.data.fps);
+    if (planetaryWorld.colonyModule.consumeOnlineAnnouncement()) {
+      missionText.textContent = 'Módulo Hábitat Nereida-01 online.';
+      showPhaseBanner('HÁBITAT NEREIDA-01 ONLINE', 'Oxígeno estable, antena enlazada y baliza operativa');
+      playTone(680, 0.18);
+      window.setTimeout(() => playTone(980, 0.24), 160);
+    }
+    const activeSurfacePosition = getActivePlayerPosition();
+    if (planetaryWorld.hazard.isInRange(activeSurfacePosition)) {
+      transientWarning = '⚠️ BOLSA DE RADIACIÓN INESTABLE - ALEJARSE';
+      cameraShake = Math.max(cameraShake, 0.08);
+      resources.hull = clampResource(resources.hull - delta * 2.5);
+    }
+  }
+  updateMission24Systems(delta, elapsed);
+  if (
+    threatDirector.complicationActive &&
+    (missionManager.step === 'analyzeHabitability' || missionManager.step === 'surviveComplication')
+  ) {
+    resources.energy = clampResource(resources.energy - delta * 1.6);
+    if (!planetInRange) {
+      resources.hull = clampResource(resources.hull - delta * 1.1);
+    }
+    transientWarning = 'Anomalia durante analisis: energia bajo presion';
+    shieldEffect.registerImpact();
+  }
+
+  if (habitabilitySystem.report && !habitabilityReportShown) {
+    habitabilityReportShown = true;
+    descentSafetyGate.completeOrbitalScan(habitabilitySystem.report.viability);
+    missionManager.completeHabitability(habitabilitySystem.report);
+    renderHabitabilityReport();
+    triggerDialogue('m01_habitability_promising', 'habitability-sufficient');
+    triggerDialogue('m01_atlas_detected', 'atlas-detected', 2.2);
+    saveProgress();
+    missionText.textContent = `${habitabilitySystem.report.status}. ${orbitalMarkerLore.scannerLead}`;
+    playTone(780, 0.22);
+    window.setTimeout(() => playTone(980, 0.28), 180);
+  }
+
+  if (orbitalMarkerSystem.update(delta, markerInRange)) {
+    orbitalMarker.flashHighlight();
+    missionManager.completeMarkerDecode();
+    descentSystem.lockCorridor();
+    descentSafetyGate.markCorridorDecoded();
+    buildCorridorPips();
+    if (!missionDiscoveries.includes(orbitalMarkerLore.name)) {
+      missionDiscoveries.push(orbitalMarkerLore.name);
+      updateDiscoveryList();
+    }
+    discoveryEffect.trigger(orbitalMarker.group.position.clone());
+    musicManager.playSting('discovery', clock.elapsedTime);
+    applyReward({ memory: 18, energy: 8 });
+    triggerDialogue('m01_descent_authorized', 'atlas-decoded');
+    saveProgress();
+    missionText.textContent = `${orbitalMarkerLore.decoded} ${descentLore.corridorLocked}`;
+    playTone(660, 0.18);
+    window.setTimeout(() => playTone(920, 0.22), 150);
+  }
+
+  const entryBoundary = candidatePlanet.definition.radius + 128;
+  if (
+    !inBasin &&
+    !inSurfacePhase &&
+    planetDistance <= entryBoundary &&
+    missionManager.step !== 'atmosphericEntry' &&
+    missionManager.step !== 'landingApproach' &&
+    missionManager.step !== 'touchdown'
+  ) {
+    if (!descentSafetyGate.requestDescent()) {
+      const outward = ship.position.clone().sub(candidatePlanet.group.position).normalize();
+      ship.position.copy(candidatePlanet.group.position).addScaledVector(outward, entryBoundary + 10);
+      const inwardSpeed = velocity.dot(outward);
+      if (inwardSpeed < 0) velocity.addScaledVector(outward, -inwardSpeed + 0.35);
+      transientWarning = 'DESCENSO DENEGADO // DATOS ORBITALES INSUFICIENTES';
+      if (elapsed - lastDescentBlockWarningAt > 2.8) {
+        lastDescentBlockWarningAt = elapsed;
+        triggerDialogue('m01_descent_blocked', 'descent-blocked');
+        const missing = descentSafetyGate.state.missingDescentRequirements.join(', ');
+        missionText.textContent = `Descenso denegado. No es seguro ingresar a la atmósfera. Faltan: ${missing}. Completa el análisis orbital antes de aproximarte.`;
+        showPhaseBanner('DESCENSO DENEGADO', `Faltan datos críticos: ${missing}`);
+        playTone(170, 0.24);
+      }
+    } else if (missionManager.step === 'approachPlanet' && descentSystem.state.phase === 'corridorLocked') {
+      descentSystem.beginEntry();
+      missionManager.beginAtmosphericEntry();
+      triggerDialogue('m01_atmospheric_entry', 'atmospheric-entry');
+      saveProgress();
+      missionText.textContent = descentLore.entryStart;
+      showPhaseBanner('ENTRADA ATMOSFÉRICA', 'Mantén el vector de descenso y controla el calor');
+      cameraShake = Math.max(cameraShake, 0.22);
+      playTone(190, 0.28);
+    }
+  }
+
+  if (missionManager.step === 'atmosphericEntry') {
+    const aligned = isAlignedWithPlanet();
+    const braking = input.has('s') || !input.has('shift');
+    const completedEntry = descentSystem.updateEntry(delta, velocity.length(), aligned, braking);
+    const stress = descentSystem.state.stress / 100;
+
+    // Continuous sky transition, now following air density rather than raw
+    // progress: the horizon thickens the way the atmosphere actually does,
+    // and the plasma glow bleeds into the sky at peak heating.
+    const entryT = entryProfile.skyMix;
+    if (scene.background instanceof THREE.Color) {
+      scene.background.copy(SPACE_BACKGROUND).lerp(ATMO_BACKGROUND, entryT);
+      // The shock layer lights the air around the ship, so the sky itself
+      // warms at the peak instead of the glow floating on a black backdrop.
+      if (entryProfile.heat > 0.01) {
+        scene.background.lerp(ENTRY_SKY_GLOW, entryProfile.heat * 0.32);
+      }
+    }
+    if (scene.fog instanceof THREE.FogExp2) {
+      scene.fog.color.copy(SPACE_FOG).lerp(ATMO_BACKGROUND, entryT);
+      if (entryProfile.heat > 0.01) {
+        scene.fog.color.lerp(ENTRY_SKY_GLOW, entryProfile.heat * 0.4);
+      }
+      scene.fog.density = entryProfile.fogDensity;
+    }
+
+    resources.energy = clampResource(resources.energy - delta * (0.8 + stress * 2.2));
+    resources.hull = clampResource(resources.hull - delta * Math.max(0, stress - 0.24) * 1.4);
+    // Buffet peaks before the thermal peak, so the roughest part of the ride
+    // is the moment the air first bites — not the brightest frame.
+    cameraShake = Math.max(cameraShake, 0.05 + entryProfile.buffet * 0.3);
+    // Entry stress reads through the plasma sheath, not the shield shell:
+    // constant impact flashes would drown the burn in a cyan bubble.
+    if (stress > 0.55) {
+      shieldEffect.registerImpact();
+    }
+    transientWarning = descentSystem.state.message;
+
+    if (completedEntry) {
+      tutorialManager.complete('surviveEntry');
+      missionManager.completeAtmosphericEntry();
+      // The cloud-break beat used to last exactly zero frames: this call ran
+      // in the same frame the entry finished, so the descent phase went
+      // entry -> cloudBreak -> landingApproach instantly and the surface
+      // reveal — the most cinematic moment of the sequence — was never seen.
+      // Hold it briefly so the plasma has somewhere to fade out and the
+      // basin actually gets revealed before control formally hands over.
+      cloudBreakHoldUntil = elapsed + CLOUD_BREAK_HOLD_SECONDS;
+      enterBasinApproach();
+      saveProgress();
+      if (!missionDiscoveries.includes(firstLandingZone.name)) {
+        missionDiscoveries.push(firstLandingZone.name);
+        updateDiscoveryList();
+      }
+      missionText.textContent = `${descentLore.cloudBreak} ${firstLandingZone.lore} Ruptura de nubes en Cuenca Nereida: mantén W/S para ajustar aproximación y desciende suavemente sobre la plataforma iluminada.`;
+      playTone(520, 0.18);
+      window.setTimeout(() => playTone(740, 0.2), 140);
+    }
+  }
+
+  if (missionManager.step === 'landingApproach' || missionManager.step === 'touchdown') {
+    if (inBasin) {
+      const distanceFromPad = Math.hypot(ship.position.x, ship.position.z);
+      const contactHeight = distanceFromPad <= firstLandingZone.radius
+        ? 2.16
+        : planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+      descentSystem.state.altitude = Math.max(0, ship.position.y - contactHeight);
+    }
+    if (landingZone.isInAssistRange(ship.position)) {
+      velocity.multiplyScalar(Math.pow(0.92, delta * 60));
+      resources.energy = clampResource(resources.energy - delta * 0.35);
+      if (missionManager.step === 'landingApproach') {
+        missionManager.enterTouchdown();
+        missionText.textContent = descentLore.landingAssist;
+      }
+    }
+
+    if (landingZone.canTouchDown(ship.position, velocity.length() * 12)) {
+      completeSurfaceTouchdown();
+      window.setTimeout(completeMissionAtSurface, 900);
+    }
+  }
+
+  candidatePlanet.update(
+    delta,
+    elapsed,
+    signal,
+    habitabilitySystem.scanning || missionManager.step === 'scanPlanet' || missionManager.step === 'approachPlanet'
+  );
+  orbitalMarker.update(delta, elapsed, orbitalMarkerSystem.state.decoded);
+  updateObjectiveMarker();
+  updateStarMap();
+  contextualTutorialHint = tutorialManager.update(delta, {
+    missionStep: missionManager.step,
+    surfaceStep: inSurfacePhase && !mission03.started ? surfaceMission.currentStep.id : undefined,
+    mission03Step: inSurfacePhase && mission03.started ? mission03.step : undefined,
+    inSurfacePhase,
+    insideShip: playerModeSystem.insideShip,
+    onFoot: playerModeSystem.onFootActive,
+    shipAccessAvailable: isShipAccessAvailable(),
+    cameraToggleAvailable: playerModeSystem.insideShip && !playerModeSystem.transitionActive
+  });
+  window.__arcaMissionState = missionManager.update(delta, getMissionObjectiveDistance(), getMissionSignalStrength(), getMissionProgress());
+}
+
+function updateThreats(delta: number, elapsed: number): number {
+  let nearestThreat = Number.POSITIVE_INFINITY;
+  if (mission24.started && !mission24.completed) return nearestThreat;
+  if (inSurfacePhase) return nearestThreat;
+  const inSafeZone = mothership.isInSafeZone(ship.position);
+
+  for (const threat of threats) {
+    if (threat.target.health <= 0) {
+      threat.effect.group.visible = false;
+      continue;
+    }
+
+    threat.phase += delta;
+    const object = threat.effect.group;
+    const distance = object.position.distanceTo(ship.position);
+    nearestThreat = Math.min(nearestThreat, distance);
+    threat.effect.update(delta, elapsed, distance);
+    object.position.y += Math.sin(threat.phase) * delta * 2.1;
+
+    if (inSafeZone && object.position.distanceTo(mothership.group.position) < mothership.safeZoneRadius * 1.28) {
+      const repel = object.position.clone().sub(mothership.group.position).normalize();
+      object.position.addScaledVector(repel, delta * 42);
+      continue;
+    }
+
+    if (distance < threat.alertRadius) {
+      const direction = ship.position.clone().sub(object.position).normalize();
+      object.position.addScaledVector(direction, delta * (8 + (threat.alertRadius - distance) * 0.055));
+    }
+
+    if (distance < threat.damageRadius && !inSafeZone) {
+      resources.hull = clampResource(resources.hull - settings.threatDamage * delta);
+      velocity.add(object.position.clone().sub(ship.position).normalize().multiplyScalar(-delta * 34));
+      shieldEffect.registerImpact();
+      cameraShake = Math.max(cameraShake, 0.22);
+      transientWarning = 'Contacto hostil: maniobra evasiva recomendada';
+    }
+  }
+
+  return nearestThreat;
+}
+
+function updateHomeMarker(): void {
+  const vector = mothership.group.position.clone().project(camera);
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const margin = 58;
+  const x = (vector.x * 0.5 + 0.5) * width;
+  const y = (-vector.y * 0.5 + 0.5) * height;
+  const clampedX = THREE.MathUtils.clamp(x, margin, width - margin);
+  const clampedY = THREE.MathUtils.clamp(y, margin, height - margin);
+  const offscreen = vector.z > 1 || x !== clampedX || y !== clampedY;
+
+  homeMarker.style.left = `${clampedX}px`;
+  homeMarker.style.top = `${clampedY}px`;
+  homeMarker.classList.toggle('is-offscreen', offscreen);
+  homeDistance.textContent = formatDistance(mothership.distanceTo(ship.position));
+}
+
+function shouldGuideMission03ToShip(): boolean {
+  if (!mission03.started) return false;
+  if (mission03.step === 'relayBeacon' && playerModeSystem.insideShip) return true;
+  if (!playerModeSystem.onFootActive) return false;
+  if (mission03.step === 'resonancePoint') return true;
+  if (mission03.step !== 'returnToBase') return false;
+  return getActivePlayerPosition().distanceTo(planetaryWorld.colonyModule.group.position) > MISSION03_BASE_RANGE;
+}
+
+function shouldGuideMission04ToShip(): boolean {
+  if (!mission04.started) return false;
+  if (mission04.step === 'deployBeacon' && playerModeSystem.insideShip) return true;
+  if (mission04.step === 'returnToShip' || (mission04.step === 'orbitalScan' && playerModeSystem.onFootActive)) {
+    return playerModeSystem.onFootActive;
+  }
+  if (!playerModeSystem.onFootActive) return false;
+  if (mission04.step === 'travelToBeacon') return true;
+  if (mission04.step === 'returnToBase') {
+    return getActivePlayerPosition().distanceTo(planetaryWorld.colonyModule.group.position) >
+      mission04Tuning.baseInteractionRange;
+  }
+  return false;
+}
+
+function shouldGuideMission05ToShip(): boolean {
+  if (!mission05.started || !playerModeSystem.onFootActive) return false;
+  if (mission05.step === 'completed') return false;
+  if (mission05.step === 'returnToBase') {
+    return getActivePlayerPosition().distanceTo(planetaryWorld.colonyModule.group.position) >
+      mission05Tuning.baseInteractionRange;
+  }
+  return mission05.step !== 'inactive';
+}
+
+type Mission03ObjectiveGuidance = {
+  nextAction?: string;
+  key?: string;
+  blockedReason?: string;
+};
+
+function getMission03ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission03.started) return {};
+
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+  const relayDistance = activePosition.distanceTo(pleyadanRelayBeacon.interactionPosition);
+  const shipAccessDistance = playerModeSystem.onFootActive
+    ? activePosition.distanceTo(shipAccessLift.getGroundExitPosition())
+    : 0;
+  const baseInteraction = (action: string): Mission03ObjectiveGuidance =>
+    baseDistance <= MISSION03_BASE_RANGE
+      ? { nextAction: action, key: 'E' }
+      : {
+          nextAction: action,
+          key: 'E',
+          blockedReason: 'E no disponible: fuera del alcance de Base Nereida.'
+        };
+
+  switch (mission03.step) {
+    case 'deepSignal':
+      return baseInteraction('Regresa a Base Nereida y revisa la señal con E.');
+    case 'calibrateCommunications':
+      if (baseDistance > MISSION03_BASE_RANGE) {
+        return baseInteraction('Calibra comunicaciones con E.');
+      }
+      return mission03.state.communicationCalibrationProgress > 0
+        ? { nextAction: 'Permanece dentro del alcance mientras termina la calibracion.', key: '' }
+        : { nextAction: 'Calibra comunicaciones con E.', key: 'E' };
+    case 'resonancePoint':
+      if (!playerModeSystem.onFootActive) {
+        return { nextAction: 'Viaja al Resonador Atlas.', key: 'WASD' };
+      }
+      return shipAccessDistance <= 4.4
+        ? { nextAction: 'Presiona F junto al elevador para volver a la nave y viajar al Resonador Atlas.', key: 'F' }
+        : {
+            nextAction: 'Acercate con WASD al elevador de la nave para embarcar.',
+            key: 'WASD',
+            blockedReason: 'F no disponible: debes estar junto al elevador de la nave.'
+          };
+    case 'relayBeacon':
+      if (playerModeSystem.insideShip) {
+        if (!isShipExitAvailable()) {
+          return {
+            nextAction: 'Desciende con F.',
+            key: 'F',
+            blockedReason: relayDistance > 42
+              ? 'F bloqueada: la nave esta fuera de la zona del Resonador Atlas.'
+              : 'F bloqueada: reduce la velocidad por debajo de 2.2 m/s.'
+          };
+        }
+        return { nextAction: 'Desciende con F.', key: 'F' };
+      }
+      if (playerModeSystem.transitionActive) {
+        return { nextAction: 'Espera a que el elevador complete el descenso.', key: '' };
+      }
+      return relayDistance <= MISSION03_RELAY_INTERACTION_RANGE
+        ? { nextAction: 'Coloca la baliza con E.', key: 'E' }
+        : {
+            nextAction: 'Coloca la baliza con E.',
+            key: 'E',
+            blockedReason: 'E no disponible: acercate al punto de instalacion de la baliza.'
+          };
+    case 'synchronization':
+      return relayDistance <= resonadorAtlasDefinition.relayRange
+        ? { nextAction: 'Permanece dentro del rango de la baliza.', key: '' }
+        : {
+            nextAction: 'Permanece dentro del rango de la baliza.',
+            key: 'WASD',
+            blockedReason: 'Sincronizacion inestable: estas fuera del rango de la baliza.'
+          };
+    case 'returnToBase':
+      if (baseDistance <= MISSION03_BASE_RANGE) {
+        return { nextAction: 'Traduce la señal Pleyadana con E.', key: 'E' };
+      }
+      if (!playerModeSystem.onFootActive) {
+        return {
+          nextAction: 'Regresa a Base Nereida.',
+          key: 'WASD',
+          blockedReason: 'E no disponible: regresa al modulo de comunicaciones.'
+        };
+      }
+      return shipAccessDistance <= 4.4
+        ? {
+            nextAction: 'Presiona F para embarcar y regresar a Base Nereida.',
+            key: 'F',
+            blockedReason: 'E no disponible: la traduccion se inicia en Base Nereida.'
+          }
+        : {
+            nextAction: 'Acercate con WASD al elevador de la nave para regresar a la base.',
+            key: 'WASD',
+            blockedReason: 'F no disponible: debes estar junto al elevador de la nave.'
+          };
+    case 'atlasTranslation':
+      return baseDistance <= MISSION03_BASE_RANGE
+        ? { nextAction: 'Permanece junto al modulo mientras la matriz Atlas reconstruye el mensaje.', key: '' }
+        : {
+            nextAction: 'Regresa con WASD al modulo de comunicaciones para reanudar la traduccion.',
+            key: 'WASD',
+            blockedReason: 'Traduccion pausada: enlace fuera del alcance de Base Nereida.'
+          };
+    case 'firstContact':
+      return baseInteraction('Observa la transmisión Pleyadana.');
+    case 'warning':
+      return baseInteraction('Observa la transmisión Pleyadana.');
+    case 'prepare':
+      return baseInteraction('Presiona E en Base Nereida para archivar el protocolo de primer contacto.');
+    case 'inactive':
+    case 'completed':
+    default:
+      return { key: '' };
+  }
+}
+
+function getMission04ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission04.started) return {};
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+  const beaconDistance = activePosition.distanceTo(getActiveDefenseBeacon().interactionPosition);
+  const shipAccessDistance = playerModeSystem.onFootActive
+    ? activePosition.distanceTo(shipAccessLift.getGroundExitPosition())
+    : 0;
+  const returnToShipGuidance = (purpose: string): Mission03ObjectiveGuidance =>
+    shipAccessDistance <= 4.4
+      ? { nextAction: `Presiona F para embarcar y ${purpose}.`, key: 'F' }
+      : {
+          nextAction: `Acercate con WASD al elevador para ${purpose}.`,
+          key: 'WASD',
+          blockedReason: 'F no disponible: debes estar junto al elevador de la nave.'
+        };
+  const baseAction = (action: string): Mission03ObjectiveGuidance =>
+    baseDistance <= mission04Tuning.baseInteractionRange
+      ? { nextAction: action, key: 'E' }
+      : {
+          nextAction: action,
+          key: playerModeSystem.onFootActive ? 'WASD' : 'WASD',
+          blockedReason: 'E no disponible: fuera del alcance de Base Nereida.'
+        };
+
+  switch (mission04.step) {
+    case 'returnToBase':
+      if (playerModeSystem.onFootActive && baseDistance > mission04Tuning.baseInteractionRange) {
+        return returnToShipGuidance('regresar a Base Nereida');
+      }
+      return baseAction('Regresa a Base Nereida y revisa el protocolo con E.');
+    case 'calibrateDefenseLink':
+      if (baseDistance > mission04Tuning.baseInteractionRange) {
+        return baseAction('Calibra el enlace defensivo con E.');
+      }
+      return mission04.state.defenseNetworkState === 'calibrating'
+        ? { nextAction: 'Permanece junto al modulo hasta completar la calibracion.', key: '' }
+        : { nextAction: 'Calibra el enlace defensivo con E.', key: 'E' };
+    case 'activateOrbitalSensor':
+      return baseAction('Activa el sensor orbital con E.');
+    case 'travelToBeacon':
+      return playerModeSystem.onFootActive
+        ? returnToShipGuidance(`viajar a ${getActiveDefenseBeacon().site.name}`)
+        : { nextAction: `Viaja a ${getActiveDefenseBeacon().site.name}.`, key: 'WASD' };
+    case 'deployBeacon':
+      if (playerModeSystem.insideShip) {
+        return {
+          nextAction: 'Desciende con F.',
+          key: 'F',
+          blockedReason: !isShipExitAvailable()
+            ? beaconDistance > 42
+              ? `F bloqueada: la nave esta fuera de ${getActiveDefenseBeacon().site.name}.`
+              : 'F bloqueada: reduce la velocidad por debajo de 2.2 m/s.'
+            : ''
+        };
+      }
+      if (playerModeSystem.transitionActive) return { nextAction: 'Espera a que el elevador complete el descenso.', key: '' };
+      return beaconDistance <= mission04Tuning.beaconInteractionRange
+        ? { nextAction: 'Activa la baliza con E.', key: 'E' }
+        : {
+            nextAction: 'Activa la baliza con E.',
+            key: 'WASD',
+            blockedReason: 'E no disponible: acercate al punto de anclaje defensivo.'
+          };
+    case 'synchronizeNetwork':
+      return beaconDistance <= mission04Tuning.synchronizationRange
+        ? { nextAction: 'Permanece dentro del rango hasta sincronizar.', key: '' }
+        : {
+            nextAction: 'Permanece dentro del rango hasta sincronizar.',
+            key: 'WASD',
+            blockedReason: 'Sincronizacion pausada: estas fuera del rango defensivo.'
+          };
+    case 'returnToShip':
+      return playerModeSystem.insideShip
+        ? { nextAction: 'Preparando sensores de la nave.', key: '' }
+        : returnToShipGuidance('realizar el barrido orbital');
+    case 'orbitalScan':
+      if (playerModeSystem.onFootActive) return returnToShipGuidance('realizar el barrido orbital');
+      return getMission04OrbitalScanClearance() >= mission04Tuning.orbitalScanAltitude
+        ? { nextAction: 'Realiza un escaneo orbital con E.', key: 'E' }
+        : {
+            nextAction: `Asciende con Space hasta ${mission04Tuning.orbitalScanAltitude} m.`,
+            key: 'Space',
+            blockedReason: 'E no disponible: altura insuficiente para el barrido orbital.'
+          };
+    case 'threatSignature':
+      return { nextAction: 'Analiza la firma anomala con E.', key: 'E' };
+    case 'inactive':
+    case 'completed':
+    default:
+      return { key: '' };
+  }
+}
+
+function getMission05ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission05.started) return {};
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+  const probeDistance = activePosition.distanceTo(silentProbe.interactionPosition);
+  const echoDistance = activePosition.distanceTo(getActiveMission05EchoPosition());
+  const shipAccessDistance = playerModeSystem.onFootActive
+    ? activePosition.distanceTo(shipAccessLift.getGroundExitPosition())
+    : 0;
+  const returnToShip = (purpose: string): Mission03ObjectiveGuidance =>
+    shipAccessDistance <= 4.4
+      ? { nextAction: `Entra en la nave con F para ${purpose}.`, key: 'F' }
+      : {
+          nextAction: `Acercate con WASD al elevador para ${purpose}.`,
+          key: 'WASD',
+          blockedReason: 'F no disponible: debes estar junto al elevador de la nave.'
+        };
+
+  if (shouldGuideMission05ToShip()) return returnToShip('continuar la investigacion orbital');
+
+  switch (mission05.step) {
+    case 'boardShip':
+      return playerModeSystem.insideShip
+        ? { nextAction: 'Preparando sensores orbitales.', key: '' }
+        : returnToShip('iniciar la investigacion');
+    case 'gainScanAltitude':
+      return getMission04OrbitalScanClearance() >= mission05Tuning.minimumScanAltitude
+        ? { nextAction: 'Altura alcanzada. Prepara el barrido orbital.', key: '' }
+        : { nextAction: `Asciende con Space hasta ${mission05Tuning.minimumScanAltitude} m.`, key: 'Space' };
+    case 'orbitalScan':
+      return { nextAction: 'Realiza un barrido orbital con E.', key: 'E' };
+    case 'approachProbe':
+      return { nextAction: 'Acercate a la Sonda Silenciosa.', key: 'WASD' };
+    case 'atlasRecalibration':
+      return { nextAction: 'Recalibra sensores con frecuencia Atlas usando E.', key: 'E' };
+    case 'trackEcho':
+      return echoDistance <= mission05Tuning.echoScanRange
+        ? { nextAction: `Analiza el eco ${mission05.state.activeEchoIndex + 1} con E.`, key: 'E' }
+        : {
+            nextAction: `Sigue el eco ${mission05.state.activeEchoIndex + 1} de interferencia.`,
+            key: 'WASD',
+            blockedReason: 'E no disponible: el eco esta fuera del alcance del escaner.'
+          };
+    case 'counterSignal':
+      if (mission05.counterSignalActive) {
+        return probeDistance <= mission05Tuning.counterSignalRange
+          ? { nextAction: 'Manten la nave dentro del alcance hasta completar la contrasenal.', key: '' }
+          : {
+              nextAction: 'Regresa al alcance de la Sonda Silenciosa.',
+              key: 'WASD',
+              blockedReason: 'Contrasenal pausada: la sonda esta fuera de alcance.'
+            };
+      }
+      return probeDistance <= mission05Tuning.counterSignalRange
+        ? { nextAction: 'Emite la contrasenal con E.', key: 'E' }
+        : {
+            nextAction: 'Acercate a la Sonda Silenciosa para emitir la contrasenal.',
+            key: 'WASD',
+            blockedReason: 'E no disponible: la sonda esta fuera del alcance de contrasenal.'
+          };
+    case 'returnToBase':
+      return baseDistance <= mission05Tuning.baseInteractionRange
+        ? { nextAction: 'Confirma el informe hostil indirecto con E.', key: 'E' }
+        : {
+            nextAction: 'Regresa a Base Nereida.',
+            key: 'WASD',
+            blockedReason: 'E no disponible: el informe debe confirmarse en Base Nereida.'
+          };
+    case 'inactive':
+    case 'completed':
+    default:
+      return { key: '' };
+  }
+}
+
+function getMission06ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission06.started || mission06.completed) return {};
+
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+  const baseAction = (action: string): Mission03ObjectiveGuidance =>
+    baseDistance <= mission06Tuning.baseInteractionRange
+      ? { nextAction: action, key: 'E' }
+      : {
+          nextAction: 'Regresa a Base Nereida.',
+          key: 'WASD',
+          blockedReason: 'E no disponible: fuera del alcance de Base Nereida.'
+        };
+
+  switch (mission06.step) {
+    case 'returnToBase':
+      return baseDistance <= mission06Tuning.baseInteractionRange
+        ? { nextAction: 'Base Nereida alcanzada. Consola preparando analisis.', key: '' }
+        : { nextAction: 'Regresa a Base Nereida.', key: 'WASD' };
+    case 'analyzeResidue':
+      return baseAction('Analiza los residuos de interferencia con E.');
+    case 'calibrateMatrix':
+      return baseAction('Calibra la Matriz de Ocultamiento con E.');
+    case 'deployNorth':
+    case 'deployEast':
+    case 'deploySouth': {
+      const index = getActiveCloakingProjectorIndex();
+      const projectorName = CLOAKING_PROJECTOR_NAMES[index] ?? 'Proyector de Ocultamiento';
+      const distance = index >= 0
+        ? activePosition.distanceTo(cloakingProjectors[index].group.position)
+        : Number.POSITIVE_INFINITY;
+      return distance <= mission06Tuning.projectorInteractionRange
+        ? { nextAction: `Calibra ${projectorName} con E.`, key: 'E' }
+        : {
+            nextAction: `Viaja a ${projectorName}.`,
+            key: 'WASD',
+            blockedReason: 'E no disponible: el proyector esta fuera del alcance de calibracion.'
+          };
+    }
+    case 'syncMatrix':
+      if (mission06SyncEngaged) {
+        return baseDistance <= mission06Tuning.baseInteractionRange
+          ? { nextAction: 'Permanece en Base Nereida hasta completar la sincronizacion.', key: '' }
+          : {
+              nextAction: 'Regresa a Base Nereida para reanudar la sincronizacion.',
+              key: 'WASD',
+              blockedReason: 'Sincronizacion pausada: fuera del alcance de Base Nereida.'
+            };
+      }
+      return baseAction('Sincroniza el campo de ocultamiento con E.');
+    case 'inactive':
+    case 'completed':
+    default:
+      return { key: '' };
+  }
+}
+
+function getMission07ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission07.started || mission07.completed) return {};
+
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+  const fractureDistance = activePosition.distanceTo(atlasSeedArchive.interactionPosition);
+  const activeNodeIndex = getActiveAtlasEchoNodeIndex();
+  const activeNode = activeNodeIndex >= 0 ? atlasEchoNodes[activeNodeIndex] : undefined;
+  const activeNodeDistance = activeNode ? activePosition.distanceTo(activeNode.interactionPosition) : Number.POSITIVE_INFINITY;
+  const archiveDistance = activePosition.distanceTo(atlasSeedArchive.interactionPosition);
+
+  if (mission07.step === 'analyzeSignal') {
+    return baseDistance <= mission07Tuning.baseInteractionRange
+      ? { nextAction: 'Analiza la señal subterránea con E.', key: 'E' }
+      : {
+          nextAction: 'Regresa a Base Nereida.',
+          key: 'WASD',
+          blockedReason: 'E no disponible: la señal debe analizarse desde Base Nereida.'
+        };
+  }
+
+  if (mission07.step === 'travelToFracture') {
+    if (fractureDistance > mission07Tuning.fractureArrivalRange) {
+      return { nextAction: 'Viaja hasta la Fractura Atlas.', key: 'WASD' };
+    }
+    if (playerModeSystem.insideShip) {
+      return isShipExitAvailable()
+        ? { nextAction: 'Desciende de la nave con F.', key: 'F' }
+        : {
+            nextAction: 'Desciende de la nave con F.',
+            key: 'F',
+            blockedReason: 'F bloqueada: reduce la velocidad por debajo de 2.2 m/s.'
+          };
+    }
+    return { nextAction: 'Localiza los nodos Atlas semienterrados.', key: 'WASD' };
+  }
+
+  if (activeNode) {
+    if (!playerModeSystem.onFootActive) {
+      return activeNodeDistance <= mission07Tuning.fractureArrivalRange
+        ? { nextAction: 'Desciende de la nave con F.', key: 'F' }
+        : { nextAction: `Viaja hasta ${activeNode.definition.name}.`, key: 'WASD' };
+    }
+    return activeNodeDistance <= mission07Tuning.nodeScanRange
+      ? { nextAction: `Escanea ${activeNode.definition.name} con E.`, key: 'E' }
+      : {
+          nextAction: `Acércate a ${activeNode.definition.name}.`,
+          key: 'WASD',
+          blockedReason: 'E no disponible: el nodo está fuera del alcance de escaneo.'
+        };
+  }
+
+  if (mission07.step === 'activateArchive') {
+    if (!playerModeSystem.onFootActive) {
+      return archiveDistance <= mission07Tuning.fractureArrivalRange
+        ? { nextAction: 'Desciende de la nave con F.', key: 'F' }
+        : { nextAction: 'Viaja hasta el Archivo Semilla Atlas.', key: 'WASD' };
+    }
+    return archiveDistance <= mission07Tuning.archiveActivationRange
+      ? { nextAction: 'Activa el Archivo Semilla Atlas con E.', key: 'E' }
+      : {
+          nextAction: 'Acércate al Archivo Semilla Atlas.',
+          key: 'WASD',
+          blockedReason: 'E no disponible: el archivo está fuera del alcance de activación.'
+        };
+  }
+
+  return { key: '' };
+}
+
+function getMission08ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission08.started || mission08.completed) return {};
+
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+  const fractureDistance = activePosition.distanceTo(getSignalFractureCenter());
+  const activeFocusIndex = getActiveFractureFocusIndex();
+  const activeFocus = activeFocusIndex >= 0 ? signalFractureNodes[activeFocusIndex] : undefined;
+  const activeFocusDistance = activeFocus ? activePosition.distanceTo(activeFocus.interactionPosition) : Number.POSITIVE_INFINITY;
+
+  if (mission08.step === 'analyzeTrace') {
+    return baseDistance <= mission08Tuning.baseInteractionRange
+      ? { nextAction: 'Analiza el rastro de escaneo con E.', key: 'E' }
+      : {
+          nextAction: 'Regresa a Base Nereida.',
+          key: 'WASD',
+          blockedReason: 'E no disponible: el rastro debe analizarse desde Base Nereida.'
+        };
+  }
+
+  if (mission08.step === 'travelToFracture') {
+    if (fractureDistance > mission08Tuning.fractureArrivalRange) {
+      return { nextAction: 'Viaja hasta la Grieta de Señal.', key: 'WASD' };
+    }
+    if (playerModeSystem.insideShip) {
+      return isShipExitAvailable()
+        ? { nextAction: 'Desciende de la nave con F.', key: 'F' }
+        : {
+            nextAction: 'Desciende de la nave con F.',
+            key: 'F',
+            blockedReason: 'F bloqueada: reduce la velocidad por debajo de 2.2 m/s.'
+          };
+    }
+    return { nextAction: 'Localiza los tres focos de la grieta.', key: 'WASD' };
+  }
+
+  if (activeFocus) {
+    if (!playerModeSystem.onFootActive) {
+      return activeFocusDistance <= mission08Tuning.fractureArrivalRange
+        ? { nextAction: 'Desciende de la nave con F.', key: 'F' }
+        : { nextAction: `Viaja hasta el ${activeFocus.definition.name}.`, key: 'WASD' };
+    }
+    return activeFocusDistance <= mission08Tuning.focusStabilizeRange
+      ? { nextAction: `Estabiliza el ${activeFocus.definition.name} con E.`, key: 'E' }
+      : {
+          nextAction: `Acércate al ${activeFocus.definition.name}.`,
+          key: 'WASD',
+          blockedReason: 'E no disponible: el foco está fuera del alcance.'
+        };
+  }
+
+  if (mission08.step === 'returnToBase') {
+    return baseDistance <= mission08Tuning.baseInteractionRange
+      ? { nextAction: 'Ejecuta la Purga de Señal con E.', key: 'E' }
+      : { nextAction: 'Vuelve a Base Nereida para ejecutar la purga.', key: 'WASD' };
+  }
+
+  if (mission08.step === 'signalPurge') {
+    return baseDistance <= mission08Tuning.baseInteractionRange
+      ? { nextAction: `Purga de señal en progreso… ${Math.round(mission08.purgeFraction * 100)}%.`, key: 'E' }
+      : {
+          nextAction: 'Vuelve a Base Nereida para retomar la purga.',
+          key: 'WASD',
+          blockedReason: 'La purga solo avanza dentro del rango de Base Nereida.'
+        };
+  }
+
+  return { key: '' };
+}
+
+function getMission09ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission09.started || mission09.completed) return {};
+
+  const activePosition = getActivePlayerPosition();
+  const baseDistance = activePosition.distanceTo(planetaryWorld.colonyModule.group.position);
+
+  if (mission09.step === 'analyzeResidual') {
+    return baseDistance <= mission09Tuning.baseInteractionRange
+      ? { nextAction: 'Analiza la firma residual con E.', key: 'E' }
+      : {
+          nextAction: 'Regresa a Base Nereida.',
+          key: 'WASD',
+          blockedReason: 'E no disponible: la firma se analiza desde Base Nereida.'
+        };
+  }
+
+  const activeBeaconIndex = getActiveRouteBeaconIndex();
+  if (activeBeaconIndex >= 0) {
+    const beacon = atlasRouteBeacons[activeBeaconIndex];
+    const beaconDistance = activePosition.distanceTo(beacon.interactionPosition);
+    return beaconDistance <= mission09Tuning.beaconScanRange
+      ? { nextAction: `Escanea ${beacon.definition.name} con E.`, key: 'E' }
+      : { nextAction: `Viaja hacia ${beacon.definition.name}.`, key: 'WASD' };
+  }
+
+  if (mission09.step === 'reachThreshold') {
+    const thresholdDistance = activePosition.distanceTo(getAuroraThresholdCenter());
+    return thresholdDistance <= mission09Tuning.horizonScanRange
+      ? { nextAction: 'Escanea el horizonte Aurora con E.', key: 'E' }
+      : { nextAction: 'Viaja hacia el Umbral Aurora.', key: 'WASD' };
+  }
+
+  return { key: '' };
+}
+
+function getSurfaceObjectivePosition(): THREE.Vector3 {
+  if (mission23.started) return getMission23StationPosition();
+  if (mission22.started) return getMission22StationPosition();
+  if (mission21.started) return getMission21StationPosition();
+  if (mission15.started) return getMission15StationPosition();
+  if (mission14.started) return getMission14StationPosition();
+  if (mission13.started) return getMission13StationPosition();
+  if (mission12.started) return getMission12StationPosition();
+  if (mission11.started) return getMission11StationPosition();
+  if (mission10.started) return getMission10ObjectivePosition();
+  if (mission09.started) {
+    if (mission09.step === 'analyzeResidual') return planetaryWorld.colonyModule.group.position;
+    const activeBeaconIndex = getActiveRouteBeaconIndex();
+    if (activeBeaconIndex >= 0) return atlasRouteBeacons[activeBeaconIndex].interactionPosition;
+    return getAuroraThresholdCenter();
+  }
+  if (mission08.started) {
+    const activeFocusIndex = getActiveFractureFocusIndex();
+    if (activeFocusIndex >= 0) return signalFractureNodes[activeFocusIndex].interactionPosition;
+    if (mission08.step === 'analyzeTrace' || mission08.step === 'returnToBase' || mission08.step === 'signalPurge') {
+      return planetaryWorld.colonyModule.group.position;
+    }
+    return getSignalFractureCenter();
+  }
+  if (mission07.started) {
+    const activeNodeIndex = getActiveAtlasEchoNodeIndex();
+    if (activeNodeIndex >= 0) return atlasEchoNodes[activeNodeIndex].interactionPosition;
+    if (mission07.step === 'analyzeSignal') return planetaryWorld.colonyModule.group.position;
+    return atlasSeedArchive.interactionPosition;
+  }
+  if (mission06.started) {
+    if (mission06.completed) return cloakingField.group.position;
+    const cloakingIndex = getActiveCloakingProjectorIndex();
+    if (cloakingIndex >= 0) return cloakingProjectors[cloakingIndex].group.position;
+    return planetaryWorld.colonyModule.group.position;
+  }
+  if (mission05.started) {
+    if (shouldGuideMission05ToShip()) return shipAccessLift.getGroundExitPosition();
+    if (mission05.step === 'gainScanAltitude' || mission05.step === 'orbitalScan') {
+      return new THREE.Vector3(
+        ship.position.x,
+        Math.max(
+          planetaryWorld.getHeightAt(ship.position.x, ship.position.z) + mission05Tuning.minimumScanAltitude,
+          ship.position.y
+        ),
+        ship.position.z
+      );
+    }
+    if (mission05.step === 'trackEcho') return getActiveMission05EchoPosition();
+    if (mission05.step === 'approachProbe' || mission05.step === 'atlasRecalibration' || mission05.step === 'counterSignal') {
+      return silentProbe.interactionPosition;
+    }
+    if (mission05.step === 'returnToBase') return planetaryWorld.colonyModule.group.position;
+    return shipAccessLift.getGroundExitPosition();
+  }
+  if (mission04.started) {
+    if (shouldGuideMission04ToShip()) return shipAccessLift.getGroundExitPosition();
+    if (mission04.step === 'travelToBeacon' || mission04.step === 'deployBeacon' || mission04.step === 'synchronizeNetwork') {
+      return getActiveDefenseBeacon().interactionPosition;
+    }
+    if (mission04.step === 'orbitalScan') {
+      return new THREE.Vector3(
+        ship.position.x,
+        Math.max(
+          planetaryWorld.getHeightAt(ship.position.x, ship.position.z) + mission04Tuning.orbitalScanAltitude,
+          ship.position.y
+        ),
+        ship.position.z
+      );
+    }
+    if (mission04.step === 'threatSignature') return MISSION04_THREAT_SIGNATURE_POSITION;
+    return planetaryWorld.colonyModule.group.position;
+  }
+  if (mission03.started) {
+    if (shouldGuideMission03ToShip()) return shipAccessLift.getGroundExitPosition();
+    const target = mission03.currentStep.target;
+    if (target === 'resonator' || target === 'relay') return pleyadanRelayBeacon.interactionPosition;
+    if (mission03.step === 'firstContact' || mission03.step === 'warning') {
+      return pleyadanHologram.group.position;
+    }
+    return planetaryWorld.colonyModule.group.position;
+  }
+  if (!colonyManager.state.habitatOnline) return HABITAT_SITE_LOCAL;
+  const stepId = surfaceMission.currentStep.id;
+  const wantedType = stepId === 'scanWater' ? 'water' : stepId === 'scanMinerals' ? 'minerals' : stepId === 'scanEnergy' ? 'energy' : null;
+  if (wantedType) {
+    const node = surfaceResourceSystem.nodes.find((candidate) => candidate.definition.type === wantedType && !candidate.scanned);
+    if (node) return node.interactionPosition;
+  }
+  if (stepId === 'surveyResourceSites' || stepId === 'stabilizeLifeSupport' || stepId === 'baseOperational' || stepId === 'prepareExpansion') {
+    return planetaryWorld.colonyModule.group.position;
+  }
+  const unscanned = surfaceResourceSystem.nodes.find((candidate) => candidate.status !== 'sampled' && candidate.status !== 'analyzed');
+  return unscanned ? unscanned.interactionPosition : planetaryWorld.colonyModule.group.position;
+}
+
+function getSurfaceObjectiveLabel(): string {
+  if (mission23.started) return getMission23StationLabel();
+  if (mission22.started) return getMission22StationLabel();
+  if (mission21.started) return getMission21StationLabel();
+  if (mission15.started) return getMission15StationLabel();
+  if (mission14.started) return getMission14StationLabel();
+  if (mission13.started) return getMission13StationLabel();
+  if (mission12.started) return getMission12StationLabel();
+  if (mission11.started) return getMission11StationLabel();
+  if (mission10.started) return getMission10ObjectiveLabel();
+  if (mission09.started) {
+    if (mission09.completed) return 'SECTOR AURORA';
+    if (mission09.step === 'analyzeResidual') return 'BASE NEREIDA';
+    const activeBeaconIndex = getActiveRouteBeaconIndex();
+    if (activeBeaconIndex >= 0) return atlasRouteBeacons[activeBeaconIndex].definition.name.toUpperCase();
+    return 'UMBRAL AURORA';
+  }
+  if (mission08.started) {
+    if (mission08.completed) return 'GRIETA CONTENIDA';
+    const activeFocusIndex = getActiveFractureFocusIndex();
+    if (activeFocusIndex >= 0) return signalFractureNodes[activeFocusIndex].definition.name.toUpperCase();
+    if (mission08.step === 'travelToFracture') return 'GRIETA DE SEÑAL';
+    return 'BASE NEREIDA';
+  }
+  if (mission07.started) {
+    const activeNodeIndex = getActiveAtlasEchoNodeIndex();
+    if (activeNodeIndex >= 0) return atlasEchoNodes[activeNodeIndex].definition.name.toUpperCase();
+    if (mission07.step === 'analyzeSignal') return 'BASE NEREIDA';
+    if (mission07.step === 'travelToFracture') return 'FRACTURA ATLAS';
+    return 'ARCHIVO SEMILLA ATLAS';
+  }
+  if (mission06.started) {
+    if (mission06.completed) return 'CAMPO DE OCULTAMIENTO NEREIDA';
+    const cloakingIndex = getActiveCloakingProjectorIndex();
+    if (cloakingIndex >= 0) return CLOAKING_PROJECTOR_NAMES[cloakingIndex].toUpperCase();
+    if (mission06.step === 'syncMatrix') return 'MATRIZ DE OCULTAMIENTO';
+    return 'BASE NEREIDA';
+  }
+  if (mission05.started) {
+    if (shouldGuideMission05ToShip() || mission05.step === 'boardShip') return 'NAVE DE RECONOCIMIENTO';
+    if (mission05.step === 'gainScanAltitude') return 'ALTURA DE ESCANEO';
+    if (mission05.step === 'orbitalScan') return 'SECTOR ORBITAL E-01';
+    if (mission05.step === 'approachProbe' || mission05.step === 'counterSignal') return 'SONDA SILENCIOSA';
+    if (mission05.step === 'atlasRecalibration') return 'FRECUENCIA ATLAS';
+    if (mission05.step === 'trackEcho') return `ECO DE INTERFERENCIA ${mission05.state.activeEchoIndex + 1}`;
+    if (mission05.step === 'returnToBase') return 'BASE NEREIDA';
+    return 'RED DEFENSIVA E-01';
+  }
+  if (mission04.started) {
+    if (shouldGuideMission04ToShip()) return 'NAVE DE RECONOCIMIENTO';
+    if (mission04.step === 'travelToBeacon' || mission04.step === 'deployBeacon') {
+      return getActiveDefenseBeacon().site.name.toUpperCase();
+    }
+    if (mission04.step === 'synchronizeNetwork') return 'RANGO DE SINCRONIZACION';
+    if (mission04.step === 'orbitalScan') return 'SECTOR ORBITAL E-01';
+    if (mission04.step === 'threatSignature') return 'FIRMA ANOMALA DISTANTE';
+    if (mission04.currentStep.target === 'communications') return 'MODULO DE COMUNICACIONES';
+    if (mission04.currentStep.target === 'orbitalSensor') return 'ENLACE ORBITAL NEREIDA';
+    return 'BASE NEREIDA';
+  }
+  if (mission03.started) {
+    if (shouldGuideMission03ToShip()) return 'NAVE DE RECONOCIMIENTO';
+    if (mission03.step === 'firstContact' || mission03.step === 'warning') return 'PROYECCION PLEYADANA';
+    const target = mission03.currentStep.target;
+    if (target === 'resonator') return 'RESONADOR ATLAS';
+    if (target === 'relay') return 'BALIZA DE ENLACE';
+    if (target === 'communications') return 'MODULO DE COMUNICACIONES';
+    return mission03.state.pleyadanContactEstablished ? 'CANAL PLEYADANO' : 'BASE NEREIDA';
+  }
+  if (!colonyManager.state.habitatOnline) return 'HÁBITAT NEREIDA-01';
+  const stepId = surfaceMission.currentStep.id;
+  if (stepId === 'scanWater') return 'LAGUNA NEREIDA';
+  if (stepId === 'scanMinerals') return 'VETA FERRITA';
+  if (stepId === 'scanEnergy') return 'FISURA GEOTÉRMICA';
+  if (stepId === 'surveyResourceSites' || stepId === 'stabilizeLifeSupport' || stepId === 'baseOperational' || stepId === 'prepareExpansion') return 'BASE NEREIDA';
+  return 'RECURSO';
+}
+
+function getMissionObjectivePosition(): THREE.Vector3 {
+  if (mission24.started) return getMission24StationPosition();
+  if (mission23.started) return getMission23StationPosition();
+  if (mission22.started) return getMission22StationPosition();
+  if (mission21.started) return getMission21StationPosition();
+  if (inSurfacePhase) {
+    return getSurfaceObjectivePosition();
+  }
+  switch (missionManager.step) {
+    case 'scanOrbitalMarker':
+    case 'decodeDescentCorridor':
+      return orbitalMarker.group.position;
+    case 'landingApproach':
+    case 'touchdown':
+    case 'firstFoothold':
+      return landingZone.active ? landingZone.group.position : candidatePlanet.group.position;
+    case 'transmitData':
+      return mothership.group.position;
+    default:
+      return candidatePlanet.group.position;
+  }
+}
+
+function getMissionObjectiveDistance(): number {
+  return getMissionObjectivePosition().distanceTo(getActivePlayerPosition());
+}
+
+function getMissionObjectiveTargetName(): string {
+  if (mission24.started) return getMission24StationLabel();
+  if (mission23.started) return getMission23StationLabel();
+  if (mission22.started) return getMission22StationLabel();
+  if (mission21.started) return getMission21StationLabel();
+  if (inSurfacePhase) return getSurfaceObjectiveLabel();
+  if (missionManager.step === 'scanOrbitalMarker' || missionManager.step === 'decodeDescentCorridor') {
+    return orbitalMarkerLore.name;
+  }
+  if (missionManager.step === 'landingApproach' || missionManager.step === 'touchdown') {
+    return firstLandingZone.name;
+  }
+  if (missionManager.step === 'transmitData') return 'Arca Epsilon';
+  return 'Biosfera E-01';
+}
+
+function getCurrentObjectiveDisplay(): ObjectiveDisplay {
+  const missionHud = missionManager.update(
+    0,
+    getMissionObjectiveDistance(),
+    getMissionSignalStrength(),
+    getMissionProgress()
+  );
+  const phase = getCurrentPhase();
+  const activeMission24Step = mission24.started ? mission24.stepDefinition : undefined;
+  const activeMission23Step = mission23.started && !activeMission24Step ? mission23.stepDefinition : undefined;
+  const activeMission22Step = mission22.started && !activeMission23Step ? mission22.stepDefinition : undefined;
+  const activeMission21Step = mission21.started && !activeMission22Step && !activeMission23Step ? mission21.stepDefinition : undefined;
+  const activeMission20Step = mission20.started && !activeMission21Step ? mission20.stepDefinition : undefined;
+  const activeMission19Step = inSurfacePhase && mission19.started && !activeMission20Step ? mission19.stepDefinition : undefined;
+  const activeMission18Step = inSurfacePhase && mission18.started && !activeMission19Step ? mission18.stepDefinition : undefined;
+  const activeMission17Step = inSurfacePhase && mission17.started && !activeMission18Step ? mission17.stepDefinition : undefined;
+  const activeMission16Step = inSurfacePhase && mission16.started && !activeMission17Step ? mission16.stepDefinition : undefined;
+  const activeMission15Step = inSurfacePhase && mission15.started && !activeMission16Step && !activeMission17Step ? mission15.stepDefinition : undefined;
+  const activeMission14Step = inSurfacePhase && mission14.started && !activeMission15Step && !activeMission16Step ? mission14.stepDefinition : undefined;
+  const activeMission13Step = inSurfacePhase && mission13.started && !activeMission14Step ? mission13.stepDefinition : undefined;
+  const activeMission12Step = inSurfacePhase && mission12.started && !activeMission13Step ? mission12.stepDefinition : undefined;
+  const activeMission11Step = inSurfacePhase && mission11.started && !activeMission12Step && !activeMission13Step ? mission11.stepDefinition : undefined;
+  const activeMission10Step = inSurfacePhase && mission10.started && !activeMission11Step && !activeMission12Step ? mission10.stepDefinition : undefined;
+  const activeMission09Step = inSurfacePhase && mission09.started && !activeMission10Step && !activeMission11Step ? mission09.stepDefinition : undefined;
+  const activeMission08Step = inSurfacePhase && mission08.started && !activeMission09Step && !activeMission10Step ? mission08.stepDefinition : undefined;
+  const activeMission07Step = inSurfacePhase && mission07.started && !activeMission08Step && !activeMission09Step ? mission07.stepDefinition : undefined;
+  const activeMission06Step = inSurfacePhase && mission06.started ? mission06.stepDefinition : undefined;
+  const activeMission05Step = inSurfacePhase && mission05.started ? mission05.currentStep : undefined;
+  const activeMission04Step = inSurfacePhase && mission04.started ? mission04.currentStep : undefined;
+  const activeMission03Step = inSurfacePhase && mission03.started ? mission03.currentStep : undefined;
+  const activeSurfaceMissionStep = activeMission24Step ?? activeMission23Step ?? activeMission22Step ?? activeMission21Step ?? activeMission20Step ?? activeMission19Step ?? activeMission18Step ?? activeMission17Step ?? activeMission16Step ?? activeMission15Step ?? activeMission14Step ?? activeMission13Step ?? activeMission12Step ?? activeMission11Step ?? activeMission10Step ?? activeMission09Step ?? activeMission08Step ?? activeMission07Step ?? activeMission06Step ?? activeMission05Step ?? activeMission04Step ?? activeMission03Step;
+  const mission24Guidance = activeMission24Step ? getMission24ObjectiveGuidance() : undefined;
+  const mission23Guidance = activeMission23Step ? getMission23ObjectiveGuidance() : undefined;
+  const mission22Guidance = activeMission22Step ? getMission22ObjectiveGuidance() : undefined;
+  const mission21Guidance = activeMission21Step ? getMission21ObjectiveGuidance() : undefined;
+  const mission20Guidance = activeMission20Step ? getMission20ObjectiveGuidance() : undefined;
+  const mission19Guidance = activeMission19Step ? getMission19ObjectiveGuidance() : undefined;
+  const mission18Guidance = activeMission18Step ? getMission18ObjectiveGuidance() : undefined;
+  const mission17Guidance = activeMission17Step ? getMission17ObjectiveGuidance() : undefined;
+  const mission16Guidance = activeMission16Step ? getMission16ObjectiveGuidance() : undefined;
+  const mission15Guidance = activeMission15Step ? getMission15ObjectiveGuidance() : undefined;
+  const mission14Guidance = activeMission14Step ? getMission14ObjectiveGuidance() : undefined;
+  const mission13Guidance = activeMission13Step ? getMission13ObjectiveGuidance() : undefined;
+  const mission12Guidance = activeMission12Step ? getMission12ObjectiveGuidance() : undefined;
+  const mission11Guidance = activeMission11Step ? getMission11ObjectiveGuidance() : undefined;
+  const mission10Guidance = activeMission10Step ? getMission10ObjectiveGuidance() : undefined;
+  const mission09Guidance = activeMission09Step ? getMission09ObjectiveGuidance() : undefined;
+  const mission08Guidance = activeMission08Step ? getMission08ObjectiveGuidance() : undefined;
+  const mission07Guidance = activeMission07Step ? getMission07ObjectiveGuidance() : undefined;
+  const mission06Guidance = activeMission06Step ? getMission06ObjectiveGuidance() : undefined;
+  const mission05Guidance = activeMission05Step ? getMission05ObjectiveGuidance() : undefined;
+  const mission04Guidance = activeMission04Step ? getMission04ObjectiveGuidance() : undefined;
+  const mission03Guidance = activeMission03Step ? getMission03ObjectiveGuidance() : undefined;
+  return resolveObjectiveDisplay({
+    phase,
+    missionStep: missionManager.step,
+    missionTitle: activeMission24Step ? mission24.missionName : activeMission23Step ? mission23.missionName : activeMission22Step ? mission22.missionName : activeMission21Step ? mission21.missionName : activeMission20Step ? mission20.missionName : activeMission19Step ? mission19.missionName : activeMission18Step ? mission18.missionName : activeMission17Step ? mission17.missionName : activeMission16Step ? mission16.missionName : activeMission15Step ? mission15.missionName : activeMission14Step ? mission14.missionName : activeMission13Step ? mission13.missionName : activeMission12Step ? mission12.missionName : activeMission11Step ? mission11.missionName : activeMission10Step ? mission10.missionName : activeMission09Step ? mission09.missionName : activeMission08Step ? mission08.missionName : activeMission07Step ? mission07.missionName : activeMission06Step ? mission06.missionName : activeMission05Step ? mission05.missionName : activeMission04Step ? mission04.missionName : activeMission03Step ? mission03.missionName : missionHud.missionName,
+    stepTitle: activeSurfaceMissionStep?.stepTitle ?? (inSurfacePhase ? surfaceMission.currentStep.stepTitle : missionHud.stepTitle),
+    objective: missionHud.objective,
+    nextAction: missionHud.nextAction,
+    target: getMissionObjectiveTargetName(),
+    distance: getMissionObjectiveDistance(),
+    surfaceStep: inSurfacePhase && !activeSurfaceMissionStep ? surfaceMission.currentStep : undefined,
+    activeStep: activeSurfaceMissionStep,
+    heat: descentSystem.state.heat,
+    stability: descentSystem.state.stability,
+    hazardActive: transientWarning.length > 0,
+    playerMode: playerModeSystem.mode,
+    onFoot: playerModeSystem.onFootActive,
+    shouldExitShip:
+      inSurfacePhase &&
+      !activeSurfaceMissionStep &&
+      colonyManager.state.habitatOnline &&
+      isShipExitAvailable(),
+    shouldReturnToShip:
+      inSurfacePhase &&
+      !activeSurfaceMissionStep &&
+      playerModeSystem.onFootActive &&
+      surfaceMission.currentStep.id === 'prepareExpansion',
+    actionOverride: mission24Guidance?.nextAction ?? mission23Guidance?.nextAction ?? mission22Guidance?.nextAction ?? mission21Guidance?.nextAction ?? mission20Guidance?.nextAction ?? mission19Guidance?.nextAction ?? mission18Guidance?.nextAction ?? mission17Guidance?.nextAction ?? mission16Guidance?.nextAction ?? mission15Guidance?.nextAction ?? mission14Guidance?.nextAction ?? mission13Guidance?.nextAction ?? mission12Guidance?.nextAction ?? mission11Guidance?.nextAction ?? mission10Guidance?.nextAction ?? mission09Guidance?.nextAction ?? mission08Guidance?.nextAction ?? mission07Guidance?.nextAction ?? mission06Guidance?.nextAction ?? mission05Guidance?.nextAction ?? mission04Guidance?.nextAction ?? mission03Guidance?.nextAction,
+    keyOverride: mission24Guidance?.key ?? mission23Guidance?.key ?? mission22Guidance?.key ?? mission21Guidance?.key ?? mission20Guidance?.key ?? mission19Guidance?.key ?? mission18Guidance?.key ?? mission17Guidance?.key ?? mission16Guidance?.key ?? mission15Guidance?.key ?? mission14Guidance?.key ?? mission13Guidance?.key ?? mission12Guidance?.key ?? mission11Guidance?.key ?? mission10Guidance?.key ?? mission09Guidance?.key ?? mission08Guidance?.key ?? mission07Guidance?.key ?? mission06Guidance?.key ?? mission05Guidance?.key ?? mission04Guidance?.key ?? mission03Guidance?.key,
+    blockedReason: mission24Guidance?.blockedReason ?? mission23Guidance?.blockedReason ?? mission22Guidance?.blockedReason ?? mission21Guidance?.blockedReason ?? mission20Guidance?.blockedReason ?? mission19Guidance?.blockedReason ?? mission18Guidance?.blockedReason ?? mission17Guidance?.blockedReason ?? mission16Guidance?.blockedReason ?? mission15Guidance?.blockedReason ?? mission14Guidance?.blockedReason ?? mission13Guidance?.blockedReason ?? mission12Guidance?.blockedReason ?? mission11Guidance?.blockedReason ?? mission10Guidance?.blockedReason ?? mission09Guidance?.blockedReason ?? mission08Guidance?.blockedReason ?? mission07Guidance?.blockedReason ?? mission06Guidance?.blockedReason ?? mission05Guidance?.blockedReason ?? mission04Guidance?.blockedReason ?? mission03Guidance?.blockedReason ?? (!inSurfacePhase ? descentSafetyGate.state.descentBlockedReason : ''),
+    missingRequirements: !inSurfacePhase ? descentSafetyGate.state.missingDescentRequirements : []
+  });
+}
+
+const SPACE_DIALOGUE_BY_STEP: Readonly<Record<string, string>> = {
+  scannerTutorial: 'm01_start_commander',
+  followSignal: 'm01_e01_detected',
+  analyzeHabitability: 'm01_orbital_scan',
+  scanOrbitalMarker: 'm01_atlas_detected',
+  approachPlanet: 'm01_descent_authorized',
+  atmosphericEntry: 'm01_atmospheric_entry',
+  firstFoothold: 'm01_landing_complete'
+};
+
+const SURFACE_DIALOGUE_BY_STEP: Readonly<Record<string, string>> = {
+  deployHabitat: 'm02_surface_start',
+  surveyResourceSites: 'm02_habitat_deployed',
+  stabilizeLifeSupport: 'm02_all_samples',
+  baseOperational: 'm02_samples_analyzed',
+  prepareExpansion: 'm02_base_operational'
+};
+
+const MISSION03_DIALOGUE_BY_STEP: Readonly<Record<Mission03StepId, string>> = {
+  inactive: '',
+  deepSignal: 'm03_signal_detected',
+  calibrateCommunications: 'm03_calibrate_comms',
+  resonancePoint: 'm03_resonator_revealed',
+  relayBeacon: 'm03_relay_deploy',
+  synchronization: 'm03_relay_placed',
+  returnToBase: 'm03_signal_synchronized',
+  atlasTranslation: 'm03_translation_started',
+  firstContact: 'm03_pleyadan_contact',
+  warning: '',
+  prepare: '',
+  completed: 'm03_complete'
+};
+
+const MISSION04_DIALOGUE_BY_STEP: Readonly<Record<Mission04StepId, string>> = {
+  inactive: '',
+  returnToBase: 'm04_protocol_start',
+  calibrateDefenseLink: 'm04_calibrate_link',
+  activateOrbitalSensor: 'm04_sensor_ready',
+  travelToBeacon: '',
+  deployBeacon: 'm04_deploy_beacon',
+  synchronizeNetwork: 'm04_network_sync',
+  returnToShip: 'm04_orbital_scan',
+  orbitalScan: 'm04_orbital_scan',
+  threatSignature: 'm04_signature_detected',
+  completed: 'm04_complete'
+};
+
+const MISSION05_DIALOGUE_BY_STEP: Readonly<Record<Mission05StepId, string>> = {
+  inactive: '',
+  boardShip: 'm05_signature_moving',
+  gainScanAltitude: 'm05_observer_confirmed',
+  orbitalScan: '',
+  approachProbe: 'm05_probe_detected',
+  atlasRecalibration: 'm05_interference',
+  trackEcho: '',
+  counterSignal: 'm05_pleyadan_warning',
+  returnToBase: 'm05_probe_retreat',
+  completed: 'm05_complete'
+};
+
+let lastDialogueObjectiveKey = '';
+
+function triggerDialogue(id: string, triggerId?: string, delaySeconds?: number): boolean {
+  return dialogueManager.trigger(id, { triggerId, delaySeconds });
+}
+
+function syncDialogueWithObjective(): void {
+  const objective = getCurrentObjectiveDisplay();
+  const objectiveKey = `${objective.phase}:${objective.step}`;
+  if (objectiveKey === lastDialogueObjectiveKey) return;
+  lastDialogueObjectiveKey = objectiveKey;
+  if (mission24.started) return;
+
+  const dialogueId = inSurfacePhase
+    ? mission05.started
+      ? MISSION05_DIALOGUE_BY_STEP[mission05.step]
+      : mission04.started
+      ? MISSION04_DIALOGUE_BY_STEP[mission04.step]
+      : mission03.started
+      ? MISSION03_DIALOGUE_BY_STEP[mission03.step]
+      : SURFACE_DIALOGUE_BY_STEP[surfaceMission.currentStep.id]
+    : SPACE_DIALOGUE_BY_STEP[missionManager.step];
+  if (dialogueId) triggerDialogue(dialogueId, 'objective-sync');
+}
+
+function triggerResourceDialogue(): void {
+  const resource = surfaceResourceSystem.lastScannedResource;
+  if (!resource) return;
+
+  if (resource.status === 'located' && resource.type === 'water') {
+    triggerDialogue('m02_water_located', 'water-located');
+  } else if (resource.status === 'sampled') {
+    const dialogueId = resource.type === 'water'
+      ? 'm02_water_sampled'
+      : resource.type === 'minerals'
+        ? 'm02_minerals_sampled'
+        : resource.type === 'energy'
+          ? 'm02_energy_sampled'
+          : '';
+    if (dialogueId) triggerDialogue(dialogueId, `${resource.type}-sampled`);
+  }
+
+  if (colonyManager.state.resourceAnalysisReady) {
+    triggerDialogue('m02_all_samples', 'all-samples-collected');
+  }
+}
+
+function getSurfaceMapTargetId(): string {
+  if (mission24.started) return 'mission24-target';
+  if (mission23.started) {
+    if (playerModeSystem.onFootActive && !mission23.completed) return 'surface-scout-ship';
+    if (mission23.step === 'approachJammerNode' || mission23.step === 'destroyJammerNode') return 'mission23-jammer';
+    if (mission23StepUsesPlatform()) return 'mission23-logistics';
+    if (mission23StepUsesBeacon() && mission23.step !== 'recoverEnemyRoute') return 'mission23-jump-beacon';
+    if (mission23.step === 'recoverEnemyRoute') return 'mission23-route-data';
+    return 'mission23-ark';
+  }
+  if (mission22.started) {
+    if (mission22.step === 'defendOrbitalFront') return `mission22-relay-${Math.min(2, mission22.relaysProtected)}`;
+    if (mission22.step === 'detectCoordinationNodes') return `mission22-node-${Math.max(0, mission22.activeNodeIndex)}`;
+    if (mission22.step === 'defendAuroraFront') return 'mission22-aurora';
+    if (mission22.step === 'defendNereidaFront') return 'mission22-nereida';
+    return 'mission22-ark';
+  }
+  if (mission21.started) {
+    if (mission21.step === 'detectCapitalShip' || mission21.step === 'analyzeSignature' || mission21.step === 'receiveUltimatum') {
+      return 'coalition-capital';
+    }
+    if (mission21.step === 'restoreThreeChannels') {
+      return `mission21-link-${Math.max(0, mission21.activeEnclaveChannelIndex)}`;
+    }
+    if (mission21.step === 'witnessDemonstration') return 'remote-orbital-beacon';
+    if (mission21.step === 'classifyAttackRoutes') {
+      return `mission21-route-${Math.max(0, mission21.activeRouteIndex)}`;
+    }
+    return 'mission21-ark';
+  }
+  if (mission09.started && !mission09.completed) {
+    if (mission09.step === 'analyzeResidual') return 'communications-module';
+    const activeBeaconIndex = getActiveRouteBeaconIndex();
+    if (activeBeaconIndex >= 0) return atlasRouteBeaconDefinitions[activeBeaconIndex].id;
+    return auroraThresholdDefinition.id;
+  }
+  if (mission08.started && !mission08.completed) {
+    const activeFocusIndex = getActiveFractureFocusIndex();
+    if (activeFocusIndex >= 0) return signalFractureFocusDefinitions[activeFocusIndex].id;
+    if (mission08.step === 'travelToFracture') return signalFractureDefinition.id;
+    if (mission08.step === 'analyzeTrace' || mission08.step === 'returnToBase' || mission08.step === 'signalPurge') {
+      return 'communications-module';
+    }
+  }
+  if (mission07.started) {
+    const activeNodeIndex = getActiveAtlasEchoNodeIndex();
+    if (activeNodeIndex >= 0) return atlasEchoNodes[activeNodeIndex].definition.id;
+    if (mission07.step === 'analyzeSignal') return 'communications-module';
+    if (mission07.step === 'travelToFracture') return atlasFractureDefinition.id;
+    if (mission07.step === 'activateArchive' || mission07.completed) return atlasSeedArchiveDefinition.id;
+  }
+  if (mission06.started) {
+    if (mission06.completed) return 'cloaking-field';
+    const cloakingIndex = getActiveCloakingProjectorIndex();
+    if (cloakingIndex >= 0) return `cloaking-projector-${cloakingIndex}`;
+    if (mission06.step === 'syncMatrix') return 'cloaking-sync-range';
+    return 'cloaking-matrix';
+  }
+  if (mission05.started) {
+    if (shouldGuideMission05ToShip() || mission05.step === 'boardShip') return 'surface-scout-ship';
+    if (mission05.step === 'trackEcho') return `signal-echo-${mission05.state.activeEchoIndex + 1}`;
+    if (mission05.step === 'counterSignal') {
+      return mission05.counterSignalActive ? 'counter-signal-status' : 'silent-probe';
+    }
+    if (mission05.step === 'approachProbe' || mission05.step === 'atlasRecalibration') return 'silent-probe';
+    if (mission05.step === 'returnToBase') return 'communications-module';
+    if (mission05.step === 'gainScanAltitude' || mission05.step === 'orbitalScan') return 'defense-network-status';
+    return 'habitat-mod';
+  }
+  if (mission04.started) {
+    if (shouldGuideMission04ToShip()) return 'surface-scout-ship';
+    if (mission04.step === 'synchronizeNetwork') return 'defense-sync-range';
+    if (mission04.step === 'travelToBeacon' || mission04.step === 'deployBeacon') {
+      return getActiveDefenseBeacon().site.id;
+    }
+    if (mission04.step === 'returnToShip') return 'surface-scout-ship';
+    if (mission04.step === 'threatSignature') return 'coalition-signature';
+    if (mission04.currentStep.target === 'communications') return 'communications-module';
+    if (mission04.currentStep.target === 'orbitalSensor') return 'defense-network-status';
+    return 'habitat-mod';
+  }
+  if (mission03.started) {
+    if (shouldGuideMission03ToShip()) return 'surface-scout-ship';
+    if (mission03.step === 'firstContact' || mission03.step === 'warning') return 'pleyadan-projection';
+    if (mission03.step === 'synchronization') return 'signal-range';
+    const target = mission03.currentStep.target;
+    if (target === 'resonator') return 'resonador-atlas';
+    if (target === 'relay') return mission03.state.relayBeaconPlaced ? 'pleyadan-relay' : 'resonador-atlas';
+    if (target === 'communications') return 'communications-module';
+    return 'habitat-mod';
+  }
+  const step = surfaceMission.currentStep.id;
+  if (step === 'deployHabitat' || step === 'confirmArrival') return 'habitat-mod';
+  if (step === 'surveyResourceSites' || step === 'stabilizeLifeSupport' || step === 'baseOperational' || step === 'prepareExpansion') return 'habitat-mod';
+  const resourceType = step === 'scanWater' ? 'water' : step === 'scanMinerals' ? 'minerals' : step === 'scanEnergy' ? 'energy' : '';
+  return surfaceResourceSystem.nodes.find((node) => node.definition.type === resourceType)?.definition.id ?? 'nereida-landing';
+}
+
+function getMissionProgress(): number {
+  if (mission24.started) return getMission24Progress();
+  if (mission23.started) return getMission23Progress();
+  if (mission22.started) return getMission22Progress();
+  if (mission21.started) return getMission21Progress();
+  switch (missionManager.step) {
+    case 'decodeDescentCorridor':
+      return orbitalMarkerSystem.state.progress;
+    case 'atmosphericEntry':
+      return descentSystem.state.entryProgress;
+    case 'landingApproach':
+    case 'touchdown': {
+      if (!landingZone.active) return 0;
+      return THREE.MathUtils.clamp(100 * (1 - landingZone.distanceTo(ship.position) / landingZone.definition.assistRadius), 0, 100);
+    }
+    case 'firstFoothold':
+    case 'missionComplete':
+      return 100;
+    default:
+      return habitabilitySystem.progress;
+  }
+}
+
+function getMissionSignalStrength(): number {
+  if (mission24.started) return mission24.atmosphericAscentActive
+    ? 1 - atmosphericAscent.metrics.density * 0.45
+    : mission24.state.allEnclaveLinksRestored ? 1 : 0.72;
+  if (mission23.started) return mission23.state.jammerNodeDestroyed ? 1 : mission23.jammed ? 0.28 : mission23.readout.jointEnergy / 100;
+  if (mission22.started) return mission22.readout.communicationsQuality / 100;
+  if (mission21.started) return mission21.readout.enemySignal / 100;
+  if (inSurfacePhase && mission13.started) {
+    // Power stability is the reading that matters while the front is over us.
+    return mission13.readout.energyStability / 100;
+  }
+  if (inSurfacePhase && mission12.started) {
+    // Habitation stability is the reading that matters once people live here.
+    return mission12.load.habitationStability / 100;
+  }
+  if (inSurfacePhase && mission11.started) {
+    // The core's own telemetry strengthens as each milestone lands.
+    return 0.6 + mission11.milestoneCount * 0.05;
+  }
+  if (inSurfacePhase && mission10.started) {
+    // Aurora valley: confidence in the site grows with each reading taken.
+    return 0.6 + mission10.analyzedSampleCount * 0.1;
+  }
+  if (inSurfacePhase && mission09.started && !mission09.completed) {
+    // Aurora: the HUD signal reads the fading Base Nereida link.
+    return mission09.state.auroraSignalStrength;
+  }
+  if (inSurfacePhase && mission08.started && !mission08.completed) {
+    if (mission08.step === 'signalPurge') return mission08.purgeFraction;
+    const stabilized = mission08.state.fractureNodesStabilized.filter(Boolean).length;
+    return THREE.MathUtils.clamp(0.16 + stabilized * 0.2 + (1 - getMissionObjectiveDistance() / 900) * 0.3, 0.08, 1);
+  }
+  if (inSurfacePhase && mission07.started) {
+    if (mission07.completed) return 1;
+    const scanned = mission07.state.atlasEchoNodesScanned.filter(Boolean).length;
+    return THREE.MathUtils.clamp(0.18 + scanned * 0.22 + (1 - getMissionObjectiveDistance() / 780) * 0.38, 0.08, 1);
+  }
+  if (inSurfacePhase && mission05.started) {
+    if (mission05.state.interferenceActive) return 0.14 + mission05.state.echoesResolved * 0.08;
+    if (mission05.counterSignalActive) return mission05.state.counterSignalProgress / 100;
+    if (mission05.state.probeRetreated) return 0.82;
+    return THREE.MathUtils.clamp(1 - getMissionObjectiveDistance() / 850, 0.08, 1);
+  }
+  if (inSurfacePhase && mission04.started) {
+    if (mission04.step === 'synchronizeNetwork') return mission04.state.defenseSyncProgress / 100;
+    if (mission04.step === 'threatSignature') return 0.28;
+    return THREE.MathUtils.clamp(1 - getMissionObjectiveDistance() / 950, 0.05, 1);
+  }
+  if (inSurfacePhase && mission03.started) {
+    if (mission03.step === 'synchronization') return mission03.state.signalStability / 100;
+    if (mission03.step === 'atlasTranslation') return signalTranslation.progress / 100;
+    return THREE.MathUtils.clamp(1 - getMissionObjectiveDistance() / 900, 0.05, 1);
+  }
+  switch (missionManager.step) {
+    case 'scanOrbitalMarker':
+    case 'decodeDescentCorridor':
+      return THREE.MathUtils.clamp(1 - orbitalMarker.distanceTo(ship.position) / 900, 0.08, 1);
+    case 'atmosphericEntry':
+    case 'landingApproach':
+    case 'touchdown':
+      return descentSystem.state.stability / 100;
+    default:
+      return candidatePlanet.signalStrengthFrom(ship.position);
+  }
+}
+
+function setCameraMode(mode: CameraMode): CameraMode {
+  debugCameraProbe = undefined;
+  if (launched && !playerModeSystem.insideShip) return cameraModeSystem.mode;
+  cameraModeSystem.setMode(mode);
+  previousShipCameraPreference = mode;
+  cameraTargetPrevious.copy(ship.position);
+  cameraTargetCurrent.copy(ship.position);
+  lastCameraModeTransition = `V:${mode}`;
+  playerModeSystem.syncShipContext(inSurfacePhase, mode === 'cockpit');
+  hud.classList.toggle('cockpit-active', mode === 'cockpit');
+  if (mode === 'cockpit') {
+    cockpitInterior.triggerAlert('SISTEMAS DE CABINA ENLAZADOS', 'info', clock.elapsedTime, 2.8);
+  }
+  if (launched) {
+    showPhaseBanner(
+      mode === 'cockpit' ? 'VISTA DE CABINA' : 'CÁMARA EXTERIOR',
+      mode === 'cockpit' ? 'Instrumentos de vuelo y navegación enlazados' : 'Perspectiva táctica restablecida'
+    );
+    playTone(mode === 'cockpit' ? 720 : 540, 0.09);
+  }
+  return cameraModeSystem.mode;
+}
+
+function toggleCockpitView(): CameraMode {
+  return setCameraMode(cameraModeSystem.mode === 'cockpit' ? 'external' : 'cockpit');
+}
+
+function getInputMode(): InputMode {
+  if (gamePaused) return 'paused';
+  if (starMap.active) return 'map';
+  if (playerModeSystem.transitionActive) return 'boarding-transition';
+  if (playerModeSystem.onFootActive) return 'on-foot';
+  return inSurfacePhase ? 'surface-flight' : 'space-flight';
+}
+
+function getInputActionState(): InputActionState {
+  return inputActionRouter.snapshot(getInputMode());
+}
+
+function handleShipAccessAction(): boolean {
+  if (!inSurfacePhase) {
+    missionText.textContent = 'Acceso de superficie no disponible durante el vuelo orbital.';
+    return false;
+  }
+
+  if (playerModeSystem.onFootActive) {
+    if (requestEnterShip()) {
+      tutorialManager.complete('returnShip');
+      return true;
+    }
+    const proximity = getBoardingProximity();
+    missionText.textContent = `Elevador de la nave a ${Math.round(proximity.horizontal)} m. Acércate y usa F para embarcar.`;
+    playTone(260, 0.1);
+    return false;
+  }
+
+  if (playerModeSystem.insideShip) {
+    if (requestExitShip()) {
+      tutorialManager.complete('shipAccess');
+      return true;
+    }
+    missionText.textContent = velocity.length() >= 2.2
+      ? 'Acceso bloqueado: detén la nave antes de descender con F.'
+      : 'Acceso de superficie no disponible en este momento.';
+    playTone(260, 0.1);
+    return false;
+  }
+
+  return false;
+}
+
+function handleCameraToggleAction(): boolean {
+  if (playerModeSystem.onFootActive) {
+    missionText.textContent = 'Cambio de cabina disponible dentro de la nave.';
+    playTone(300, 0.08);
+    return true;
+  }
+  if (!playerModeSystem.insideShip) return false;
+  toggleCockpitView();
+  tutorialManager.complete('cameraToggle');
+  return true;
+}
+
+function dispatchInputAction(action: GameInputAction, key: string): boolean {
+  return inputActionRouter.dispatch(
+    action,
+    key,
+    {
+      pauseOpen: gamePaused,
+      mapOpen: starMap.active,
+      transitionActive: playerModeSystem.transitionActive,
+      onFoot: playerModeSystem.onFootActive,
+      insideShip: playerModeSystem.insideShip
+    },
+    {
+      scan: () => {
+        if (!launched) return false;
+        // During the prologue the interaction key runs the launch checklist
+        // and the clamp release instead of the long-range sweep, which only
+        // makes sense once the ship is outside the perimeter anyway.
+        if (handleArkDepartureInteraction()) return true;
+        scan();
+        return true;
+      },
+      shipAccess: handleShipAccessAction,
+      toggleCamera: handleCameraToggleAction,
+      map: () => {
+        if (!launched) return false;
+        input.clear();
+        const opening = !starMap.active;
+        starMap.toggle();
+        if (opening) updateStarMap();
+        tutorialManager.complete('openMap');
+        if (opening) void document.exitPointerLock?.();
+        else requestGamePointerLock();
+        return true;
+      },
+      pause: () => {
+        if (!launched) return false;
+        setGamePaused(!gamePaused);
+        return true;
+      },
+      closeMap: () => {
+        starMap.close();
+        input.clear();
+        requestGamePointerLock();
+        return true;
+      }
+    }
+  );
+}
+
+function getCockpitRadarContacts(radarRange: number): CockpitRadarContact[] {
+  const contacts = new Map<string, CockpitRadarContact>();
+  const inverseRotation = ship.quaternion.clone().invert();
+  const objectivePosition = getMissionObjectivePosition();
+
+  const addContact = (
+    id: string,
+    label: string,
+    kind: CockpitRadarContact['kind'],
+    position: THREE.Vector3
+  ): void => {
+    if (id !== 'objective' && position.distanceToSquared(objectivePosition) < 4) return;
+    const local = position.clone().sub(ship.position).applyQuaternion(inverseRotation);
+    const distance = local.length();
+    if (distance > radarRange * 1.35) return;
+    contacts.set(id, { id, label, kind, localX: local.x, localZ: local.z, distance });
+  };
+
+  addContact(
+    'objective',
+    inSurfacePhase ? getSurfaceObjectiveLabel() : objectiveMarkerLabel.textContent || 'OBJETIVO',
+    'objective',
+    objectivePosition
+  );
+
+  if (inSurfacePhase) {
+    if (mission22.started && !mission23.started) {
+      threeFrontCommandNetwork.relayPositions.forEach((position, index) => {
+        addContact(`mission22-relay-${index}`, `RELÉ ${index + 1}`, 'marker', position);
+      });
+      threeFrontCommandNetwork.nodePositions.forEach((position, index) => {
+        if (mission22.state.coordinationNodesDetected[index]) {
+          addContact(`mission22-node-${index}`, MISSION22_NODE_LABELS[MISSION22_NODE_ORDER[index]], 'hazard', position);
+        }
+      });
+    }
+    if (mission24.started) addContact('mission24-target', getMission24StationLabel(), 'objective', getMission24StationPosition());
+    if (mission23.started && !mission24.started) {
+      addContact('mission23-ark', 'ARCA EPSILON', 'mothership', mothership.group.position);
+      if (!mission23.state.jammerNodeDestroyed && coalitionJammer.isActive) {
+        addContact('mission23-jammer', 'INTERFERIDOR', 'hazard', coalitionJammer.position);
+      }
+      if (!mission23.state.logisticsPlatformDestroyed && mission23.state.mission23TargetOrder.length > 0) {
+        addContact('mission23-logistics', 'PLATAFORMA LOGISTICA', 'hazard', coalitionLogisticsPlatform.position);
+      }
+      if (mission23.state.mission23TargetOrder.length > 0 && !mission23.state.enemyRouteRecovered) {
+        addContact('mission23-jump-beacon', 'BALIZA DE SALTO', mission23.state.jumpBeaconDestroyed ? 'marker' : 'hazard', coalitionJumpBeacon.position);
+      }
+    }
+    if (mission21.started && coalitionCapitalPresence.isVisible) {
+      addContact('coalition-capital', 'NAVE CAPITAL', 'hazard', coalitionCapitalPresence.capitalPosition);
+      if (!mission21.state.demonstrationObserved || mission21.step === 'witnessDemonstration') {
+        addContact('remote-orbital-beacon', 'BALIZA REMOTA', 'marker', coalitionCapitalPresence.remoteBeaconPosition);
+      }
+    }
+    if (colonyManager.state.habitatOnline) {
+      addContact('habitat', 'BASE NEREIDA', 'mothership', planetaryWorld.colonyModule.group.position);
+    }
+    for (const node of surfaceResourceSystem.nodes) {
+      if (!node.scanned) addContact(node.definition.id, node.definition.name, 'resource', node.interactionPosition);
+    }
+    if (mission03.state.communicationCalibrated) {
+      addContact('resonador-atlas', 'RESONADOR ATLAS', 'marker', pleyadanRelayBeacon.interactionPosition);
+    }
+    if (mission04.started) {
+      defensiveBeacons.forEach((beacon) => {
+        addContact(beacon.site.id, beacon.site.name.toUpperCase(), 'marker', beacon.interactionPosition);
+      });
+      if (mission04.state.threatSignatureDetected && !mission05.started) {
+        addContact('coalition-signature', 'FIRMA ANOMALA', 'hazard', MISSION04_THREAT_SIGNATURE_POSITION);
+      }
+    }
+    if (mission05.started) {
+      if (mission05.state.probeDetected && mission05.state.activeEchoIndex < 0 && mission05.state.probeState !== 'escaped') {
+        addContact('silent-probe', 'SONDA SILENCIOSA', 'hazard', silentProbe.interactionPosition);
+      }
+      if (mission05.step === 'trackEcho') {
+        MISSION05_ECHO_POSITIONS.forEach((position, index) => {
+          if (index >= mission05.state.echoesResolved) {
+            addContact(`signal-echo-${index + 1}`, `ECO ${index + 1}`, 'marker', position);
+          }
+        });
+      }
+    }
+    if (mission06.started) {
+      cloakingProjectors.forEach((projector, index) => {
+        const calibrated = mission06.state.cloakingProjectorsCalibrated[index];
+        addContact(
+          `cloaking-projector-${index}`,
+          `${CLOAKING_PROJECTOR_NAMES[index].toUpperCase()}${calibrated ? ' // ACTIVO' : ''}`,
+          'marker',
+          projector.group.position
+        );
+      });
+      if (mission06.state.cloakingFieldOnline) {
+        addContact('cloaking-field', 'CAMPO DE OCULTAMIENTO', 'objective', cloakingField.group.position);
+      }
+    }
+    if (mission07.started && mission07.state.atlasFractureRevealed) {
+      addContact('atlas-fracture', 'FRACTURA ATLAS', 'marker', atlasSeedArchive.interactionPosition);
+      atlasEchoNodes.forEach((node, index) => {
+        if (!mission07.state.atlasEchoNodesScanned[index]) {
+          addContact(node.definition.id, node.definition.name.toUpperCase(), 'marker', node.interactionPosition);
+        }
+      });
+      if (mission07.state.atlasSeedArchiveUnlocked) {
+        addContact('atlas-seed-archive', 'ARCHIVO SEMILLA', 'objective', atlasSeedArchive.interactionPosition);
+      }
+    }
+    if (mission08.started && mission08.state.signalFractureRevealed) {
+      const fractureLabel = mission08.state.signalFractureContained ? 'GRIETA CONTENIDA' : 'GRIETA DE SEÑAL';
+      addContact('signal-fracture', fractureLabel, mission08.state.signalFractureContained ? 'marker' : 'hazard', getSignalFractureCenter());
+      signalFractureNodes.forEach((node, index) => {
+        const stabilized = mission08.state.fractureNodesStabilized[index];
+        if (!mission08.completed) {
+          addContact(
+            node.definition.id,
+            `${node.definition.name.toUpperCase()}${stabilized ? ' // ESTABLE' : ''}`,
+            'marker',
+            node.interactionPosition
+          );
+        }
+      });
+    }
+    if (mission09.started && mission09.state.auroraRouteDecoded) {
+      const activeBeaconIndex = getActiveRouteBeaconIndex();
+      atlasRouteBeacons.forEach((beacon, index) => {
+        const scanned = mission09.state.auroraRouteBeaconsScanned[index];
+        if (scanned || index === activeBeaconIndex) {
+          addContact(
+            beacon.definition.id,
+            `${beacon.definition.name.toUpperCase()}${scanned ? ' // OK' : ''}`,
+            'marker',
+            beacon.interactionPosition
+          );
+        }
+      });
+      if (mission09.step === 'reachThreshold' || mission09.completed) {
+        addContact(
+          auroraThresholdDefinition.id,
+          mission09.completed ? 'SECTOR AURORA' : 'UMBRAL AURORA',
+          mission09.completed ? 'objective' : 'marker',
+          getAuroraThresholdCenter()
+        );
+      }
+    }
+    // Mission 10 keeps the valley map readable: only the active sample plus
+    // the ones already taken, the clearing, and the module once it exists.
+    if (mission10.started) {
+      const activeSampleIndex = getActiveAuroraSampleIndex();
+      auroraSurveyProbes.forEach((probe, index) => {
+        const analyzed = isAuroraSampleAnalyzed(probe.definition.kind);
+        if (!analyzed && index !== activeSampleIndex) return;
+        addContact(
+          probe.definition.id,
+          `${probe.definition.shortName.toUpperCase()}${analyzed ? ' // OK' : ''}`,
+          'marker',
+          probe.interactionPosition
+        );
+      });
+      if (mission10.state.auroraModuleDeployed) {
+        addContact('aurora-module', 'AURORA-01', mission11.started ? 'marker' : 'objective', auroraHabitatModule.interactionPosition);
+      } else {
+        addContact(
+          auroraSettlementSiteDefinition.id,
+          mission10.state.auroraSettlementSiteMarked ? 'SITIO AURORA-01' : 'CLARO AURORA',
+          mission10.state.auroraSettlementSiteMarked ? 'objective' : 'marker',
+          getAuroraSettlementSite()
+        );
+      }
+    }
+    // Mission 11 reveals each station only once it exists, plus the active
+    // objective — the valley map stays readable as the core grows.
+    if (mission11.started) {
+      const state = mission11.state;
+      if (state.auroraSecondModuleDeployed) {
+        addContact(auroraSecondModuleSiteDefinition.id, 'AURORA-02', 'marker', auroraSecondModule.interactionPosition);
+      }
+      if (state.auroraEnergyLinkOnline) {
+        addContact(auroraEnergyLinkDefinition.id, 'ENLACE // OK', 'marker', auroraEnergyLink.interactionPosition);
+      }
+      if (state.auroraWaterFilterInstalled) {
+        addContact(auroraWaterFilterDefinition.id, state.auroraWaterFlowCalibrated ? 'MICROFILTRO // OK' : 'MICROFILTRO', 'marker', auroraWaterFilter.interactionPosition);
+      }
+      if (state.auroraCultivationBedPrepared) {
+        addContact(auroraCultivationBedDefinition.id, state.auroraBioTrialStarted ? 'BIOENSAYO // OK' : 'CULTIVO', 'marker', auroraCultivationBed.interactionPosition);
+      }
+      if (!mission11.completed) {
+        addContact('mission11-objective', getMission11StationLabel(), 'objective', getMission11StationPosition());
+      }
+    }
+    // Mission 12: the pad, the capsule and the crew appear only once they
+    // exist, plus the active objective. Same restraint as the M11 layer.
+    if (mission12.started) {
+      const state = mission12.state;
+      if (state.auroraLandingZoneMarked && !state.auroraCrewCapsuleLanded) {
+        addContact(auroraLandingZoneDefinition.id, 'ZONA ATERRIZAJE', 'marker', getAuroraLandingZone());
+      }
+      if (state.auroraCrewCapsuleLanded) {
+        addContact('aurora-capsule', 'CAPSULA', 'marker', auroraCrewCapsule.interactionPosition);
+      }
+      if (state.auroraFirstCrewDisembarked) {
+        addContact(
+          'aurora-crew',
+          `TRIPULACION ${mission12.crewCount}/3`,
+          'marker',
+          auroraStationPosition(auroraCrewDefinitions[1].position)
+        );
+      }
+      if (!mission12.completed) {
+        addContact('mission12-objective', getMission12StationLabel(), 'objective', getMission12StationPosition());
+      }
+    }
+    // Mission 13: the storm stations appear with the mission, plus the active
+    // objective. Anchors only show while the antenna phase is live.
+    if (mission13.started) {
+      const state = mission13.state;
+      addContact(
+        auroraStormGeneratorDefinition.id,
+        state.auroraGeneratorSecured ? 'GENERADOR // OK' : 'GENERADOR',
+        'marker',
+        auroraStormStations.generatorPosition
+      );
+      addContact(
+        auroraStormAntennaDefinition.id,
+        state.auroraAntennaOnline ? 'ANTENA // OK' : 'ANTENA',
+        'marker',
+        auroraStormStations.antennaPosition
+      );
+      const activeAnchor = mission13.activeAnchorIndex;
+      if (activeAnchor >= 0 && auroraStormStations.anchorPositions[activeAnchor]) {
+        addContact('aurora-storm-anchor', `ANCLAJE ${activeAnchor + 1}`, 'marker', auroraStormStations.anchorPositions[activeAnchor]);
+      }
+      if (!mission13.completed) {
+        addContact('mission13-objective', getMission13StationLabel(), 'objective', getMission13StationPosition());
+      }
+    }
+    // Mission 14: the two reused nodes are marked once the terminal has
+    // identified them. The third is deliberately absent from the map until the
+    // pilot is inside reveal range — the search must be walked, not read.
+    if (mission14.started) {
+      const traceState = mission14.state;
+      if (traceState.coalitionSignatureAnalyzed) {
+        addContact(
+          'aurora-trace-power',
+          traceState.coalitionPowerNodePurged ? 'NODO ENERGETICO // LIMPIO' : 'NODO ENERGETICO // MARCA',
+          'marker',
+          auroraStormStations.generatorPosition
+        );
+        addContact(
+          'aurora-trace-comms',
+          traceState.coalitionCommsNodePurged ? 'REPETIDOR // LIMPIO' : 'REPETIDOR // MARCA',
+          'marker',
+          auroraStormStations.antennaPosition
+        );
+      }
+      addContact(coalitionTerminalDefinition.id, 'TERMINAL', 'marker', auroraTraceNodes.terminalPosition);
+      if (traceState.coalitionHiddenNodeLocated || mission14.isHiddenNodeRevealed()) {
+        addContact(
+          coalitionHiddenNodeDefinition.id,
+          traceState.coalitionTraceSampleRecovered ? 'SENSOR 04 // LIMPIO' : 'SENSOR 04 // MARCA',
+          'marker',
+          auroraTraceNodes.hiddenNodePosition
+        );
+      }
+      // The objective marker follows the same rule: during the search it is
+      // withheld entirely rather than pointing at the answer.
+      if (!mission14.completed && (mission14.step !== 'locateHiddenNode' || mission14.isHiddenNodeRevealed())) {
+        addContact('mission14-objective', getMission14StationLabel(), 'objective', getMission14StationPosition());
+      }
+    }
+    // Mission 15: the sealed module and the terminal are always on the map;
+    // a parasite appears only once the pilot is inside reveal range, so the
+    // hunt has to be walked rather than read.
+    if (mission15.started) {
+      const sabotageState = mission15.state;
+      if (sabotageState.auroraModuleSealed && !sabotageState.auroraModuleReleased) {
+        addContact(sealedModuleDoorDefinition.id, 'AURORA-02 // SELLADO', 'objective', auroraSealedDoorPosition);
+      }
+      if (!sabotageState.auroraRoutineComplete) {
+        addContact(auroraSupplyCacheDefinition.id, 'DEPOSITO', 'marker', auroraSupplyPosition);
+      }
+      for (let i = 0; i < parasiteNodeDefinitions.length; i += 1) {
+        const nodeState = sabotageState.auroraParasiteStates[i];
+        const revealed = nodeState !== 'hidden' || (mission15.activeParasiteIndex === i && mission15.isParasiteRevealed());
+        if (!revealed) continue;
+        addContact(
+          parasiteNodeDefinitions[i].id,
+          nodeState === 'disabled' ? 'PARASITO // NEUTRALIZADO' : 'PARASITO // ACTIVO',
+          'marker',
+          auroraParasiteNodes.positions[i]
+        );
+      }
+      const searching =
+        mission15.step === 'findEnergyParasite' ||
+        mission15.step === 'findLifeSupportParasite' ||
+        mission15.step === 'findCommsParasite';
+      if (!mission15.completed && (!searching || mission15.isParasiteRevealed())) {
+        addContact('mission15-objective', getMission15StationLabel(), 'objective', getMission15StationPosition());
+      }
+    }
+    addContact('surface-hazard', 'RADIACIÓN', 'hazard', planetaryWorld.hazard.group.position);
+  } else {
+    if (mothership.group.visible) addContact('mothership', 'ARCA EPSILON', 'mothership', mothership.group.position);
+    if (missionManager.step !== 'briefing' && missionManager.step !== 'scannerTutorial') {
+      addContact('candidate-e01', 'E-01', 'planet', candidatePlanet.group.position);
+    }
+    if (habitabilityReportShown || orbitalMarkerSystem.state.decoded || missionManager.step === 'scanOrbitalMarker') {
+      addContact('atlas-marker', 'ATLAS', 'marker', orbitalMarker.group.position);
+    }
+    if (landingZone.active) addContact('landing-zone', 'CUENCA', 'objective', landingZone.group.position);
+    threats.forEach((threat, index) => {
+      if (threat.target.health > 0) {
+        addContact(`threat-${index}`, 'HOSTIL', 'hazard', threat.effect.group.position);
+      }
+    });
+    for (const point of pointsOfInterest) {
+      if (point.scanned) addContact(point.id, point.name, 'unknown', point.object.position);
+    }
+  }
+
+  return [...contacts.values()].sort((a, b) => a.distance - b.distance);
+}
+
+function getCockpitLiveAlert(): CockpitTelemetry['alert'] {
+  if (transientWarning) {
+    const critical = resources.hull < 35 || descentSystem.state.heat > 78 || descentSystem.state.stability < 42;
+    return { message: transientWarning, severity: critical ? 'critical' : 'caution' };
+  }
+  if (resources.hull < 28) return { message: 'CASCO EN ESTADO CRÍTICO', severity: 'critical' };
+  if (resources.energy < 18) return { message: 'RESERVA DE ENERGÍA BAJA', severity: 'caution' };
+  if (descentSystem.state.phase === 'entry' && descentSystem.state.heat > 68) {
+    return { message: 'TEMPERATURA DE REENTRADA ELEVADA', severity: 'critical' };
+  }
+  if (descentSystem.state.phase === 'landingApproach' && velocity.length() * 12 > firstLandingZone.touchdownSpeed) {
+    return { message: 'REDUCE VELOCIDAD PARA ATERRIZAJE', severity: 'caution' };
+  }
+  return undefined;
+}
+
+function buildCockpitTelemetry(): CockpitTelemetry {
+  const phase = getCurrentPhase();
+  const objectiveDistanceMeters = getMissionObjectiveDistance();
+  const radarRange = mission22.started || mission21.started
+    ? 5200
+    : inSurfacePhase
+    ? mission05.started || mission04.started || mission03.started ? 1100 : 420
+    : THREE.MathUtils.clamp(Math.max(800, objectiveDistanceMeters * 1.15), 800, 3600);
+  const surfaceStep = surfaceMission.currentStep;
+
+  return {
+    phase,
+    phaseLabel: phase === 'colonization' ? 'Colonia' : phase === 'surface' ? 'Superficie' : phase === 'descent' ? 'Descenso' : 'Espacio',
+    missionName: missionNameReadout.textContent || (inSurfacePhase ? mission05.started ? mission05.missionName : mission04.started ? mission04.missionName : mission03.started ? mission03.missionName : surfaceStep.title : 'Misión 01'),
+    missionStep: inSurfacePhase ? mission05.started ? mission05.step : mission04.started ? mission04.step : mission03.started ? mission03.step : surfaceStep.id : missionManager.step,
+    objective: objectiveText.textContent || (inSurfacePhase ? mission05.started ? mission05.currentStep.objective : mission04.started ? mission04.currentStep.objective : mission03.started ? mission03.currentStep.objective : surfaceStep.objective : missionManager.step),
+    nextAction: nextAction.textContent || (inSurfacePhase ? mission05.started ? mission05.currentStep.nextAction : mission04.started ? mission04.currentStep.nextAction : mission03.started ? mission03.currentStep.nextAction : surfaceStep.nextAction : ''),
+    targetDistance: objectiveDistanceMeters,
+    speed: velocity.length() * 12,
+    altitude: descentSystem.state.altitude > 0 ? descentSystem.state.altitude : Math.max(0, ship.position.y),
+    heat: descentSystem.state.heat,
+    stability: descentSystem.state.stability,
+    hull: resources.hull,
+    shield: resources.energy,
+    energy: resources.energy,
+    oxygen: resources.oxygen,
+    scannerStatus: scannerStatus.textContent || 'En espera',
+    signalStrength: getMissionSignalStrength() * 100,
+    scanProgress: inSurfacePhase ? mission22.started ? getMission22Progress() : mission21.started ? getMission21Progress() : mission15.started ? getMission15Progress() : mission14.started ? getMission14Progress() : mission13.started ? getMission13Progress() : mission12.started ? getMission12Progress() : mission11.started ? getMission11Progress() : mission10.started ? getMission10Progress() : mission09.started && !mission09.completed ? getMission09Progress() : mission08.started && !mission08.completed ? getMission08Progress() : mission07.started ? getMission07Progress() : mission06.started && !mission06.completed ? getMission06Progress() : mission05.started ? getMission05Progress() : mission04.started ? getMission04Progress() : mission03.started ? getMission03Progress() : colonyManager.state.colonizationReadiness : getMissionProgress(),
+    atlasDecoded: orbitalMarkerSystem.state.decoded,
+    landingZoneActive: landingZone.active,
+    habitatOnline: colonyManager.state.habitatOnline,
+    colonyReadiness: colonyManager.state.colonizationReadiness,
+    colonyStage: colonyManager.state.currentStage,
+    waterFound: colonyManager.state.waterFound,
+    mineralsFound: colonyManager.state.mineralsFound,
+    energyFound: colonyManager.state.energyFound || colonyManager.state.energySourceFound,
+    baseOperational: colonyManager.state.baseNereidaOperational || colonyManager.state.operational,
+    turbulence: THREE.MathUtils.clamp(cameraShake * 4 + descentSystem.state.stress / 160, 0, 1),
+    radarRange,
+    radarContacts: getCockpitRadarContacts(radarRange),
+    alert: getCockpitLiveAlert()
+  };
+}
+
+let lastCockpitMissionStep = missionManager.step as string;
+let lastCockpitPhase = getCurrentPhase();
+let lastCockpitBaseOperational = false;
+
+function syncCockpitEventAlerts(elapsed: number): void {
+  const currentStep = missionManager.step as string;
+  const currentPhase = getCurrentPhase();
+
+  if (currentStep !== lastCockpitMissionStep) {
+    const alerts: Partial<Record<string, [string, CockpitAlertSeverity]>> = {
+      approachPlanet: ['CORREDOR ATLAS DECODIFICADO', 'info'],
+      atmosphericEntry: ['ADVERTENCIA DE ENTRADA ATMOSFÉRICA', 'critical'],
+      landingApproach: ['CUENCA NEREIDA: ASISTENCIA DE ATERRIZAJE', 'caution'],
+      firstFoothold: ['SUPERFICIE E-01 ASEGURADA', 'info']
+    };
+    const alert = alerts[currentStep];
+    if (alert) cockpitInterior.triggerAlert(alert[0], alert[1], elapsed, 5.4);
+    lastCockpitMissionStep = currentStep;
+  }
+
+  if (currentPhase !== lastCockpitPhase) {
+    if (currentPhase === 'surface') cockpitInterior.triggerAlert('TELEMETRÍA DE SUPERFICIE ENLAZADA', 'info', elapsed, 4.5);
+    if (currentPhase === 'colonization') cockpitInterior.triggerAlert('FASE DE COLONIZACIÓN ACTIVA', 'info', elapsed, 5.4);
+    lastCockpitPhase = currentPhase;
+  }
+
+  const baseOperational = colonyManager.state.baseNereidaOperational || colonyManager.state.operational;
+  if (baseOperational && !lastCockpitBaseOperational) {
+    cockpitInterior.triggerAlert('BASE NEREIDA OPERATIVA', 'info', elapsed, 7);
+  }
+  lastCockpitBaseOperational = baseOperational;
+}
+
+function updateObjectiveMarker(): void {
+  const target = getMissionObjectivePosition();
+  const objective = getCurrentObjectiveDisplay();
+  const vector = target.clone().project(camera);
+  const localTarget = camera.worldToLocal(target.clone());
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const margin = 62;
+  const behindCamera = localTarget.z > 0;
+  let x = (vector.x * 0.5 + 0.5) * width;
+  let y = (-vector.y * 0.5 + 0.5) * height;
+  if (behindCamera || !Number.isFinite(x) || !Number.isFinite(y)) {
+    let directionX = -localTarget.x;
+    let directionY = localTarget.y;
+    const directionLength = Math.hypot(directionX, directionY) || 1;
+    directionX /= directionLength;
+    directionY /= directionLength;
+    x = width * 0.5 + directionX * width;
+    y = height * 0.5 + directionY * height;
+  }
+  const clampedX = THREE.MathUtils.clamp(x, margin, width - margin);
+  const clampedY = THREE.MathUtils.clamp(y, margin, height - margin);
+  guideOffscreen = behindCamera || vector.z > 1 || x !== clampedX || y !== clampedY;
+  guideVisible = launched && !(!inSurfacePhase && missionManager.step === 'missionComplete');
+  const directionX = clampedX - width * 0.5;
+  const directionY = clampedY - height * 0.5;
+  const guideAngle = Math.atan2(directionY, directionX) + Math.PI / 2;
+  guideDirection = guideAngle;
+
+  objectiveMarker.style.display = guideVisible ? 'grid' : 'none';
+  objectiveMarker.style.left = `${clampedX}px`;
+  objectiveMarker.style.top = `${clampedY}px`;
+  objectiveMarkerArrow.style.transform = `rotate(${guideAngle}rad)`;
+  objectiveMarker.classList.toggle('is-offscreen', guideOffscreen);
+  objectiveMarker.classList.toggle('is-near', objective.distance < 34);
+  objectiveMarker.classList.toggle(
+    'is-signal-unstable',
+    (mission03.step === 'synchronization' && !isPlayerInRelayRange()) ||
+      (mission04.step === 'synchronizeNetwork' && !isPlayerInDefenseSyncRange()) ||
+      mission05.state.interferenceActive
+  );
+  objectiveMarker.classList.toggle('is-interference', mission05.state.interferenceActive);
+  objectiveMarker.setAttribute('aria-hidden', guideVisible ? 'false' : 'true');
+  objectiveMarkerLabel.textContent = objective.target.toUpperCase();
+  objectiveMarkerDistance.textContent = formatDistance(objective.distance);
+}
+
+function updateStarMap(): void {
+  if (!starMap.active) return;
+  if (inSurfacePhase) {
+    const onFoot = playerModeSystem.onFootActive || playerModeSystem.transitionActive;
+    const surfaceEntities = surfaceMapSystem.generateEntities(
+      onFoot ? surfaceCharacter.group.position : ship.position,
+      SURFACE_LANDING_LOCAL,
+      planetaryWorld.colonyModule,
+      surfaceResourceSystem,
+      getSurfaceMapTargetId(),
+      onFoot ? 'onFoot' : 'ship',
+      ship.position,
+      HABITAT_SITE_LOCAL,
+      {
+        resonatorVisible: mission03.state.communicationCalibrated,
+        resonatorPosition: pleyadanRelayBeacon.interactionPosition,
+        relayPlaced: mission03.state.relayBeaconPlaced,
+        relayRange: resonadorAtlasDefinition.relayRange,
+        signalStability: mission03.state.signalStability,
+        communicationsVisible: mission03.started || mission04.started || mission05.started || mission06.started || mission07.started || mission08.started || mission09.started,
+        communicationsPosition: planetaryWorld.colonyModule.group.position,
+        projectionVisible:
+          mission03.step === 'firstContact' ||
+          mission03.step === 'warning' ||
+          mission03.step === 'prepare' ||
+          mission03.step === 'completed',
+        projectionPosition: pleyadanHologram.group.position
+      },
+      {
+        started: mission04.started,
+        networkState: mission04.state.defenseNetworkState,
+        beaconSites: defensiveBeacons.map((beacon, index) => ({
+          id: beacon.site.id,
+          name: beacon.site.name,
+          position: beacon.interactionPosition,
+          placed: mission04.state.defensiveBeaconsPlaced[index]
+        })),
+        synchronizationRange: mission04Tuning.synchronizationRange,
+        synchronizationActive: mission04.step === 'synchronizeNetwork',
+        defenseSyncProgress: mission04.state.defenseSyncProgress,
+        threatSignatureDetected: mission04.state.threatSignatureDetected,
+        threatSignaturePosition: MISSION04_THREAT_SIGNATURE_POSITION
+      },
+      {
+        started: mission05.started,
+        probeDetected: mission05.state.probeDetected,
+        probeState: mission05.state.probeState,
+        interferenceActive: mission05.state.interferenceActive,
+        probePosition: silentProbe.interactionPosition,
+        echoPositions: MISSION05_ECHO_POSITIONS,
+        activeEchoIndex: mission05.state.activeEchoIndex,
+        echoesResolved: mission05.state.echoesResolved,
+        counterSignalProgress: mission05.state.counterSignalProgress
+      },
+      {
+        started: mission06.started,
+        step: mission06.step,
+        projectorSites: cloakingProjectors.map((projector, index) => ({
+          id: `cloaking-projector-${index}`,
+          name: CLOAKING_PROJECTOR_NAMES[index],
+          position: projector.group.position,
+          placed: mission06.state.cloakingProjectorsPlaced[index],
+          calibrated: mission06.state.cloakingProjectorsCalibrated[index]
+        })),
+        syncRange: mission06Tuning.baseInteractionRange,
+        syncProgress: mission06.step === 'syncMatrix'
+          ? (mission06.state.cloakingSyncProgress / mission06Tuning.syncSeconds) * 100
+          : mission06.state.cloakingFieldOnline
+            ? 100
+            : getMission06Progress(),
+        syncActive: mission06SyncEngaged,
+        fieldOnline: mission06.state.cloakingFieldOnline,
+        signatureReduced: mission06.state.nereidaSignatureReduced
+      },
+      {
+        started: mission07.started,
+        fractureRevealed: mission07.state.atlasFractureRevealed,
+        fracturePosition: atlasSeedArchive.interactionPosition,
+        nodeSites: atlasEchoNodes.map((node, index) => ({
+          id: node.definition.id,
+          name: node.definition.name,
+          position: node.interactionPosition,
+          scanned: mission07.state.atlasEchoNodesScanned[index]
+        })),
+        archiveUnlocked: mission07.state.atlasSeedArchiveUnlocked,
+        archiveActivated: mission07.state.atlasSeedArchiveActivated,
+        archivePosition: atlasSeedArchive.interactionPosition
+      }
+    );
+    if (mission24.started) {
+      surfaceEntities.push({
+        id: 'mission24-target',
+        name: getMission24StationLabel(),
+        type: mission24.step === 'prepareLaunch' || mission24.step === 'boardShip' ? 'ship' : 'communications',
+        position: getMission24StationPosition(),
+        status: mission24.stepDefinition.stepTitle.toUpperCase(),
+        isCurrentTarget: true
+      });
+    }
+    if (mission21.started && !mission22.started) {
+      const targetId = getSurfaceMapTargetId();
+      surfaceEntities.push({
+        id: 'mission21-ark',
+        name: 'ARCA EPSILON',
+        type: 'communications',
+        position: mothership.group.position,
+        status: mission21.readout.arkStatus.toUpperCase(),
+        isCurrentTarget: targetId === 'mission21-ark'
+      });
+      if (coalitionCapitalPresence.isVisible) {
+        surfaceEntities.push({
+          id: 'coalition-capital',
+          name: 'NAVE CAPITAL // FUERA DE ALCANCE',
+          type: 'threat',
+          position: coalitionCapitalPresence.capitalPosition,
+          status: 'NO ATACABLE // FIRMA MASIVA',
+          isCurrentTarget: targetId === 'coalition-capital'
+        });
+      }
+      if (!mission21.state.demonstrationObserved || mission21.step === 'witnessDemonstration') {
+        surfaceEntities.push({
+          id: 'remote-orbital-beacon',
+          name: 'BALIZA ORBITAL REMOTA',
+          type: 'communications',
+          position: coalitionCapitalPresence.remoteBeaconPosition,
+          status: mission21.state.demonstrationObserved ? 'INUTILIZADA' : 'EN LINEA',
+          isCurrentTarget: targetId === 'remote-orbital-beacon'
+        });
+      }
+      mission21LinkPositions.forEach((position, index) => {
+        surfaceEntities.push({
+          id: `mission21-link-${index}`,
+          name: ENCLAVE_CHANNEL_LABELS[ENCLAVE_CHANNEL_ORDER[index]],
+          type: 'communications',
+          position,
+          status: mission21.state.enclaveChannelsRestored[index] ? 'RESTAURADO' : 'AISLADO',
+          isCurrentTarget: targetId === `mission21-link-${index}`
+        });
+      });
+      mission21RoutePositions.forEach((position, index) => {
+        if (!mission21.state.attackRoutesClassified[index] && targetId !== `mission21-route-${index}`) return;
+        surfaceEntities.push({
+          id: `mission21-route-${index}`,
+          name: ATTACK_ROUTE_LABELS[ATTACK_ROUTE_ORDER[index]],
+          type: 'threat',
+          position,
+          status: mission21.state.attackRoutesClassified[index] ? 'CLASIFICADA' : 'ANALIZANDO',
+          isCurrentTarget: targetId === `mission21-route-${index}`
+        });
+      });
+    }
+    if (mission22.started && !mission23.started) {
+      const targetId = getSurfaceMapTargetId();
+      const aurora = auroraStationPosition(auroraSettlementSiteDefinition.position);
+      const nereida = mission19StationPosition(nereidaAtlasGate, mission19DefenseScratch);
+      surfaceEntities.push(
+        {
+          id: 'mission22-ark', name: 'ARCA // MANDO', type: 'communications',
+          position: mothership.group.position, status: `INTEGRIDAD ${Math.round(mission22.state.orbitalIntegrity)}%`,
+          isCurrentTarget: targetId === 'mission22-ark'
+        },
+        {
+          id: 'mission22-aurora', name: 'FRENTE AURORA', type: 'defense', position: aurora,
+          status: `${Math.round(mission22.state.auroraIntegrity)}%`, isCurrentTarget: targetId === 'mission22-aurora'
+        },
+        {
+          id: 'mission22-nereida', name: 'FRENTE NEREIDA', type: 'defense', position: nereida,
+          status: `${Math.round(mission22.state.nereidaIntegrity)}%`, isCurrentTarget: targetId === 'mission22-nereida'
+        }
+      );
+      threeFrontCommandNetwork.relayPositions.forEach((position, index) => {
+        surfaceEntities.push({
+          id: `mission22-relay-${index}`,
+          name: `RELÉ ORBITAL ${index + 1}`,
+          type: 'communications',
+          position,
+          status: mission22.state.orbitalRelaysProtected[index] ? 'PROTEGIDO' : 'BAJO ATAQUE',
+          isCurrentTarget: targetId === `mission22-relay-${index}`
+        });
+      });
+      threeFrontCommandNetwork.nodePositions.forEach((position, index) => {
+        if (!mission22.state.coordinationNodesDetected[index] && targetId !== `mission22-node-${index}`) return;
+        surfaceEntities.push({
+          id: `mission22-node-${index}`,
+          name: MISSION22_NODE_LABELS[MISSION22_NODE_ORDER[index]],
+          type: 'threat',
+          position,
+          status: mission22.state.coordinationNodesDetected[index] ? 'LOCALIZADO // NO ATACAR' : 'ANALIZANDO',
+          isCurrentTarget: targetId === `mission22-node-${index}`
+        });
+      });
+    }
+    if (mission23.started && !mission24.started) {
+      const targetId = getSurfaceMapTargetId();
+      surfaceEntities.push({
+        id: 'mission23-ark', name: 'ARCA EPSILON // MANDO CONJUNTO', type: 'communications',
+        position: mothership.group.position,
+        status: mission23.state.jointForcesSynchronized ? 'FUERZAS SINCRONIZADAS' : 'PREPARANDO RED',
+        isCurrentTarget: targetId === 'mission23-ark'
+      });
+      if (!mission23.state.jammerNodeDestroyed && mission23.state.mission23TargetOrder.length > 0) {
+        surfaceEntities.push({
+          id: 'mission23-jammer', name: MISSION23_TARGET_LABELS.jammer, type: 'threat',
+          position: mission23.step === 'approachJammerNode' ? getMission23JammerReadingPosition() : coalitionJammer.position,
+          status: `LOCK DEGRADADO // LECTURAS ${mission23.readingsCount}/3`,
+          isCurrentTarget: targetId === 'mission23-jammer'
+        });
+      }
+      if (!mission23.state.logisticsPlatformDestroyed && mission23.state.mission23TargetOrder.length > 0) {
+        surfaceEntities.push({
+          id: 'mission23-logistics', name: MISSION23_TARGET_LABELS.logistics, type: 'threat',
+          position: coalitionLogisticsPlatform.position,
+          status: mission23.state.platformEnergyDisabled ? 'NUCLEO EXPUESTO' : mission23.state.platformDefensesDisabled ? 'ENERGIA EXPUESTA' : 'MODULOS 3',
+          isCurrentTarget: targetId === 'mission23-logistics'
+        });
+      }
+      if (mission23.state.mission23TargetOrder.length > 0 && !mission23.state.enemyRouteRecovered) {
+        surfaceEntities.push({
+          id: 'mission23-jump-beacon', name: MISSION23_TARGET_LABELS.jumpBeacon,
+          type: mission23.state.jumpBeaconDestroyed ? 'hazard' : 'threat', position: coalitionJumpBeacon.position,
+          status: mission23.state.jumpBeaconDestroyed ? 'RUTA COLAPSADA' : `ANCLAJES ${mission23.anchorsDisabled}/3`,
+          isCurrentTarget: targetId === 'mission23-jump-beacon'
+        });
+      }
+      if (mission23.step === 'recoverEnemyRoute' || mission23.state.enemyRouteRecovered) {
+        surfaceEntities.push({
+          id: 'mission23-route-data', name: 'DATOS DE RUTA ENEMIGA', type: 'communications',
+          position: ship.position, status: mission23.state.enemyRouteRecovered ? 'RECUPERADOS' : 'LISTOS // E',
+          isCurrentTarget: targetId === 'mission23-route-data'
+        });
+      }
+    }
+    starMap.updateEntities(surfaceEntities as StarMapEntity[]);
+    const starmapTitle = document.querySelector('.starmap-title') as HTMLElement | null;
+    const starmapPoiList = document.getElementById('starmap-poi-list');
+    surfaceMapPanel.renderToStarMap(surfaceEntities, starmapTitle, starmapPoiList);
+    return;
+  }
+  const currentTargetPos = getMissionObjectivePosition();
+  const entities: StarMapEntity[] = [
+    {
+      id: 'player',
+      name: 'NAVE DE RECONOCIMIENTO',
+      type: 'player',
+      position: ship.position
+    },
+    {
+      id: 'mothership',
+      name: 'ARCA EPSILON [ORIGEN]',
+      type: 'mothership',
+      position: mothership.group.position,
+      status: 'Órbita Segura // Telemetría Activa'
+    },
+    {
+      id: 'marker',
+      name: 'MARCADOR ATLAS [GLB]',
+      type: 'marker',
+      position: orbitalMarker.group.position,
+      status: orbitalMarkerSystem.state.decoded ? 'Decodificado' : 'Señal Orbital Detectada',
+      isCurrentTarget: currentTargetPos.distanceTo(orbitalMarker.group.position) < 50
+    },
+    {
+      id: 'biosphere',
+      name: 'BIOSFERA E-01',
+      type: 'biosphere',
+      position: candidatePlanet.group.position,
+      status: habitabilitySystem.report ? `Habitabilidad ${habitabilitySystem.report.viability}%` : 'Análisis en curso',
+      isCurrentTarget: currentTargetPos.distanceTo(candidatePlanet.group.position) < 50
+    }
+  ];
+
+  for (const poi of pointsOfInterest) {
+    entities.push({
+      id: poi.id,
+      name: poi.name.toUpperCase(),
+      type: 'poi',
+      position: poi.object.position,
+      status: poi.scanned ? 'Escaneado' : 'Señal de Anomalía',
+      isCurrentTarget: currentTargetPos.distanceTo(poi.object.position) < 50
+    });
+  }
+
+  if (mission24.started) {
+    entities.push({
+      id: 'mission24-target',
+      name: getMission24StationLabel(),
+      type: mission24.step === 'detectFinalFleet' ? 'threat' : 'communications',
+      position: getMission24StationPosition(),
+      status: mission24.stepDefinition.stepTitle.toUpperCase(),
+      isCurrentTarget: true
+    });
+    if (mission24.state.finalFleetDetected) {
+      entities.push({
+        id: 'mission24-final-fleet',
+        name: 'FLOTA FINAL // FIRMA DISTANTE',
+        type: 'threat',
+        position: arkFinalPreparationNetwork.finalFleetPosition,
+        status: 'NO ATACABLE // SIN COMBATE'
+      });
+    }
+  }
+
+  starMap.updateEntities(entities);
+}
+
+function renderHabitabilityReport(): void {
+  const report = habitabilitySystem.report;
+  if (!report) return;
+
+  habitabilityPanel.classList.add('is-active');
+  habitabilityTitle.textContent = report.planetName;
+  habitabilityReport.innerHTML = `
+    <ul class="habitability-report-list">
+      ${report.metrics
+        .map((metric) => `<li><span>${metric.label}: ${metric.value}</span><strong>${metric.score}%</strong></li>`)
+        .join('')}
+    </ul>
+    <p class="viability-score">Viabilidad final: ${report.viability}%</p>
+    <p>${report.status}. ${report.colonizationPotential}</p>
+  `;
+}
+
+function updateHud(nearestThreat: number): void {
+  meters.hull.value = resources.hull;
+  meters.shield.value = resources.energy;
+  meters.energy.value = resources.energy;
+  meters.oxygen.value = resources.oxygen;
+  meters.memory.value = resources.memory;
+  const activeSpeed = playerModeSystem.onFootActive ? surfaceCharacter.speed : velocity.length() * 12;
+  velocityReadout.textContent = `${Math.round(activeSpeed)} m/s`;
+  distanceReadout.textContent = `${Math.round(traveled)} km`;
+
+  const closest = getClosestPoint();
+  if (inSurfacePhase && mission23.started && mission23StepUsesBeacon() && ship.position.distanceTo(coalitionJumpBeacon.position) < 520) {
+    sectorName.textContent = 'Corredor de Salto Hostil';
+  } else if (inSurfacePhase && mission23.started && mission23StepUsesPlatform() && ship.position.distanceTo(coalitionLogisticsPlatform.position) < 520) {
+    sectorName.textContent = 'Nodo Logistico de la Coalicion';
+  } else if (inSurfacePhase && mission23.started && coalitionJammer.isActive && ship.position.distanceTo(coalitionJammer.position) < 520) {
+    sectorName.textContent = 'Campo de Interferencia Orbital';
+  } else if (inSurfacePhase && mission05.started && getActivePlayerPosition().distanceTo(silentProbe.interactionPosition) < 180) {
+    sectorName.textContent = 'Orbita Baja E-01';
+  } else if (inSurfacePhase && mission04.started && getActivePlayerPosition().distanceTo(getActiveDefenseBeacon().interactionPosition) < 150) {
+    sectorName.textContent = getActiveDefenseBeacon().site.name;
+  } else if (inSurfacePhase && mission03.started && getActivePlayerPosition().distanceTo(pleyadanRelayBeacon.interactionPosition) < 150) {
+    sectorName.textContent = 'Umbral del Resonador';
+  } else if (descentSystem.state.phase === 'landed' || (landingZone.active && landingZone.distanceTo(ship.position) < 150)) {
+    sectorName.textContent = firstLandingZone.name;
+  } else if (orbitalMarker.distanceTo(ship.position) < orbitalMarkerSystem.scanRadius) {
+    sectorName.textContent = 'Orbita de E-01';
+  } else if (closest && ship.position.distanceTo(closest.object.position) < 125) {
+    sectorName.textContent = closest.sector;
+  } else if (mothership.isInSafeZone(ship.position)) {
+    sectorName.textContent = 'Perimetro de la Arca';
+  } else if (ship.position.z < -740) {
+    sectorName.textContent = 'Frontera de Mareas';
+  } else if (ship.position.x < -260) {
+    sectorName.textContent = 'Ruta de Restos';
+  } else {
+    sectorName.textContent = 'Umbral Ciego';
+  }
+
+  const hazardActive = transientWarning.length > 0;
+  const threatHigh = nearestThreat < 85;
+  const threatMedium = nearestThreat < 180 || hazardActive;
+  threatReadout.classList.toggle('is-warning', threatMedium);
+  threatReadout.textContent = hazardActive ? 'Peligro ambiental' : threatHigh ? 'Riesgo alto' : threatMedium ? 'Riesgo medio' : 'Riesgo bajo';
+
+  warningOverlay.textContent = transientWarning;
+  warningOverlay.classList.toggle('is-active', hazardActive);
+
+  const currentObjectiveDisplay = getCurrentObjectiveDisplay();
+  missionNameReadout.textContent = `${currentObjectiveDisplay.missionTitle} // ${currentObjectiveDisplay.stepTitle}`;
+  objectiveText.textContent = currentObjectiveDisplay.objective;
+  const missingRequirements = currentObjectiveDisplay.missingRequirements.length > 0
+    ? ` Pendiente: ${currentObjectiveDisplay.missingRequirements.join(', ')}.`
+    : '';
+  nextAction.textContent = currentObjectiveDisplay.blockedReason
+    ? `${currentObjectiveDisplay.blockedReason}${missingRequirements} ${currentObjectiveDisplay.nextAction}`
+    : currentObjectiveDisplay.nextAction;
+  objectiveDistance.textContent = `${currentObjectiveDisplay.target.toUpperCase()} // ${formatDistance(currentObjectiveDisplay.distance)}`;
+  document.querySelector('.objective-panel')?.setAttribute('data-urgency', currentObjectiveDisplay.urgency);
+
+  if (mission24.started) {
+    scannerStatus.textContent = mission24.completed ? 'Formacion final estable' : mission24.stepDefinition.stepTitle;
+    signalStrength.textContent = mission24.atmosphericAscentActive
+      ? `${Math.round((1 - atmosphericAscent.metrics.density) * 100)}%`
+      : `${atmosphericAscent.metrics.orbitalStability}%`;
+    habitabilityProgress.value = getMission24Progress();
+    missionProgressLabel.textContent = mission24.step === 'assessArkDamage'
+      ? `Sistemas ${mission24.arkSystemsAssessedCount}/5`
+      : mission24.step === 'restoreEnclaveLinks'
+        ? `Enlaces ${mission24.enclaveLinksRestoredCount}/4`
+        : mission24.step === 'prepareArkSystems'
+          ? `Preparacion ${mission24.arkSystemsPreparedCount}/3`
+          : mission24.step === 'integratePleyadianNetwork'
+            ? `Nodos ${mission24.pleyadianNodesIntegratedCount}/3`
+            : mission24.step === 'revisitStartingSector'
+              ? `Puntos ${mission24.startingSectorPointsVisitedCount}/3`
+              : mission24.step === 'runDefenseRehearsal'
+                ? `Ensayo ${Math.round(mission24.rehearsalProgress)}%`
+                : mission24.atmosphericAscentActive || mission24.step === 'orbitalInsertion'
+                  ? `Alt ${atmosphericAscent.metrics.altitude} m // H ${atmosphericAscent.metrics.horizontalSpeed} m/s`
+                  : `Fase ${mission24.stepNumber}/24`;
+    missionHint.textContent = mission24.completed
+      ? 'M25 desbloqueada // no iniciada'
+      : mission24.stepDefinition.hint;
+  } else if (inSurfacePhase) {
+    const surfaceStep = surfaceMission.currentStep;
+    if (mission23.started) {
+      const readout = mission23.readout;
+      const firstTarget = mission23.state.mission23TargetOrder[0];
+      const orderLabel = firstTarget === 'jammer'
+        ? 'INTERFERIDOR > LOGISTICA > BALIZA'
+        : firstTarget === 'logistics'
+          ? 'LOGISTICA > INTERFERIDOR > BALIZA'
+          : 'ORDEN PENDIENTE';
+      scannerStatus.textContent = mission23.completed ? 'Ruta al origen confirmada' : mission23.stepDefinition.stepTitle;
+      signalStrength.textContent = `${Math.round(readout.jointEnergy)}%`;
+      habitabilityProgress.value = getMission23Progress();
+      missionProgressLabel.textContent = mission23.step === 'approachJammerNode'
+        ? `Lecturas ${readout.triangulationReadings}/3 // lock degradado`
+        : mission23.step === 'destroyJammerNode'
+          ? `Escoltas ${coalitionDrones.activeCount} // jammer ${Math.max(0, Math.round(coalitionJammer.target.health))}`
+          : mission23StepUsesPlatform()
+            ? `Modulos restantes ${readout.platformModulesRemaining} // hostiles ${coalitionDrones.activeCount}`
+            : mission23.step === 'disableBeaconAnchors' || mission23.step === 'collapseJumpBeacon'
+              ? `Anclajes restantes ${readout.beaconAnchorsRemaining} // hostiles ${coalitionDrones.activeCount}`
+              : mission23.step === 'escapeDistortion'
+                ? `Escape ${Math.round(ship.position.distanceTo(coalitionJumpBeacon.position))}/${mission23Tuning.escapeSafeDistance} m`
+                : mission23.state.enemyRouteRecovered
+                  ? 'Datos de ruta recuperados'
+                  : orderLabel;
+      missionHint.textContent = mission23.completed
+        ? 'M24 desbloqueada // no iniciada'
+        : `${mission23.stepDefinition.hint} // ${orderLabel}`;
+    } else if (mission22.started) {
+      const readout = mission22.readout;
+      const support = readout.supportAssigned === 'none'
+        ? 'PENDIENTE'
+        : MISSION22_FRONT_LABELS[readout.supportAssigned];
+      scannerStatus.textContent = mission22.completed ? 'Tres frentes operativos' : mission22.stepDefinition.stepTitle;
+      signalStrength.textContent = `${Math.round(readout.communicationsQuality)}%`;
+      habitabilityProgress.value = getMission22Progress();
+      missionProgressLabel.textContent = mission22.step === 'assignInitialResources'
+        ? `Asignando ${mission22.activeInitialResource ? MISSION22_RESOURCE_LABELS[mission22.activeInitialResource] : 'recursos'}`
+        : mission22.step === 'defendOrbitalFront'
+          ? `Relés ${readout.relaysProtected}/3 // hostiles ${coalitionDrones.activeCount}`
+          : mission22.step === 'detectCoordinationNodes'
+            ? `Nodos ${readout.nodesDetected}/3 // análisis ${Math.round(readout.phaseProgress)}%`
+            : mission22.step === 'restoreJointNetwork'
+              ? `Enlace conjunto ${Math.round(readout.jointLink)}%`
+              : mission22.step === 'defendAuroraFront'
+                ? `Aurora ${Math.round(readout.auroraIntegrity)}% // hostiles ${coalitionDrones.activeCount}`
+                : mission22.step === 'defendNereidaFront'
+                  ? `Nereida ${Math.round(readout.nereidaIntegrity)}% // brechas ${coalitionBreachDrones.activeCount}`
+                  : `Soporte ${support} // energía ${Math.round(readout.availableEnergy)}%`;
+      missionHint.textContent = mission22.completed
+        ? 'Aurora, Nereida y el Arca sobreviven // M23 desbloqueada'
+        : `${mission22.stepDefinition.hint} A ${Math.round(readout.auroraIntegrity)}% // N ${Math.round(readout.nereidaIntegrity)}% // O ${Math.round(readout.orbitalIntegrity)}%`;
+    } else if (mission21.started) {
+      const readout = mission21.readout;
+      const toneLabel = {
+        none: 'PENDIENTE',
+        defiant: 'DESAFIANTE',
+        diplomatic: 'DIPLOMATICA',
+        strategic: 'ESTRATEGICA'
+      }[readout.responseTone];
+      scannerStatus.textContent = mission21.completed ? 'Tres frentes activos' : mission21.stepDefinition.stepTitle;
+      signalStrength.textContent = `${Math.round(readout.enemySignal)}%`;
+      habitabilityProgress.value = getMission21Progress();
+      missionProgressLabel.textContent = mission21.step === 'decryptTransmission'
+        ? `Canales de cifrado ${mission21.alignedChannelCount}/3`
+        : mission21.step === 'restoreThreeChannels'
+          ? `Enlaces ${mission21.restoredChannelCount}/3 // interferencia ${readout.interferenceLevel}%`
+          : mission21.step === 'classifyAttackRoutes'
+            ? `Rutas ${readout.routesDetected}/3`
+            : `Respuesta ${toneLabel} // interferencia ${readout.interferenceLevel}%`;
+      missionHint.textContent = mission21.completed
+        ? 'Aurora: ATAQUE // Nereida: ATAQUE // Arca: OPERATIVO // M22 desbloqueada'
+        : `${mission21.stepDefinition.hint} Aurora: ${readout.auroraStatus} // Nereida: ${readout.nereidaStatus} // Arca: ${readout.arkStatus}`;
+    } else if (mission15.started) {
+      const sabotage = mission15.readout;
+      scannerStatus.textContent = mission15.completed ? 'Aurora restaurada' : mission15.stepDefinition.stepTitle;
+      // The colony's own fault stutters the readouts on the saboteur's clock.
+      const glitched = coalitionSabotageEffect.hudGlitch(clock.elapsedTime) > 0.4;
+      signalStrength.textContent = glitched
+        ? '--%'
+        : sabotage.signalIntensity > 0
+          ? `${sabotage.signalIntensity}%`
+          : `${Math.round(100 - sabotage.compromisedSystems * 25)}%`;
+      habitabilityProgress.value = getMission15Progress();
+      missionProgressLabel.textContent = mission15.completed
+        ? 'Mision 16 preparada'
+        : mission15.state.auroraModuleSealed && !mission15.state.auroraModuleReleased
+          ? `Presión ${Math.round(sabotage.modulePressure)}%`
+          : mission15.step === 'centralOverload'
+            ? `Sobrecarga ${Math.round(sabotage.centralOverload)}%`
+            : sabotage.signalIntensity > 0
+              ? `Señal ${sabotage.signalIntensity}%`
+              : `Nodos ${sabotage.parasitesDisabled}/3 // sistemas ${sabotage.compromisedSystems} caídos`;
+      missionHint.textContent = contextualTutorialHint || mission15.stepDefinition.hint;
+    } else if (mission14.started) {
+      const trace = mission14.readout;
+      scannerStatus.textContent = mission14.completed ? 'Red limpia' : mission14.stepDefinition.stepTitle;
+      // The mark stutters the readouts on its own exact clock — the tell that
+      // the interference is machine-made rather than weather.
+      const glitched = coalitionTraceEffect.hudGlitch(clock.elapsedTime) > 0.4;
+      signalStrength.textContent = glitched
+        ? '--%'
+        : mission14.step === 'locateHiddenNode' || mission14.step === 'extractSample'
+          ? `${trace.signalIntensity}%`
+          : `${Math.round(100 - trace.contamination)}%`;
+      habitabilityProgress.value = getMission14Progress();
+      missionProgressLabel.textContent = mission14.completed
+        ? 'Mision 15 preparada'
+        : mission14.step === 'purgePowerNode'
+          ? `Purga ${Math.round(mission14.powerPurgePercent)}%`
+          : mission14.step === 'purgeCommsNode'
+            ? `Pulsos ${mission14.pulsesBlocked}/${mission14Tuning.pulseCount}`
+            : mission14.step === 'locateHiddenNode'
+              ? `Señal ${trace.signalIntensity}%`
+              : mission14.step === 'extractSample'
+                ? `Extracción ${Math.round(mission14.extractionPercent)}%`
+                : `Nodos ${trace.purgedNodes}/3 // contaminación ${Math.round(trace.contamination)}%`;
+      missionHint.textContent = contextualTutorialHint || mission14.stepDefinition.hint;
+    } else if (mission13.started) {
+      const storm = mission13.readout;
+      scannerStatus.textContent = mission13.completed ? 'Colonia intacta' : mission13.stepDefinition.stepTitle;
+      // With the front overhead the HUD signal reads power stability.
+      signalStrength.textContent = `${Math.round(storm.energyStability)}%`;
+      habitabilityProgress.value = getMission13Progress();
+      missionProgressLabel.textContent = mission13.completed
+        ? 'Mision 14 preparada'
+        : mission13.step === 'secureGenerator'
+          ? `Energía ${Math.round(mission13.state.auroraGeneratorProgress)}%`
+          : mission13.activeAnchorIndex >= 0
+            ? `Anclajes ${mission13.anchorsSecuredCount}/2`
+            : mission13.step === 'chargeShield'
+              ? `Escudo ${Math.round(storm.shieldCharge)}%`
+              : `Tormenta ${Math.round(storm.stormIntensity * 100)}%`;
+      missionHint.textContent = contextualTutorialHint || mission13.stepDefinition.hint;
+    } else if (mission12.started) {
+      const load = mission12.load;
+      scannerStatus.textContent = mission12.completed ? 'Núcleo habitado' : mission12.stepDefinition.stepTitle;
+      // With people inside, the HUD signal reads habitation stability.
+      signalStrength.textContent = `${Math.round(load.habitationStability)}%`;
+      habitabilityProgress.value = getMission12Progress();
+      missionProgressLabel.textContent = mission12.completed
+        ? 'Mision 13 preparada'
+        : mission12.step === 'prepareLifeSupport'
+          ? `Soporte vital ${Math.round(mission12.lifeSupportPercent)}%`
+          : mission12.step === 'startLoadCycle'
+            ? `Ciclo humano ${Math.round(mission12.state.auroraHumanLoadProgress)}%`
+            : mission12.step === 'recalibrate'
+              ? `Recalibrando ${Math.round(mission12.state.auroraRecalibrationProgress)}%`
+              : mission12.step === 'recordFirstNight'
+                ? `Primera noche ${Math.round(mission12.firstNightPercent)}%`
+                : `Tripulación ${mission12.crewCount}/3`;
+      missionHint.textContent = contextualTutorialHint || mission12.stepDefinition.hint;
+    } else if (mission11.started) {
+      scannerStatus.textContent = mission11.completed ? 'Núcleo Aurora' : mission11.stepDefinition.stepTitle;
+      signalStrength.textContent = `${Math.round(60 + mission11.milestoneCount * 5)}%`;
+      habitabilityProgress.value = getMission11Progress();
+      missionProgressLabel.textContent = mission11.completed
+        ? 'Mision 12 preparada'
+        : mission11.step === 'connectEnergyLink'
+          ? `Enlace ${Math.round(mission11.state.auroraEnergyLinkProgress)}%`
+          : mission11.step === 'calibrateWaterFlow'
+            ? `Flujo ${Math.round(mission11.state.auroraWaterFlowProgress)}%`
+            : mission11.step === 'assessImpact'
+              ? `Impacto ${Math.round(mission11.state.auroraImpactAssessmentProgress)}%`
+              : `Hitos ${mission11.milestoneCount}/8`;
+      missionHint.textContent = contextualTutorialHint || mission11.stepDefinition.hint;
+    } else if (mission10.started) {
+      scannerStatus.textContent = mission10.completed
+        ? 'Aurora-01 operativo'
+        : mission10.activeSampleKind
+          ? auroraSurveyProbes[getActiveAuroraSampleIndex()].definition.shortName
+          : mission10.stepDefinition.stepTitle;
+      // The valley reads clean: this is what a habitable place looks like.
+      signalStrength.textContent = `${Math.round(60 + mission10.analyzedSampleCount * 10)}%`;
+      habitabilityProgress.value = getMission10Progress();
+      missionProgressLabel.textContent = mission10.completed
+        ? 'Mision 11 preparada'
+        : mission10.step === 'stabilizeModule'
+          ? `Soporte vital ${Math.round(mission10.state.auroraStabilizationProgress)}%`
+          : mission10.activeSampleKind || mission10.step === 'returnToClearing'
+            ? `Muestras ${mission10.analyzedSampleCount}/4`
+            : mission10.stepDefinition.stepTitle;
+      missionHint.textContent = contextualTutorialHint || mission10.stepDefinition.hint;
+    } else if (mission09.started) {
+      scannerStatus.textContent = mission09.completed
+        ? 'Sector Aurora'
+        : mission09.step === 'analyzeResidual'
+          ? 'Firma residual'
+          : mission09.step === 'reachThreshold'
+            ? 'Umbral Aurora'
+            : auroraSectorRoute.currentSectorName || 'Ruta Aurora';
+      signalStrength.textContent = `${Math.round(mission09.state.auroraSignalStrength * 100)}%`;
+      habitabilityProgress.value = getMission09Progress();
+      missionProgressLabel.textContent = mission09.completed
+        ? 'Mision 10 preparada'
+        : mission09.step === 'reachThreshold'
+          ? 'Umbral Aurora'
+          : mission09.step === 'analyzeResidual'
+            ? 'Firma residual'
+            : `Balizas ${mission09.beaconsScannedCount}/5`;
+      missionHint.textContent = contextualTutorialHint || mission09.stepDefinition.hint;
+    } else if (mission08.started) {
+      scannerStatus.textContent = mission08.completed
+        ? 'Grieta contenida'
+        : mission08.step === 'signalPurge'
+          ? 'Purga de señal'
+          : mission08.step === 'returnToBase'
+            ? 'Regreso a base'
+            : mission08.state.signalFractureRevealed
+              ? 'Grieta de señal'
+              : 'Rastro de escaneo';
+      signalStrength.textContent = `${Math.round(getMissionSignalStrength() * 100)}%`;
+      habitabilityProgress.value = getMission08Progress();
+      missionProgressLabel.textContent = mission08.completed
+        ? 'Mision 09 preparada'
+        : mission08.step === 'signalPurge'
+          ? `Purga ${Math.round(mission08.purgeFraction * 100)}%`
+          : `Focos ${mission08.state.fractureNodesStabilized.filter(Boolean).length}/3`;
+      missionHint.textContent = contextualTutorialHint || mission08.stepDefinition.hint;
+    } else if (mission07.started) {
+      scannerStatus.textContent = mission07.completed
+        ? 'Mundo semilla'
+        : mission07.step === 'activateArchive'
+          ? 'Archivo Semilla'
+          : mission07.state.atlasFractureRevealed
+            ? 'Ecos bajo corteza'
+            : 'Señal subterránea';
+      signalStrength.textContent = `${Math.round(getMissionSignalStrength() * 100)}%`;
+      habitabilityProgress.value = getMission07Progress();
+      missionProgressLabel.textContent = mission07.completed
+        ? 'Mision 08 preparada'
+        : mission07.step === 'activateArchive'
+          ? 'Archivo desbloqueado'
+          : `Nodos ${mission07.state.atlasEchoNodesScanned.filter(Boolean).length}/3`;
+      missionHint.textContent = contextualTutorialHint || mission07.stepDefinition.hint;
+    } else if (mission06.started) {
+      scannerStatus.textContent = mission06.state.cloakingFieldOnline
+        ? 'Campo activo'
+        : mission06.step === 'syncMatrix'
+          ? 'Sincronizando'
+          : 'Matriz de ocultamiento';
+      signalStrength.textContent = `${Math.round(getMissionSignalStrength() * 100)}%`;
+      habitabilityProgress.value = getMission06Progress();
+      missionProgressLabel.textContent = mission06.completed
+        ? 'Mision 07 preparada'
+        : mission06.step === 'syncMatrix'
+        ? `Blindaje ${Math.round((mission06.state.cloakingSyncProgress / mission06Tuning.syncSeconds) * 100)}%`
+        : `Proyectores ${mission06.state.cloakingProjectorsCalibrated.filter(Boolean).length}/3`;
+      missionHint.textContent = contextualTutorialHint || mission06.stepDefinition.hint;
+    } else if (mission05.started) {
+      scannerStatus.textContent = mission05.state.interferenceActive
+        ? 'Ruido Atlas'
+        : mission05.state.probeRetreated
+          ? 'Sonda en retirada'
+          : mission05.state.probeDetected
+            ? 'Sonda Silenciosa'
+            : 'Barrido orbital';
+      signalStrength.textContent = `${Math.round(getMissionSignalStrength() * 100)}%`;
+      habitabilityProgress.value = getMission05Progress();
+      missionProgressLabel.textContent = mission05.step === 'trackEcho'
+        ? `Ecos ${mission05.state.echoesResolved}/3`
+        : mission05.step === 'counterSignal'
+          ? `Contrasenal ${Math.round(mission05.state.counterSignalProgress)}%`
+          : mission05.state.interferenceActive
+            ? 'Interferencia'
+            : 'Investigacion orbital';
+      missionHint.textContent = contextualTutorialHint || mission05.currentStep.hint;
+    } else if (mission04.started) {
+      scannerStatus.textContent = mission04.state.threatSignatureDetected ? 'Firma anomala' : 'Red defensiva';
+      signalStrength.textContent = `${Math.round(getMissionSignalStrength() * 100)}%`;
+      habitabilityProgress.value = getMission04Progress();
+      missionProgressLabel.textContent =
+        mission04.step === 'calibrateDefenseLink'
+          ? 'Calibracion'
+          : mission04.step === 'synchronizeNetwork'
+            ? 'Sincronizacion'
+            : mission04.step === 'orbitalScan' || mission04.step === 'threatSignature'
+              ? 'Barrido orbital'
+              : 'Red defensiva';
+      missionHint.textContent = contextualTutorialHint || mission04.currentStep.hint;
+    } else if (mission03.started) {
+      scannerStatus.textContent = mission03.state.pleyadanContactEstablished ? 'Canal Pleyadano' : 'Red Atlas';
+      signalStrength.textContent = `${Math.round(getMissionSignalStrength() * 100)}%`;
+      habitabilityProgress.value = getMission03Progress();
+      missionProgressLabel.textContent =
+        mission03.step === 'calibrateCommunications'
+          ? 'Calibracion'
+          : mission03.step === 'synchronization'
+            ? 'Estabilidad'
+            : mission03.step === 'atlasTranslation'
+              ? 'Traduccion'
+              : 'Contacto';
+      missionHint.textContent = contextualTutorialHint || mission03.currentStep.hint;
+    } else {
+      scannerStatus.textContent = 'Superficie';
+      const nearest = surfaceResourceSystem.getNearestUnscannedDistance(getActivePlayerPosition());
+      signalStrength.textContent = Number.isFinite(nearest.distance)
+        ? `${Math.round(THREE.MathUtils.clamp(1 - nearest.distance / 420, 0.05, 1) * 100)}%`
+        : '100%';
+      habitabilityProgress.value = colonyManager.state.colonizationReadiness;
+      missionProgressLabel.textContent = 'Preparacion';
+      missionHint.textContent = contextualTutorialHint || surfaceStep.hint;
+    }
+  } else {
+    const missionHud = missionManager.update(0, getMissionObjectiveDistance(), getMissionSignalStrength(), getMissionProgress());
+    scannerStatus.textContent = missionHud.scannerStatus;
+    signalStrength.textContent = `${Math.round(missionHud.signalStrength * 100)}%`;
+    habitabilityProgress.value = missionHud.scanProgress;
+    missionHint.textContent = contextualTutorialHint || missionHud.hint;
+    missionProgressLabel.textContent =
+      missionManager.step === 'decodeDescentCorridor'
+        ? 'Decodificacion'
+        : missionManager.step === 'atmosphericEntry'
+          ? 'Entrada'
+          : missionManager.step === 'landingApproach' || missionManager.step === 'touchdown'
+            ? 'Aterrizaje'
+            : 'Progreso';
+  }
+
+  const descentActive =
+    descentSystem.state.phase === 'entry' ||
+    descentSystem.state.phase === 'cloudBreak' ||
+    descentSystem.state.phase === 'landingApproach' ||
+    descentSystem.state.phase === 'landed';
+  hud.classList.toggle('descent-active', descentActive);
+  hud.classList.toggle('surface-active', inSurfacePhase);
+
+  // Chip de fase: el jugador siempre sabe en qué modo está.
+  const phaseLabel = inSurfacePhase
+    ? playerModeSystem.characterVisible ? 'A pie' : 'Superficie'
+    : descentActive ? 'Descenso' : 'Espacio';
+  phaseChip.textContent = phaseLabel;
+  phaseChip.dataset.phase = phaseLabel.toLowerCase();
+
+  // Tecla destacada del siguiente paso, extraída del texto de acción.
+  // Solo mayúsculas: evita confundir la "m" de "9 m/s" con la tecla M.
+  const keyMatch = currentObjectiveDisplay.key ? [currentObjectiveDisplay.key, currentObjectiveDisplay.key] : null;
+  nextKey.textContent = keyMatch ? keyMatch[1].toUpperCase() : '›';
+
+  updateInteractPrompt();
+  // Heat vignette: the cockpit edges glow with entry plasma stress.
+  const heatAmount = descentSystem.state.phase === 'entry'
+    ? descentSystem.state.heat / 100
+    : descentSystem.state.phase === 'cloudBreak'
+      ? 0.18
+      : 0;
+  heatOverlay.style.opacity = `${Math.min(0.85, heatAmount * 0.9).toFixed(2)}`;
+  descentPanel.classList.toggle('is-active', descentActive);
+  descentPanel.setAttribute('aria-hidden', descentActive ? 'false' : 'true');
+  descentTitle.textContent =
+    descentSystem.state.phase === 'landed'
+      ? 'Superficie E-01'
+      : descentSystem.state.phase === 'landingApproach'
+        ? firstLandingZone.name
+        : 'Corredor Atlas';
+  heatMeter.value = descentSystem.state.heat;
+  stabilityMeter.value = descentSystem.state.stability;
+  stabilityMeter.classList.toggle('is-critical', descentSystem.state.stability < 55);
+  altitudeReadout.textContent =
+    descentSystem.state.altitude > 0 ? `${Math.round(descentSystem.state.altitude)} m` : '--';
+  landingReadout.textContent = landingZone.active
+    ? landingZone.canTouchDown(ship.position, velocity.length() * 12)
+      ? 'Listo'
+      : `${Math.round(landingZone.distanceTo(ship.position))} m`
+    : 'En espera';
+
+  laserStatus.textContent = weaponSystem.state.laserReady
+    ? 'Laser listo'
+    : `Laser ${weaponSystem.state.laserCooldown.toFixed(1)}s`;
+  missileStatus.textContent = weaponSystem.state.missileReady
+    ? `Misiles ${weaponSystem.state.missileAmmo}/4`
+    : `Misil ${weaponSystem.state.missileCooldown.toFixed(1)}s`;
+  lockStatus.textContent = mission23.jammed ? 'Lock degradado' : weaponSystem.state.lockStatus;
+
+  const diag = diagnostics.data;
+  diagnosticsReadout.textContent =
+    `GLB: Arca ${mothership.diagnostics.status}, nave ${playerShip.diagnostics.status} | ` +
+    `meshes ${mothership.diagnostics.meshCount}+${playerShip.diagnostics.meshCount} | ` +
+    `tris ${(diag.triangles / 1000).toFixed(0)}k | draw ${diag.drawCalls} | ` +
+    `particulas ~${diag.activeParticles} | ${diag.fps} FPS`;
+  updateHomeMarker();
+}
+
+function resolveOnFootCameraCollision(target: THREE.Vector3, desired: THREE.Vector3): THREE.Vector3 {
+  const ray = desired.clone().sub(target);
+  const desiredDistance = ray.length();
+  if (desiredDistance <= onFootCameraTuning.MIN_COLLISION_DISTANCE) return desired;
+  const direction = ray.normalize();
+  let allowedDistance = desiredDistance;
+  const obstacles = [
+    { center: ship.position.clone().add(new THREE.Vector3(0, -0.25, 0)), radius: 4.65 }
+  ];
+  if (planetaryWorld.colonyModule.group.visible) {
+    obstacles.push({
+      center: planetaryWorld.colonyModule.group.position.clone().add(new THREE.Vector3(0, 2.8, 0)),
+      radius: 5.4
+    });
+  }
+
+  for (const obstacle of obstacles) {
+    const targetToCenter = obstacle.center.clone().sub(target);
+    if (targetToCenter.lengthSq() <= obstacle.radius * obstacle.radius) continue;
+    const projection = targetToCenter.dot(direction);
+    if (projection <= 0 || projection >= allowedDistance) continue;
+    const closestDistanceSq = targetToCenter.lengthSq() - projection * projection;
+    const radiusSq = obstacle.radius * obstacle.radius;
+    if (closestDistanceSq >= radiusSq) continue;
+    const entryDistance = projection - Math.sqrt(radiusSq - closestDistanceSq) - 0.18;
+    allowedDistance = Math.min(
+      allowedDistance,
+      Math.max(onFootCameraTuning.MIN_COLLISION_DISTANCE, entryDistance)
+    );
+  }
+
+  return target.clone().addScaledVector(direction, allowedDistance);
+}
+
+function normalizeCameraProbeName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
+function createDebugCameraProbe(target: CameraLookAtInput): DebugCameraProbe | undefined {
+  if (typeof target !== 'string') {
+    const values = Array.isArray(target) ? target : [target.x, target.y, target.z];
+    if (values.length !== 3 || !values.every(Number.isFinite)) return undefined;
+    const position = new THREE.Vector3(values[0], values[1], values[2]);
+    return {
+      targetName: 'Posicion de prueba',
+      getPosition: () => position.clone(),
+      offset: new THREE.Vector3(14, 9, 18),
+      lookHeight: 0
+    };
+  }
+
+  const normalized = normalizeCameraProbeName(target);
+  const beaconIndex = defenseBeaconSites.findIndex(
+    (site) => normalizeCameraProbeName(site.name) === normalized
+  );
+  if (beaconIndex >= 0) {
+    const beacon = defensiveBeacons[beaconIndex];
+    return {
+      targetName: beacon.site.name,
+      getPosition: () => beacon.group.getWorldPosition(new THREE.Vector3()),
+      offset: new THREE.Vector3(12, 8, 15),
+      lookHeight: 2.5
+    };
+  }
+
+  if (normalized === 'base nereida') {
+    return {
+      targetName: 'Base Nereida',
+      getPosition: () => planetaryWorld.colonyModule.group.getWorldPosition(new THREE.Vector3()),
+      offset: new THREE.Vector3(18, 12, 22),
+      lookHeight: 2.8
+    };
+  }
+  if (normalized === 'firma anomala' || normalized === 'firma anomala distante') {
+    return {
+      targetName: 'Firma Anomala',
+      getPosition: () => threatSignatureSprite.getWorldPosition(new THREE.Vector3()),
+      offset: new THREE.Vector3(34, 18, 42),
+      lookHeight: 0
+    };
+  }
+  if (normalized === 'nave capital' || normalized === 'nave capital de la coalicion' || normalized === 'coalicion del silencio') {
+    return {
+      targetName: 'Nave Capital de la Coalicion',
+      getPosition: () => coalitionCapitalPresence.capitalPosition.clone(),
+      offset: new THREE.Vector3(520, 260, 680),
+      lookHeight: 0
+    };
+  }
+  if (normalized === 'baliza orbital remota' || normalized === 'baliza remota') {
+    return {
+      targetName: 'Baliza Orbital Remota',
+      getPosition: () => coalitionCapitalPresence.remoteBeaconPosition.clone(),
+      offset: new THREE.Vector3(54, 30, 68),
+      lookHeight: 0
+    };
+  }
+  if (normalized === 'resonador atlas') {
+    return {
+      targetName: 'Resonador Atlas',
+      getPosition: () => pleyadanRelayBeacon.group.getWorldPosition(new THREE.Vector3()),
+      offset: new THREE.Vector3(24, 15, 30),
+      lookHeight: 3.8
+    };
+  }
+  if (normalized === 'fractura atlas') {
+    return {
+      targetName: 'Fractura Atlas',
+      getPosition: () => atlasSeedArchive.group.getWorldPosition(new THREE.Vector3()),
+      offset: new THREE.Vector3(26, 14, 24),
+      lookHeight: 1.2
+    };
+  }
+  if (normalized === 'archivo semilla atlas') {
+    return {
+      targetName: 'Archivo Semilla Atlas',
+      getPosition: () => atlasSeedArchive.interactionPosition.clone(),
+      offset: new THREE.Vector3(12, 8, 14),
+      lookHeight: 2.8
+    };
+  }
+  const atlasNode = atlasEchoNodes.find((node) => normalizeCameraProbeName(node.definition.name) === normalized);
+  if (atlasNode) {
+    return {
+      targetName: atlasNode.definition.name,
+      getPosition: () => atlasNode.group.getWorldPosition(new THREE.Vector3()),
+      offset: new THREE.Vector3(8, 5, 9),
+      lookHeight: 1.2
+    };
+  }
+  if (normalized === 'nave' || normalized === 'nave de reconocimiento') {
+    return {
+      targetName: 'Nave',
+      getPosition: () => ship.getWorldPosition(new THREE.Vector3()),
+      offset: new THREE.Vector3(13, 8, 20),
+      lookHeight: 0.5
+    };
+  }
+
+  const sceneTarget = scene.getObjectByName(target);
+  if (!sceneTarget) return undefined;
+  return {
+    targetName: sceneTarget.name || target,
+    getPosition: () => sceneTarget.getWorldPosition(new THREE.Vector3()),
+    offset: new THREE.Vector3(14, 9, 18),
+    lookHeight: 1.5
+  };
+}
+
+function applyDebugCameraProbe(): CameraProbeResult | undefined {
+  if (!debugCameraProbe) return undefined;
+  const target = debugCameraProbe.getPosition();
+  const lookTarget = target.clone().add(new THREE.Vector3(0, debugCameraProbe.lookHeight, 0));
+  const desired = target.clone().add(debugCameraProbe.offset);
+  if (inSurfacePhase) {
+    desired.y = Math.max(desired.y, planetaryWorld.getHeightAt(desired.x, desired.z) + 2);
+  }
+  cameraTargetPrevious.copy(cameraTargetCurrent);
+  cameraTargetCurrent.copy(lookTarget);
+  camera.position.copy(desired);
+  camera.lookAt(lookTarget);
+  camera.fov = 58;
+  camera.near = 0.08;
+  camera.updateProjectionMatrix();
+  return {
+    targetName: debugCameraProbe.targetName,
+    targetPosition: [target.x, target.y, target.z],
+    cameraPosition: [camera.position.x, camera.position.y, camera.position.z]
+  };
+}
+
+function setDebugCameraLookAt(target: CameraLookAtInput): CameraProbeResult | undefined {
+  const probe = createDebugCameraProbe(target);
+  if (!probe) return undefined;
+  debugCameraProbe = probe;
+  return applyDebugCameraProbe();
+}
+
+function getDefenseNetworkVisualState(): DefenseNetworkVisualState {
+  return {
+    defenseLinksActive: defenseNetworkLinks.linksActive,
+    defenseLinksUnstable: defenseNetworkLinks.unstable,
+    defenseLinksOnline: defenseNetworkLinks.online,
+    defenseNetworkVisible: defenseNetworkLinks.networkVisible,
+    threatSignatureWorldVisible: threatSignatureSprite.visible,
+    activeDefenseLinkCount: defenseNetworkLinks.activeLinkCount,
+    defensiveBeaconVisibility: defensiveBeacons.map((beacon) => beacon.group.visible)
+  };
+}
+
+function updateCamera(delta: number): void {
+  if (debugCameraProbe) {
+    applyDebugCameraProbe();
+    return;
+  }
+  cameraTargetPrevious.copy(cameraTargetCurrent);
+  if (inSurfacePhase && playerModeSystem.transitionActive) {
+    const boardingTarget = shipAccessLift.getBoardingLookTarget();
+    if (surfaceCharacter.group.visible) {
+      boardingTarget.lerp(surfaceCharacter.group.position.clone().add(new THREE.Vector3(0, 1.05, 0)), 0.58);
+    }
+    const desired = shipAccessLift.getBoardingCameraPosition();
+    if (playerModeSystem.mode === 'ENTERING_SHIP') {
+      const settle = THREE.MathUtils.smoothstep(playerModeSystem.transitionProgress, 0.68, 0.98);
+      const basis = new THREE.Quaternion().setFromAxisAngle(WORLD_UP, smoothYaw);
+      const externalDesired = ship.position.clone().add(new THREE.Vector3(0, 6.4, 19).applyQuaternion(basis));
+      const cockpitDesired = ship.position
+        .clone()
+        .add(new THREE.Vector3(0, 0.84, -1.34).applyQuaternion(ship.quaternion));
+      desired.lerp(previousShipCameraPreference === 'cockpit' ? cockpitDesired : externalDesired, settle);
+      boardingTarget.lerp(ship.position, settle);
+    }
+    cameraTargetCurrent.copy(boardingTarget);
+    desired.y = Math.max(desired.y, planetaryWorld.getHeightAt(desired.x, desired.z) + 1.35);
+    camera.position.lerp(desired, 1 - Math.exp(-delta * 7.4));
+    camera.lookAt(boardingTarget);
+    camera.fov = THREE.MathUtils.lerp(camera.fov, 57, 1 - Math.exp(-delta * 6));
+    camera.near = THREE.MathUtils.lerp(camera.near, 0.08, 1 - Math.exp(-delta * 6));
+    camera.updateProjectionMatrix();
+    applyLiftLockTremor(delta);
+    return;
+  }
+
+  if (inSurfacePhase && playerModeSystem.characterVisible) {
+    const characterTarget = surfaceCharacter.group.position
+      .clone()
+      .add(new THREE.Vector3(0, onFootCameraTuning.TARGET_HEIGHT, 0));
+    cameraTargetCurrent.copy(characterTarget);
+    const lookTarget = characterTarget.clone();
+    const transitioning = playerModeSystem.transitionActive;
+    if (transitioning) {
+      lookTarget.lerp(ship.position.clone().add(new THREE.Vector3(0, 0.35, 0)), 0.2);
+    }
+    const distance = transitioning ? onFootCameraTuning.TRANSITION_DISTANCE : onFootCameraTuning.DISTANCE;
+    const horizontalDistance = Math.cos(footCameraPitch) * distance;
+    const cameraBasis = getOnFootCameraBasis();
+    const desiredUnresolved = characterTarget
+      .clone()
+      .addScaledVector(cameraBasis.forward, -horizontalDistance)
+      .addScaledVector(cameraBasis.right, transitioning ? 0.4 : onFootCameraTuning.SHOULDER_OFFSET);
+    desiredUnresolved.y += onFootCameraTuning.HEIGHT + Math.sin(footCameraPitch) * distance;
+    const desired = resolveOnFootCameraCollision(characterTarget, desiredUnresolved);
+    const cameraGround =
+      auroraSurfaceHeight(desired.x, desired.z) + onFootCameraTuning.TERRAIN_CLEARANCE;
+    desired.y = Math.max(desired.y, cameraGround);
+    if (snapOnFootCameraNextFrame) {
+      camera.position.copy(desired);
+      snapOnFootCameraNextFrame = false;
+      cameraFollowInitialized = true;
+      cameraFollowSnapPending = false;
+      cameraFollowInitializedThisFrame = true;
+    } else {
+      camera.position.lerp(desired, 1 - Math.exp(-delta * onFootCameraTuning.FOLLOW_RESPONSE));
+    }
+    const currentCameraGround =
+      auroraSurfaceHeight(camera.position.x, camera.position.z) + onFootCameraTuning.TERRAIN_CLEARANCE;
+    camera.position.y = Math.max(camera.position.y, currentCameraGround);
+    camera.lookAt(lookTarget);
+    camera.fov = THREE.MathUtils.lerp(camera.fov, transitioning ? 63 : 59, 1 - Math.pow(0.02, delta));
+    camera.near = THREE.MathUtils.lerp(camera.near, 0.08, 1 - Math.pow(0.02, delta));
+    camera.updateProjectionMatrix();
+    applyLiftLockTremor(delta);
+    return;
+  }
+
+  const target = ship.position.clone();
+  cameraTargetCurrent.copy(target);
+  const lookTarget = target.clone();
+  const speed = velocity.length();
+  const boosting = input.has('shift') && speed > 6;
+  const step = missionManager.step;
+  const cockpitBlend = THREE.MathUtils.smoothstep(cameraModeSystem.blend, 0.02, 0.98);
+
+  // Per-phase framing: tight and low on the surface so terrain reads;
+  // slightly wide during basin approach to show the world below; raised
+  // during planet approach so E-01 owns the upper frame.
+  let offsetY = 8.8 + Math.min(speed * 0.04, 2.8);
+  let offsetZ = 25 + Math.min(speed * 0.18, 13);
+  let offsetX = 0;
+  if (inSurfacePhase) {
+    const boostCamera = THREE.MathUtils.clamp(surfaceBoostIntensity / SURFACE_SHIP_TUNING.BOOST_FX_INTENSITY, 0, 1);
+    offsetY = THREE.MathUtils.lerp(6.4, 7.6, boostCamera);
+    offsetZ = THREE.MathUtils.lerp(19, 26, boostCamera);
+  } else if (inBasin) {
+    offsetX = -2;
+    offsetY = 7.4;
+    offsetZ = 25.5;
+    lookTarget.lerp(landingZone.group.position, 0.1);
+  } else if (step === 'atmosphericEntry') {
+    offsetX = 3.2;
+    offsetY = 7.2;
+    offsetZ = 22.5;
+  } else if (step === 'approachPlanet') {
+    offsetY += 2.8;
+    offsetZ += 2;
+  }
+
+  const surfaceIntroAge = surfacePhaseStartedAt >= 0 ? clock.elapsedTime - surfacePhaseStartedAt : Number.POSITIVE_INFINITY;
+  if (inSurfacePhase && surfaceIntroAge < 8) {
+    lookTarget.lerp(SURFACE_LANDING_LOCAL, THREE.MathUtils.lerp(0.16, 0.05, surfaceIntroAge / 8));
+  }
+  if (planetaryWorld.colonyModule.activationInProgress) {
+    const moduleTarget = planetaryWorld.colonyModule.group.getWorldPosition(new THREE.Vector3());
+    moduleTarget.y += 3.2;
+    lookTarget.lerp(moduleTarget, 0.32);
+    offsetX = 2.4;
+    offsetY = 7.6;
+    offsetZ = 19.5;
+  }
+
+  const cameraBasis = inBasin || inSurfacePhase
+    ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), smoothYaw)
+    : ship.quaternion;
+  const offset = new THREE.Vector3(offsetX, offsetY, offsetZ).applyQuaternion(cameraBasis);
+  const externalDesired = target.clone().add(offset);
+  if (inSurfacePhase && cockpitBlend < 0.98) {
+    const cameraGround = planetaryWorld.getHeightAt(externalDesired.x, externalDesired.z) + 1.5;
+    externalDesired.y = Math.max(externalDesired.y, cameraGround);
+  }
+  const cockpitOffset = new THREE.Vector3(0, inSurfacePhase ? 0.84 : 0.94, -1.34).applyQuaternion(ship.quaternion);
+  const cockpitDesired = target.clone().add(cockpitOffset);
+  const desired = externalDesired.lerp(cockpitDesired, cockpitBlend);
+  if (!cameraFollowInitialized || cameraFollowSnapPending) {
+    camera.position.copy(desired);
+    cameraFollowInitialized = true;
+    cameraFollowSnapPending = false;
+    cameraFollowInitializedThisFrame = true;
+  } else {
+    camera.position.lerp(desired, 1 - Math.pow(0.0009, delta));
+  }
+  if (inSurfacePhase && cockpitBlend < 0.5) {
+    const cameraGround = planetaryWorld.getHeightAt(camera.position.x, camera.position.z) + 1.25;
+    camera.position.y = Math.max(camera.position.y, cameraGround);
+  }
+
+  if (cameraShake > 0) {
+    const shakeScale = THREE.MathUtils.lerp(1, 0.38, cockpitBlend);
+    camera.position.x += (Math.random() - 0.5) * cameraShake * shakeScale;
+    camera.position.y += (Math.random() - 0.5) * cameraShake * shakeScale;
+    cameraShake = Math.max(0, cameraShake - delta * 0.55);
+  }
+  applyLiftLockTremor(delta);
+
+  // Atmospheric entry adds a low-frequency sway on top of the jitter: the
+  // whole airframe wallowing in turbulence, not just vibrating.
+  if (step === 'atmosphericEntry') {
+    const sway = clock.elapsedTime;
+    const swayScale = THREE.MathUtils.lerp(1, 0.32, cockpitBlend);
+    camera.position.x += Math.sin(sway * 1.3) * 0.55 * swayScale;
+    camera.position.y += Math.sin(sway * 1.7 + 1.2) * 0.4 * swayScale;
+  }
+
+  camera.lookAt(lookTarget);
+  // The camera leans a fraction of the ship's bank: horizon tilts with the
+  // turn instead of staying artificially level.
+  camera.rotateZ(bankRoll * 0.3);
+  if (cockpitBlend > 0) {
+    const externalQuaternion = camera.quaternion.clone();
+    const cockpitQuaternion = ship.quaternion.clone();
+    camera.quaternion.copy(externalQuaternion).slerp(cockpitQuaternion, cockpitBlend);
+  }
+
+  // Boost widens the lens; atmospheric entry pushes it further for the
+  // sense of a hull being dragged down a gravity well.
+  const surfaceFov = THREE.MathUtils.lerp(
+    62,
+    72,
+    THREE.MathUtils.clamp(surfaceBoostIntensity / SURFACE_SHIP_TUNING.BOOST_FX_INTENSITY, 0, 1)
+  );
+  const externalFov = step === 'atmosphericEntry' ? 72 : inBasin && !inSurfacePhase ? 68 : boosting ? 70 : inSurfacePhase ? surfaceFov : step === 'approachPlanet' ? 66 : 64;
+  const cockpitFov = step === 'atmosphericEntry' ? 68 : inSurfacePhase ? 64 : 66;
+  // The Aurora expedition opens the lens a couple of degrees on the exposed
+  // legs and on the reveal; it is an offset on the existing target, so every
+  // other camera rule keeps working untouched.
+  const targetFov = THREE.MathUtils.lerp(externalFov, cockpitFov, cockpitBlend) + auroraTravelFovOffset;
+  camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 1 - Math.pow(0.02, delta));
+  camera.near = THREE.MathUtils.lerp(camera.near, THREE.MathUtils.lerp(0.1, 0.07, cockpitBlend), 1 - Math.pow(0.02, delta));
+  camera.updateProjectionMatrix();
+}
+
+function snapBasinCameraFraming(): void {
+  const basis = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), smoothYaw);
+  const offset = new THREE.Vector3(-2, 7.4, 25.5).applyQuaternion(basis);
+  const lookTarget = ship.position.clone().lerp(landingZone.group.position, 0.08);
+  camera.position.copy(ship.position).add(offset);
+  camera.lookAt(lookTarget);
+}
+
+function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta): void {
+  if (!inSurfacePhase) {
+    starfield.update(delta, elapsed);
+    nebula.update(delta, elapsed);
+    planets.update(delta, elapsed);
+    asteroidField.update(delta);
+    radiationStorm.update(delta, elapsed);
+    gravityAnomaly.update(delta, elapsed);
+    for (const point of pointsOfInterest) {
+      point.updateVisual(delta, elapsed);
+      point.marker.rotation.z -= delta * 0.9;
+      point.marker.quaternion.copy(camera.quaternion);
+      const distance = ship.position.distanceTo(point.object.position);
+      const targetOpacity = point.scanned ? 0.94 : distance < 360 ? 0.5 : 0.18;
+      point.markerMaterial.opacity = THREE.MathUtils.lerp(point.markerMaterial.opacity, targetOpacity, 0.04);
+    }
+
+    // Corridor approach lights: a slow chase pulse running toward E-01,
+    // visible only while the corridor is the active guidance.
+    if (corridorPips) {
+      const corridorRelevant =
+        !inBasin && (missionManager.step === 'approachPlanet' || missionManager.step === 'atmosphericEntry');
+      corridorPips.visible = corridorRelevant;
+      if (corridorRelevant) {
+        const phaseStrength = missionManager.step === 'approachPlanet' ? 1 : 0.58;
+        for (const pip of corridorPipSprites) {
+          const cameraDistance = camera.position.distanceTo(pip.sprite.position);
+          const worldScale = THREE.MathUtils.clamp(cameraDistance * 0.018, 4.8, 15);
+          const easedScale = THREE.MathUtils.lerp(pip.sprite.scale.x, worldScale, 1 - Math.pow(0.025, delta));
+          pip.sprite.scale.setScalar(easedScale);
+          const nearFade = THREE.MathUtils.smoothstep(cameraDistance, 14, 58);
+          const farFade = 1 - THREE.MathUtils.smoothstep(cameraDistance, 1800, 3600);
+          const chase = Math.pow(Math.max(0, Math.sin(elapsed * 2.35 - pip.index * 0.82)), 1.7);
+          pip.material.opacity = (0.11 + chase * 0.48) * nearFade * farFade * phaseStrength;
+        }
+      }
+    }
+
+    mothership.update(delta, elapsed, mothership.distanceTo(ship.position));
+    mothership.setPlayerInside(mothership.isInSafeZone(ship.position), delta);
+  }
+
+  landingZone.update(delta, elapsed);
+
+  // Basin reveal: the floor arrives first, then the near ridge band. The
+  // second ridge stays softened by haze so the player is never flying blind.
+  if (inBasin && scene.fog instanceof THREE.FogExp2) {
+    const revealAge = basinRevealStartedAt >= 0 ? Math.max(0, elapsed - basinRevealStartedAt) : 9;
+    const reveal = THREE.MathUtils.smoothstep(revealAge, 0.35, 7.5);
+    const fogReveal = THREE.MathUtils.smoothstep(revealAge, 0.2, 8.5);
+    const targetDensity = THREE.MathUtils.lerp(0.0046, 0.00255, fogReveal);
+    scene.fog.density = THREE.MathUtils.lerp(scene.fog.density, targetDensity, 1 - Math.pow(0.035, delta));
+    planetaryWorld.setRevealProgress(reveal);
+    landingZone.setApproachVisibility(0.42 + reveal * 0.58);
+  }
+
+  const speed = velocity.length();
+  const boosting = input.has('shift') && speed > 6;
+  // Close the cloud-break beat once it has had its moment, then hand control
+  // to the landing approach exactly as before.
+  if (cloudBreakHoldUntil >= 0 && elapsed >= cloudBreakHoldUntil) {
+    cloudBreakHoldUntil = -1;
+    descentSystem.beginLandingApproach();
+  }
+  // One staged profile drives the whole entry; recomputed in place before any
+  // consumer reads it this frame.
+  updateEntryProfile(entryProfile, descentSystem.state, speed);
+  entryEffect.update(delta, elapsed, descentSystem.state, entryProfile);
+  // The plasma phase charges the nozzle collars; PlayerShip cools them down.
+  // Hull glow outlives the sheath: hot metal cools slower than a shock layer.
+  playerShip.hullHeat = Math.max(playerShip.hullHeat, entryProfile.hullGlow);
+  // Leading edges heat with the shock layer and keep glowing after it dies —
+  // `hullHeat` decays on its own in PlayerShip, so the afterglow is real
+  // cooling rather than a second timer.
+  playerShip.setEntryHeat(
+    Math.max(entryProfile.hullGlow, entryProfile.active ? 0 : playerShip.hullHeat),
+    entryProfile.ionization
+  );
+  // Propulsion intent: live acceleration and hover support drive the plume,
+  // shimmer and ventral wash so movement reads powered, not translated.
+  const pilotFlying = playerModeSystem.insideShip && launched;
+  playerShip.thrustInput = pilotFlying && input.has('w') ? (boosting ? 1 : 0.7) : 0;
+  playerShip.liftInput = pilotFlying && inSurfacePhase ? (input.has(' ') ? 1 : 0.45) : 0;
+  playerShip.groundEffect = inSurfacePhase
+    ? THREE.MathUtils.clamp(
+        1 - (ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z)) / 15,
+        0,
+        1
+      )
+    : 0;
+  playerShip.update(delta, elapsed, speed, boosting, camera.position.distanceTo(ship.position));
+  // The propulsion mix hears exactly what the nozzles show: same intents.
+  engineAudio.update(delta, elapsed, {
+    active: pilotFlying,
+    thrust: playerShip.thrustInput,
+    boost: boosting,
+    vertical: pilotFlying && input.has(' ') ? 1 : 0,
+    hover: playerShip.liftInput,
+    groundEffect: playerShip.groundEffect,
+    speed,
+    atmosphere: inSurfacePhase || inBasin,
+    liftActive: inSurfacePhase && playerModeSystem.transitionActive,
+    dialogueActive: Boolean(dialogueManager.current)
+  });
+  scannerPulse.update(visualDelta);
+  discoveryEffect.update(visualDelta);
+  shieldEffect.update(delta, resources.hull, resources.energy, elapsed);
+  engineTrail.update(input.has('shift'), speed, elapsed);
+  weaponSystem.update(delta, ship, getWeaponTargets());
+  cinematicDust.update(delta, camera, velocity);
+}
+
+function animate(): void {
+  renderer.info.reset();
+  const rawDelta = clock.getDelta();
+  const delta = Math.min(rawDelta, 0.05);
+  const elapsed = clock.elapsedTime;
+  let nearestThreat = Number.POSITIVE_INFINITY;
+  const dialoguePausesGameplay = dialogueManager.current?.pausesGameplay === true;
+
+  const mission24LiftTransition = mission24.started && playerModeSystem.transitionActive;
+  if (launched && !gamePaused && (!dialoguePausesGameplay || mission24LiftTransition)) {
+    if (inSurfacePhase) {
+      const surfacePlayerDelta = playerModeSystem.transitionActive
+        ? mission24.started ? rawDelta : Math.min(rawDelta, 0.25)
+        : delta;
+      updateSurfacePlayer(surfacePlayerDelta);
+    } else {
+      playerModeSystem.syncShipContext(false, cameraModeSystem.mode === 'cockpit');
+    }
+
+    if (playerModeSystem.insideShip) {
+      const headingResponse = 1 - Math.pow(0.002, delta);
+      const yawError = yaw - smoothYaw;
+      smoothYaw += yawError * headingResponse;
+      smoothPitch += (pitch - smoothPitch) * headingResponse;
+
+      // Bank into turns and lateral slip; ease back to level flight.
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ship.quaternion);
+      const lateralSlip = right.dot(velocity);
+      const strafe = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
+      const maxBank = inSurfacePhase ? SURFACE_SHIP_TUNING.MAX_BANK : 0.55;
+      const targetRoll = THREE.MathUtils.clamp(
+        yawError * (inSurfacePhase ? 3.4 : 4.2) - strafe * 0.16 - lateralSlip * 0.006,
+        -maxBank,
+        maxBank
+      );
+      bankRoll += (targetRoll - bankRoll) * (1 - Math.pow(0.01, delta));
+      // In orbit the hull also carries the eased thrust attitude, so a burn
+      // reads on the silhouette itself and not only in the HUD.
+      ship.rotation.set(smoothPitch + (inSurfacePhase ? 0 : spaceThrustPitch), smoothYaw, bankRoll);
+      // Surface control gets a slightly wider simulation step so input stays
+      // responsive on low-FPS/WebGL software renderers without destabilizing
+      // the rest of the mission simulation.
+      applyInput(
+        inSurfacePhase || mission24.orbitalFlightActive
+          ? Math.min(rawDelta, 0.1)
+          : delta
+      );
+    } else {
+      bankRoll *= Math.pow(0.02, delta);
+      velocity.set(0, 0, 0);
+    }
+    // Runs after the flight model so the prologue's clamps and throttle cap
+    // are applied to the velocity the pilot just produced.
+    updateArkDeparture(delta, elapsed);
+    updateSafeZone(delta);
+    updateHazards(delta);
+    updateMissionSystems(delta, elapsed);
+    nearestThreat = updateThreats(delta, elapsed);
+    updateHud(nearestThreat);
+  } else if (launched) {
+    updateHud(nearestThreat);
+  } else {
+    updateHomeMarker();
+  }
+
+  footstepAudio.update({
+    active:
+      launched &&
+      !gamePaused &&
+      !dialoguePausesGameplay &&
+      inSurfacePhase &&
+      playerModeSystem.onFootActive &&
+      !playerModeSystem.transitionActive,
+    position: surfaceCharacter.group.position,
+    speed: surfaceCharacter.speed,
+    moveState: surfaceCharacter.moveState,
+    elapsedSeconds: elapsed
+  });
+
+  if (launched) {
+    musicManager.update({
+      phase: getCurrentPhase(),
+      currentMissionId: getCurrentAudioMissionId(),
+      missionStep: getCurrentAudioMissionStep(),
+      interferenceActive: mission05.state.interferenceActive || mission23.jammed,
+      // Contained danger raises the tension layer over whatever bed plays.
+      tensionActive:
+        (mission23.started && !mission23.completed) ||
+        (mission22.started && !mission22.completed) ||
+        (mission21.started && !mission21.completed) ||
+        defenseNetworkLinks.unstable ||
+        mission04.step === 'threatSignature' ||
+        (mission05.started && !mission05.state.probeRetreated && mission05.state.probeState !== 'hidden') ||
+        (mission06.started && !mission06.completed && mission06.step === 'syncMatrix') ||
+        // The storm plateau leg keeps the tension layer riding on top.
+        auroraTravelDirector.state.stormIntensity > 0.6,
+      dialogueActive: Boolean(dialogueManager.current),
+      // Aurora expedition: the score follows the leg of the journey.
+      auroraSegment: mission09.started ? auroraTravelDirector.state.segment : null
+    });
+    syncDialogueWithObjective();
+    dialogueManager.update(!gamePaused && !starMap.active ? delta : 0);
+  }
+  const nextDialogueAudioActive = launched && Boolean(dialogueManager.current);
+  if (nextDialogueAudioActive !== dialogueAudioActive) {
+    void sfxManager.play(nextDialogueAudioActive ? 'commStart' : 'commEnd', 0.48);
+    dialogueAudioActive = nextDialogueAudioActive;
+  }
+  commsDialoguePanel.setSuppressed(
+    !launched || gamePaused || starMap.active || hud.classList.contains('capture-clean')
+  );
+  commsDialoguePanel.sync(dialogueManager.current);
+  // Real commander voice follows whatever line is actually on screen; a
+  // skipped or replaced line fades its take with it.
+  voiceManager.syncDialogue(dialogueManager.current?.id, dialogueManager.current?.speakerId);
+
+  updateSceneMotion(gamePaused ? 0 : delta, elapsed, gamePaused ? 0 : rawDelta);
+  // Point-light budget. Runs on the real frame delta so it keeps working while
+  // the game is paused and the camera can still be moved.
+  // Mission hardware is added to the scene long after boot, so the budget
+  // re-scans occasionally. A full traverse at 0.2 Hz costs nothing next to the
+  // per-fragment light loop it saves.
+  // Aurora greeble LOD: bolts and cable segments stop being resolvable past a
+  // few tens of metres, so the pool hides them. Silhouette parts stay. Checked
+  // on the same low-frequency tick as the light pool; no allocation.
+  auroraGreebleDetailTimer += rawDelta;
+  if (auroraGreebleDetailTimer >= 0.4) {
+    auroraGreebleDetailTimer = 0;
+    auroraGreebleField.setDetailVisible(
+      camera.position.distanceToSquared(auroraHabitatModule.interactionPosition) < 55 * 55
+    );
+  }
+
+  if (lightPoolEnabled) {
+    // Mission hardware reaches the scene long after boot, so the pool re-scans
+    // occasionally. A traverse at 0.2 Hz is nothing next to what it saves.
+    lightPoolRescanTimer += rawDelta;
+    if (lightPoolRescanTimer >= 5) {
+      lightPoolRescanTimer = 0;
+      lightPool.registerSubtree(scene);
+    }
+    // Keep the active objective lit even when the camera looks past it.
+    lightPool.setPriorityTarget(launched ? getMissionObjectivePosition() : null);
+    lightPool.update(rawDelta, camera);
+  }
+  if (!surfaceCharacter.group.visible) surfaceCharacter.noteInactiveFrame();
+  cameraModeSystem.update(rawDelta);
+  const cockpitAvailable = launched && playerModeSystem.insideShip;
+  cockpitInterior.setVisibilityBlend(cockpitAvailable ? cameraModeSystem.blend : 0);
+  const cockpitOccludesExterior = cockpitAvailable && cameraModeSystem.blend > 0.58;
+  playerShip.group.visible = !cockpitOccludesExterior;
+  engineTrail.group.visible = !cockpitOccludesExterior;
+  if (cockpitAvailable && cockpitInterior.active) {
+    syncCockpitEventAlerts(elapsed);
+    cockpitInterior.update(delta, elapsed, buildCockpitTelemetry());
+  } else {
+    cockpitInterior.noteInactiveFrame();
+  }
+  orbitalMarker.updateDistanceQuality(ship.position.distanceTo(orbitalMarker.group.position));
+  cameraPositionBeforeUpdate.copy(camera.position);
+  cameraFollowInitializedThisFrame = false;
+  updateCamera(delta);
+  cameraJumpDistance = cameraFollowInitializedThisFrame
+    ? 0
+    : camera.position.distanceTo(cameraPositionBeforeUpdate);
+  shipCameraJumpDistance = playerModeSystem.insideShip ? cameraJumpDistance : 0;
+  // Color grade by phase: neutral space, warm plasma during entry, gentle
+  // earthy warmth over Cuenca Nereida. Eased inside the composer.
+  if (missionManager.step === 'atmosphericEntry') {
+    // The grade rides the thermal curve: neutral in the exosphere, deeply
+    // warm at peak heating, cooling back off as the ship slows.
+    const warmth = entryProfile.heat;
+    post.setTintTarget(1 + warmth * 0.14, 1 - warmth * 0.04, 1 - warmth * 0.13);
+  } else if (inSurfacePhase || inBasin) {
+    post.setTintTarget(1.02, 1.005, 0.965);
+  } else {
+    post.setTintTarget(1, 1, 1);
+  }
+  // Heat haze and the bloom lift are part of the same staged curve; both
+  // return to their base values on their own once the entry ends.
+  post.setEntryGrade(entryProfile.haze, entryProfile.bloomBoost);
+  lastFrameDelta = delta;
+  updateCharacterShadow();
+  post.render(delta, elapsed);
+  // The diagnostics snapshot is only published every 100 ms, so assembling
+  // this patch on frames that cannot publish it is pure waste: it walks the
+  // whole mission state, formats ~100 numbers and allocates several arrays.
+  // Frame-rate accounting and the renderer counters still run every frame.
+  if (diagnostics.patchDue(rawDelta)) {
+      const diagnosticObjective = getCurrentObjectiveDisplay();
+      const inputActionState = getInputActionState();
+      const cameraToggleAvailable =
+        playerModeSystem.insideShip && !playerModeSystem.transitionActive && !gamePaused && !starMap.active;
+      const entryParticles = entryEffect.activeParticleCount;
+      const surfaceParticles = planetaryWorld.activeParticleCount + (surfaceResourceSystem.group.visible ? 34 : 0);
+      const resourceTerrainMetrics = planetaryWorld.getResourceSiteTerrainDiagnostics();
+      const lagoonResourceNode = surfaceResourceSystem.nodes.find((node) => node.definition.type === 'water');
+      const dialogueState = dialogueManager.getState();
+      const premiumVisualState = premiumVisuals.getState();
+      const boardingProximity = inSurfacePhase && playerModeSystem.onFootActive
+        ? getBoardingProximity()
+        : undefined;
+      diagnostics.update(renderer, rawDelta, {
+        ...getPerformanceDiagnosticsPatch(),
+        activeParticles:
+          (inBasin ? surfaceParticles : activeParticleBudget + entryParticles) +
+          scannerPulse.activeCount * 64 +
+          discoveryEffect.activeCount * 90,
+        entryParticles,
+        surfaceParticles,
+        activePOIs: pointsOfInterest.length,
+        activeThreats: inSurfacePhase || mission24.started ? 0 : threats.filter((threat) => threat.target.health > 0).length,
+        dialogueQueueLength: dialogueState.queueLength,
+        currentDialogueId: dialogueState.currentDialogueId,
+        currentSpeaker: dialogueState.currentSpeaker,
+        currentDialoguePriority: dialogueState.currentPriority,
+        playedDialogueCount: dialogueState.playedDialogueCount,
+        lastDialogueTrigger: dialogueState.lastDialogueTrigger,
+        dialoguePanelVisible: commsDialoguePanel.visible,
+        dialogueAwaitingInput: dialogueState.awaitingInput,
+        mothershipStatus: mothership.diagnostics.status,
+        mothershipPath: mothership.diagnostics.path,
+        mothershipMeshCount: mothership.diagnostics.meshCount,
+        mothershipTriangles: mothership.diagnostics.triangles,
+        mothershipScale: mothership.diagnostics.scale,
+        mothershipVisible: mothership.diagnostics.visible,
+        playerShipStatus: playerShip.diagnostics.status,
+        playerShipPath: playerShip.diagnostics.path,
+        playerShipMeshCount: playerShip.diagnostics.meshCount,
+        playerShipTriangles: playerShip.diagnostics.triangles,
+        playerShipScale: playerShip.diagnostics.scale,
+        playerShipVisible: playerShip.diagnostics.visible,
+        shipPosition: [
+          Number(ship.position.x.toFixed(2)),
+          Number(ship.position.y.toFixed(2)),
+          Number(ship.position.z.toFixed(2))
+        ],
+        shipVelocity: [
+          Number(velocity.x.toFixed(2)),
+          Number(velocity.y.toFixed(2)),
+          Number(velocity.z.toFixed(2))
+        ],
+        shipAltitudeHold: Number((shipAltitudeHoldY ?? ship.position.y).toFixed(2)),
+        shipGroundClearance: inSurfacePhase
+          ? Number((ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z)).toFixed(2))
+          : 0,
+        shipAltitudeHoldTarget: Number((shipAltitudeHoldY ?? ship.position.y).toFixed(2)),
+        shipVerticalVelocity: Number(velocity.y.toFixed(2)),
+        shipRealY: Number(ship.position.y.toFixed(2)),
+        shipPreviousY: Number(shipPreviousY.toFixed(2)),
+        shipAltitudeHoldY: Number((shipAltitudeHoldY ?? ship.position.y).toFixed(2)),
+        shipTerrainY: Number(shipTerrainY.toFixed(2)),
+        shipTerrainClearance: inSurfacePhase
+          ? Number((ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z)).toFixed(2))
+          : 0,
+        parkedShipTerrainHeight: Number(parkedShipTerrainHeight.toFixed(3)),
+        parkedShipHullBottom: Number(parkedShipHullBottom.toFixed(3)),
+        parkedShipTerrainSeparation: Number(parkedShipTerrainSeparation.toFixed(3)),
+        shipBoardingAnchorWorld: boardingProximity
+          ? [
+              Number(boardingProximity.anchor.x.toFixed(3)),
+              Number(boardingProximity.anchor.y.toFixed(3)),
+              Number(boardingProximity.anchor.z.toFixed(3))
+            ]
+          : [0, 0, 0],
+        shipBoardingHorizontalDistance: boardingProximity
+          ? Number(boardingProximity.horizontal.toFixed(3))
+          : Number.POSITIVE_INFINITY,
+        shipBoardingVerticalDifference: boardingProximity
+          ? Number(boardingProximity.vertical.toFixed(3))
+          : Number.POSITIVE_INFINITY,
+        shipBoardingAvailable: boardingProximity?.available ?? false,
+        shipParked: inSurfacePhase && playerModeSystem.onFootActive && parkedShipResolved,
+        playerShipInstances: cachedPlayerShipInstances,
+        shipAltitudeResetForce: Number(shipAltitudeResetForce.toFixed(3)),
+        shipCameraJumpDistance: Number(shipCameraJumpDistance.toFixed(3)),
+        verticalThrustActive:
+          playerModeSystem.insideShip &&
+          (input.has(' ') || input.has('q') || input.has('c') || input.has('control')),
+        orbitalMarkerStatus: orbitalMarker.diagnostics.status,
+        orbitalMarkerPath: orbitalMarker.diagnostics.path,
+        orbitalMarkerMeshCount: orbitalMarker.diagnostics.meshCount,
+        orbitalMarkerMaterialCount: orbitalMarker.diagnostics.materialCount,
+        orbitalMarkerTriangles: orbitalMarker.diagnostics.triangles,
+        orbitalMarkerObjectCount: orbitalMarker.diagnostics.objectCount,
+        orbitalMarkerScale: orbitalMarker.diagnostics.scale,
+        orbitalMarkerVisible: orbitalMarker.diagnostics.visible,
+        orbitalMarkerLodLevel: orbitalMarker.diagnostics.lodLevel,
+        descentPhase: descentSystem.state.phase,
+        descentProgress: descentSystem.state.entryProgress,
+        descentHeat: descentSystem.state.heat,
+        descentStability: descentSystem.state.stability,
+        descentAltitude: descentSystem.state.altitude,
+        mission01Step: missionManager.step,
+        orbitalScanComplete: habitabilitySystem.complete,
+        habitabilityScore: habitabilitySystem.report?.viability ?? 0,
+        missingDescentRequirements: [...descentSafetyGate.state.missingDescentRequirements],
+        descentAuthorized: descentSafetyGate.state.descentAuthorized,
+        descentBlockedReason: descentSafetyGate.state.descentBlockedReason,
+        atlasCorridorDecoded: descentSafetyGate.state.atlasCorridorDecoded,
+        altitudeEstimate: inBasin
+          ? Math.max(0, ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z))
+          : descentSystem.state.altitude,
+        descentSpeedEstimate: Number((Math.max(0, -velocity.y) * 12).toFixed(1)),
+        heatLevel: descentSystem.state.heat,
+        turbulenceLevel: entryEffect.turbulenceLevel,
+        entryFxIntensity: entryEffect.entryFxIntensity,
+        entryStage: entryProfile.stage,
+        entryHeat: Number(entryProfile.heat.toFixed(3)),
+        entryIonization: Number(entryProfile.ionization.toFixed(3)),
+        entryHaze: Number(entryProfile.haze.toFixed(3)),
+        entryBuffet: Number(entryProfile.buffet.toFixed(3)),
+        entryAirDensity: Number(entryProfile.airDensity.toFixed(3)),
+        landingZoneActive: landingZone.active,
+        corridorPipsVisible: corridorPips?.visible ?? false,
+        basinReveal: planetaryWorld.revealAmount,
+        landingImpactVisible: planetaryWorld.landingImpactVisible,
+        horizonTriangles: planetaryWorld.horizonTriangleCount,
+        cameraMode: cameraModeSystem.mode,
+        previousShipCameraPreference,
+        cameraFollowInitialized,
+        cameraTargetCurrent: [
+          Number(cameraTargetCurrent.x.toFixed(2)),
+          Number(cameraTargetCurrent.y.toFixed(2)),
+          Number(cameraTargetCurrent.z.toFixed(2))
+        ],
+        cameraTargetPrevious: [
+          Number(cameraTargetPrevious.x.toFixed(2)),
+          Number(cameraTargetPrevious.y.toFixed(2)),
+          Number(cameraTargetPrevious.z.toFixed(2))
+        ],
+        cameraJumpDistance: Number(cameraJumpDistance.toFixed(3)),
+        cameraFov: Number(camera.fov.toFixed(2)),
+        lastCameraModeTransition,
+        cockpitActive: playerModeSystem.insideShip && cameraModeSystem.cockpitActive,
+        cockpitGlbStatus: cockpitInterior.glbDiagnostics.status,
+        cockpitGlbPath: cockpitInterior.glbDiagnostics.path,
+        cockpitGlbMeshCount: cockpitInterior.glbDiagnostics.meshCount,
+        cockpitGlbMaterialCount: cockpitInterior.glbDiagnostics.materialCount,
+        cockpitGlbTriangleCount: cockpitInterior.glbDiagnostics.triangles,
+        cockpitGlbScale: cockpitInterior.glbDiagnostics.scale,
+        cockpitDrawCalls: cockpitInterior.estimatedDrawCalls,
+        cockpitScreenUpdateRate: cockpitInterior.screenUpdateRate,
+        cockpitScreenCount: cockpitInterior.dynamicScreenCount,
+        cockpitScreenAnchorsVisible: cockpitInterior.screenAnchorsVisible,
+        cockpitDustParticleCount: cockpitInterior.dustParticleCount,
+        cockpitActiveDustParticles: cockpitInterior.activeDustParticleCount,
+        cockpitCanopyReflectionOpacity: cockpitInterior.canopyReflectionOpacity,
+        playerMode: playerModeSystem.mode,
+        onFootActive: playerModeSystem.onFootActive,
+        characterGlbStatus: surfaceCharacter.diagnostics.status,
+        characterMeshCount: surfaceCharacter.diagnostics.meshCount,
+        characterMaterialCount: surfaceCharacter.diagnostics.materialCount,
+        characterTriangleCount: surfaceCharacter.diagnostics.triangles,
+        characterAnimationClips: [...surfaceCharacter.diagnostics.animationClips],
+        characterAnimation: surfaceCharacter.diagnostics.currentAnimation,
+        characterMoveState: surfaceCharacter.moveState,
+        characterInputVector: [surfaceCharacter.inputVector.x, surfaceCharacter.inputVector.y],
+        characterVelocity: [
+          Number(surfaceCharacter.velocity.x.toFixed(2)),
+          Number(surfaceCharacter.velocity.y.toFixed(2)),
+          Number(surfaceCharacter.velocity.z.toFixed(2))
+        ],
+        characterFacingYaw: Number(surfaceCharacter.facingYaw.toFixed(3)),
+        cameraYaw: Number(footCameraYaw.toFixed(3)),
+        cameraPitch: Number(footCameraPitch.toFixed(3)),
+        characterPosition: [
+          Number(surfaceCharacter.group.position.x.toFixed(2)),
+          Number(surfaceCharacter.group.position.y.toFixed(2)),
+          Number(surfaceCharacter.group.position.z.toFixed(2))
+        ],
+        characterSpeed: Number(surfaceCharacter.speed.toFixed(2)),
+        characterGrounded: surfaceCharacter.grounded,
+        liftRideState,
+        characterOnLift,
+        characterFootLockActive,
+        liftProgress: Number(liftProgress.toFixed(3)),
+        liftContactShadowActive: shipAccessLift.liftContactShadowActive,
+        boardingAnimationState,
+        nearestInteractionTarget,
+        nearestInteractionAction,
+        interactionDistance: nearestInteractionDistance,
+        insideShip: playerModeSystem.insideShip,
+        rampState: shipAccessLift.state,
+        shipExitAvailable: isShipExitAvailable(),
+        shipAccessAvailable: isShipAccessAvailable(),
+        inputMode: inputActionState.inputMode,
+        lastInputKey: inputActionState.lastInputKey,
+        lastInputAction: inputActionState.lastInputAction,
+        actionConsumedBy: inputActionState.actionConsumedBy,
+        canToggleCamera: cameraToggleAvailable,
+        cameraToggleAvailable,
+        mapOpen: starMap.active,
+        pauseOpen: gamePaused,
+        currentPhase: getCurrentPhase(),
+        currentMissionId: mission24.started ? mission24.missionId : inSurfacePhase ? mission23.started ? mission23.missionId : mission22.started ? mission22.missionId : mission21.started ? mission21.missionId : mission20.started ? mission20.missionId : mission19.started ? mission19.missionId : mission18.started ? mission18.missionId : mission17.started ? mission17.missionId : mission16.started ? mission16.missionId : mission15.started ? mission15.missionId : mission14.started ? mission14.missionId : mission13.started ? mission13.missionId : mission12.started ? mission12.missionId : mission11.started ? mission11.missionId : mission10.started ? mission10.missionId : mission09.started ? mission09.missionId : mission08.started ? mission08.missionId : mission07.started ? mission07.missionId : mission06.started ? mission06.missionId : mission05.started ? mission05.missionId : mission04.started ? mission04.missionId : mission03.started ? mission03.missionId : surfaceMission.missionId : 'mission-01-search-home',
+        currentMissionStep: mission24.started ? mission24.step : inSurfacePhase ? mission23.started ? mission23.step : mission22.started ? mission22.step : mission21.started ? mission21.step : mission20.started ? mission20.step : mission19.started ? mission19.step : mission18.started ? mission18.step : mission17.started ? mission17.step : mission16.started ? mission16.step : mission15.started ? mission15.step : mission14.started ? mission14.step : mission13.started ? mission13.step : mission12.started ? mission12.step : mission11.started ? mission11.step : mission10.started ? mission10.step : mission09.started ? mission09.step : mission08.started ? mission08.step : mission07.started ? mission07.step : mission06.started ? mission06.step : mission05.started ? mission05.step : mission04.started ? mission04.step : mission03.started ? mission03.step : surfaceMission.currentStep.id : missionManager.step,
+        objectiveText: diagnosticObjective.objective,
+        nextAction: diagnosticObjective.nextAction,
+        currentGuideTarget: diagnosticObjective.target,
+        guideTargetName: diagnosticObjective.targetName,
+        guideTargetDistance: diagnosticObjective.targetDistance,
+        guideDirection,
+        guideMode: !guideVisible ? 'hidden' : guideOffscreen ? 'screen-edge' : 'world-marker',
+        guideDistance: diagnosticObjective.distance,
+        guideVisible,
+        guideOffscreen,
+        guideSource: GUIDE_SOURCE,
+        playerInputMode: inputActionState.inputMode,
+        surfaceModeActive: inSurfacePhase,
+        mission02Step: inSurfacePhase ? surfaceMission.currentStep.id : 'inactive',
+        mission03Started: mission03.started,
+        mission03Step: mission03.step,
+        communicationCalibrated: mission03.state.communicationCalibrated,
+        communicationCalibrationProgress: mission03.state.communicationCalibrationProgress,
+        mission03SignalState: mission03.state.mission03SignalState,
+        relayBeaconPlaced: mission03.state.relayBeaconPlaced,
+        relayRange: resonadorAtlasDefinition.relayRange,
+        signalStability: mission03.state.signalStability,
+        playerInRelayRange: mission03.state.relayBeaconPlaced && isPlayerInRelayRange(),
+        relaySignalFlowActive: pleyadanRelayBeacon.relaySignalFlowActive,
+        translationState: signalTranslation.state,
+        translationProgress: signalTranslation.progress,
+        translatedFragments: signalTranslation.translatedFragments,
+        pleyadanContactEstablished: mission03.state.pleyadanContactEstablished,
+        hologramWarningActive: pleyadanHologram.hologramWarningActive,
+        atlasTranslationMatrixUnlocked: mission03.state.atlasTranslationMatrixUnlocked,
+        galacticThreatKnown: mission03.state.galacticThreatKnown,
+        orbitalDefenseRequired: mission03.state.orbitalDefenseRequired,
+        mission04Unlocked: mission03.state.mission04Unlocked,
+        mission03Completed: mission03.state.mission03Completed,
+        mission04Started: mission04.started,
+        mission04Step: mission04.step,
+        defenseNetworkState: mission04.state.defenseNetworkState,
+        defensiveBeaconsPlaced: [...mission04.state.defensiveBeaconsPlaced],
+        defenseSyncProgress: mission04.state.defenseSyncProgress,
+        activeDefenseBeaconTarget: mission04.state.activeDefenseBeaconTarget,
+        threatSignatureDetected: mission04.state.threatSignatureDetected,
+        mission04Completed: mission04.state.mission04Completed,
+        mission05Unlocked: mission04.state.mission05Unlocked,
+        defenseLinksActive: defenseNetworkLinks.linksActive,
+        defenseLinksUnstable: defenseNetworkLinks.unstable,
+        defenseLinksOnline: defenseNetworkLinks.online,
+        defenseNetworkVisible: defenseNetworkLinks.networkVisible,
+        threatSignatureWorldVisible: threatSignatureSprite.visible,
+        activeDefenseLinkCount: defenseNetworkLinks.activeLinkCount,
+        mission05Started: mission05.started,
+        mission05Step: mission05.step,
+        probeState: mission05.state.probeState,
+        interferenceActive: mission05.state.interferenceActive,
+        activeEchoIndex: mission05.state.activeEchoIndex,
+        echoesResolved: mission05.state.echoesResolved,
+        counterSignalProgress: mission05.state.counterSignalProgress,
+        probeRetreated: mission05.state.probeRetreated,
+        firstHostileContactConfirmed: mission05.state.firstHostileContactConfirmed,
+        mission06Unlocked: mission05.state.mission06Unlocked,
+        mission06Started: mission06.started,
+        mission06Step: mission06.step,
+        interferenceResidueAnalyzed: mission06.state.interferenceResidueAnalyzed,
+        cloakingMatrixCalibrated: mission06.state.cloakingMatrixCalibrated,
+        cloakingProjectorsPlaced: [...mission06.state.cloakingProjectorsPlaced],
+        cloakingProjectorsCalibrated: [...mission06.state.cloakingProjectorsCalibrated],
+        cloakingSyncProgress: mission06.state.cloakingSyncProgress,
+        cloakingFieldOnline: mission06.state.cloakingFieldOnline,
+        nereidaSignatureReduced: mission06.state.nereidaSignatureReduced,
+        mission06Completed: mission06.completed,
+        mission07Unlocked: mission06.state.mission07Unlocked,
+        mission07Started: mission07.started,
+        mission07Step: mission07.step,
+        subsurfaceSignalAnalyzed: mission07.state.subsurfaceSignalAnalyzed,
+        atlasFractureRevealed: mission07.state.atlasFractureRevealed,
+        atlasEchoNodesScanned: [...mission07.state.atlasEchoNodesScanned],
+        atlasSeedArchiveUnlocked: mission07.state.atlasSeedArchiveUnlocked,
+        atlasSeedArchiveActivated: mission07.state.atlasSeedArchiveActivated,
+        seedWorldRevealed: mission07.state.seedWorldRevealed,
+        mission07Completed: mission07.completed,
+        mission08Unlocked: mission07.state.mission08Unlocked,
+        mission08Started: mission08.started,
+        mission08Step: mission08.step,
+        fractureTraceAnalyzed: mission08.state.fractureTraceAnalyzed,
+        signalFractureRevealed: mission08.state.signalFractureRevealed,
+        fractureNodesStabilized: [...mission08.state.fractureNodesStabilized],
+        signalPurgeProgress: Number(mission08.state.signalPurgeProgress.toFixed(2)),
+        signalFractureContained: mission08.state.signalFractureContained,
+        coalitionTraceResidual: mission08.state.coalitionTraceResidual,
+        mission08Completed: mission08.completed,
+        mission09Unlocked: mission08.state.mission09Unlocked,
+        mission09Started: mission09.started,
+        mission09Step: mission09.step,
+        residualTraceAnalyzed: mission09.state.residualTraceAnalyzed,
+        auroraRouteDecoded: mission09.state.auroraRouteDecoded,
+        auroraRouteBeaconsScanned: [...mission09.state.auroraRouteBeaconsScanned],
+        currentAuroraSector: mission09.state.currentAuroraSector,
+        auroraSignalStrength: Number(mission09.state.auroraSignalStrength.toFixed(3)),
+        auroraSectorDiscovered: mission09.state.auroraSectorDiscovered,
+        mission09Completed: mission09.completed,
+        mission10Unlocked: mission09.state.mission10Unlocked,
+        activeAuroraSectorCount: auroraSectorRoute.activeSectorCount,
+        auroraSectorStreamingActive: auroraSectorRoute.streamingActive,
+        signalFractureVisualActive: signalFractureEffect.group.visible,
+        auroraRevealVisualActive: auroraRevealEffect.group.visible,
+        premiumVisualsEnabled: premiumVisualState.premiumVisualsEnabled,
+        premiumVisualsMode: premiumVisualState.premiumVisualsMode,
+        premiumVisualQuality: premiumVisualState.premiumVisualQuality,
+        premiumParticleCount: premiumVisualState.premiumParticleCount,
+        premiumVisualDrawCalls: premiumVisualState.premiumVisualDrawCalls,
+        premiumVisualWarnings: premiumVisualState.premiumVisualWarnings,
+        webgpuAvailable: premiumVisualState.webgpuAvailable,
+        tslAvailable: premiumVisualState.tslAvailable,
+        premiumAutoQualityEnabled: premiumVisualState.premiumAutoQualityEnabled,
+        premiumFpsAverage: premiumVisualState.premiumFpsAverage,
+        premiumQualityDowngradeReason: premiumVisualState.premiumQualityDowngradeReason,
+        premiumLastQualityChangeAt: premiumVisualState.premiumLastQualityChangeAt,
+        renderProfile,
+        activePointLights: lightPool.activeCount,
+        registeredPointLights: lightPool.sourceCount,
+        mission13Started: mission13.started,
+        mission13Step: mission13.step,
+        auroraStormAlertAcknowledged: mission13.state.auroraStormAlertAcknowledged,
+        auroraGeneratorSecured: mission13.state.auroraGeneratorSecured,
+        auroraGeneratorProgress: Number(mission13.state.auroraGeneratorProgress.toFixed(1)),
+        auroraAntennaAnchorsSecured: [...mission13.state.auroraAntennaAnchorsSecured],
+        auroraAntennaOnline: mission13.state.auroraAntennaOnline,
+        auroraShieldCharge: Number(mission13.state.auroraShieldCharge.toFixed(1)),
+        auroraShieldOnline: mission13.state.auroraShieldOnline,
+        auroraStormFrontIntensity: mission13.readout.stormIntensity,
+        auroraStormEnergyStability: mission13.readout.energyStability,
+        auroraStormInterference: mission13.readout.interference,
+        mission13Completed: mission13.completed,
+        mission14Unlocked: mission13.state.mission14Unlocked,
+        mission14Started: mission14.started,
+        mission14Step: mission14.step,
+        coalitionTraceInspections: [...mission14.state.coalitionTraceInspections],
+        coalitionSignatureAnalyzed: mission14.state.coalitionSignatureAnalyzed,
+        coalitionPowerNodePurged: mission14.state.coalitionPowerNodePurged,
+        coalitionCommsNodePurged: mission14.state.coalitionCommsNodePurged,
+        coalitionHiddenNodeLocated: mission14.state.coalitionHiddenNodeLocated,
+        coalitionTraceSampleRecovered: mission14.state.coalitionTraceSampleRecovered,
+        coalitionReverseTriangulationComplete: mission14.state.coalitionReverseTriangulationComplete,
+        coalitionContamination: mission14.readout.contamination,
+        coalitionHostileTriangulation: mission14.readout.hostileTriangulation,
+        coalitionSignalIntensity: mission14.readout.signalIntensity,
+        coalitionPurgedNodes: mission14.readout.purgedNodes,
+        coalitionPhaseProgress: mission14.readout.phaseProgress,
+        coalitionTraceVisualActive: coalitionTraceEffect.group.visible,
+        mission14Completed: mission14.completed,
+        mission15Unlocked: mission14.state.mission15Unlocked,
+        mission15Started: mission15.started,
+        mission15Step: mission15.step,
+        auroraRoutineComplete: mission15.state.auroraRoutineComplete,
+        auroraModuleSealed: mission15.state.auroraModuleSealed,
+        auroraModuleReleased: mission15.state.auroraModuleReleased,
+        auroraCoordinatedFailureConfirmed: mission15.state.auroraCoordinatedFailureConfirmed,
+        auroraParasiteStates: [...mission15.state.auroraParasiteStates],
+        mission15Sequence: [...mission15.sequenceSymbols],
+        mission15SequenceVisualStep: mission15.sequenceVisualStep,
+        mission15SequenceLogicalStep: mission15.sequenceMatchedCount,
+        mission15ExpectedSymbol: mission15.sequenceExpectedSymbol,
+        mission15HighlightedSymbol: mission15.sequenceHighlightedSymbol,
+        mission15InteractedSymbol: mission15.sequenceLastInteractedSymbol,
+        mission15SequenceMatched: mission15.sequenceMatchedCount,
+        mission15SequenceInputConsumed: mission15.sequenceInputWasConsumed,
+        mission15SequenceInputLockRemaining: Number(mission15.sequenceInputLockRemaining(clock.elapsedTime).toFixed(3)),
+        mission15SequenceErrorActive: mission15.sequenceErrorActive,
+        mission15SequenceFeedback: mission15.sequenceFeedbackState,
+        mission15SequenceCompleted: mission15.state.auroraCommsSequenceCompleted,
+        auroraParasitesFound: mission15.parasitesFound,
+        auroraParasitesDisabled: mission15.parasitesDisabled,
+        auroraModulePressure: mission15.modulePressurePercent,
+        auroraCompromisedSystems: mission15.compromisedSystems,
+        auroraCentralOverload: mission15.centralOverloadPercent,
+        auroraCentralOverloadResolved: mission15.state.auroraCentralOverloadResolved,
+        auroraSabotageSignalIntensity: mission15.readout.signalIntensity,
+        auroraSabotagePhaseProgress: mission15.readout.phaseProgress,
+        auroraParasiteAnalyzed: mission15.state.auroraParasiteAnalyzed,
+        auroraSabotageVisualActive: coalitionSabotageEffect.group.visible,
+        mission15Completed: mission15.completed,
+        mission16Unlocked: mission15.state.mission16Unlocked,
+        mission21Started: mission21.started,
+        mission21Step: mission21.step,
+        transmissionChannelsAligned: [...mission21.state.transmissionChannelsAligned],
+        transmissionDecoded: mission21.state.transmissionDecoded,
+        capitalShipDetected: mission21.state.capitalShipDetected,
+        capitalSignatureAnalyzed: mission21.state.capitalSignatureAnalyzed,
+        ultimatumReceived: mission21.state.ultimatumReceived,
+        coalitionResponseTone: mission21.state.coalitionResponseTone,
+        enclaveChannelsRestored: [...mission21.state.enclaveChannelsRestored],
+        demonstrationObserved: mission21.state.demonstrationObserved,
+        attackRoutesClassified: [...mission21.state.attackRoutesClassified],
+        pleyadianNetworkActivated: mission21.state.pleyadianNetworkActivated,
+        simultaneousAssaultDetected: mission21.state.simultaneousAssaultDetected,
+        mission21Completed: mission21.completed,
+        mission22Unlocked: mission21.state.mission22Unlocked,
+        coalitionCapitalPresenceBuilt: coalitionCapitalPresence.isBuilt,
+        coalitionCapitalPresenceVisible: coalitionCapitalPresence.isVisible,
+        coalitionCapitalAttackable: false,
+        coalitionRemoteBeaconDestroyed: coalitionCapitalPresence.remoteBeaconDestroyed,
+        coalitionAttackRoutesVisible: coalitionCapitalPresence.activeRouteCount,
+        mission21InterferenceLevel: mission21.readout.interferenceLevel,
+        mission22Started: mission22.started,
+        mission22Step: mission22.step,
+        mission22AuroraIntegrity: mission22.readout.auroraIntegrity,
+        mission22NereidaIntegrity: mission22.readout.nereidaIntegrity,
+        mission22OrbitalIntegrity: mission22.readout.orbitalIntegrity,
+        mission22InitialEnergyFront: mission22.state.mission22InitialEnergyFront,
+        mission22InitialDefenseFront: mission22.state.mission22InitialDefenseFront,
+        mission22InitialCommsFront: mission22.state.mission22InitialCommsFront,
+        mission22AuroraFrontDefended: mission22.state.auroraFrontDefended,
+        mission22NereidaFrontDefended: mission22.state.nereidaFrontDefended,
+        mission22OrbitalRelaysProtected: [...mission22.state.orbitalRelaysProtected],
+        mission22CrossFrontCrisisManaged: mission22.state.crossFrontCrisisManaged,
+        mission22SupportPriority: mission22.state.mission22SupportPriority,
+        mission22JointNetworkRestored: mission22.state.jointNetworkRestored,
+        mission22CoordinationNodesDetected: [...mission22.state.coordinationNodesDetected],
+        mission22FinalPressureSurvived: mission22.state.finalPressureSurvived,
+        mission22Completed: mission22.completed,
+        mission23Unlocked: mission22.state.mission23Unlocked,
+        mission22VisualBuilt: threeFrontCommandNetwork.isBuilt,
+        mission22VisualVisible: threeFrontCommandNetwork.isVisible,
+        mission22VisibleRelayCount: threeFrontCommandNetwork.visibleRelayCount,
+        mission22VisibleNodeCount: threeFrontCommandNetwork.visibleNodeCount,
+        mission22JointNetworkVisible: threeFrontCommandNetwork.jointNetworkVisible,
+        mission23Started: mission23.started,
+        mission23Step: mission23.step,
+        mission23TargetOrder: mission23.state.mission23TargetOrder,
+        jointForcesSynchronized: mission23.state.jointForcesSynchronized,
+        jammerTriangulationReadings: mission23.state.jammerTriangulationReadings,
+        jammerNodeDestroyed: mission23.state.jammerNodeDestroyed,
+        platformDefensesDisabled: mission23.state.platformDefensesDisabled,
+        platformEnergyDisabled: mission23.state.platformEnergyDisabled,
+        mission23PlatformMethod: mission23.state.mission23PlatformMethod,
+        logisticsPlatformDestroyed: mission23.state.logisticsPlatformDestroyed,
+        jumpBeaconAnchorsDisabled: mission23.state.jumpBeaconAnchorsDisabled,
+        jumpBeaconDestroyed: mission23.state.jumpBeaconDestroyed,
+        escapeCompleted: mission23.state.escapeCompleted,
+        enemyRouteRecovered: mission23.state.enemyRouteRecovered,
+        returnToArkConfirmed: mission23.state.returnToArkConfirmed,
+        mission23Completed: mission23.completed,
+        mission24Unlocked: mission23.state.mission24Unlocked,
+        mission23JointEnergy: mission23.readout.jointEnergy,
+        mission23LockDegraded: mission23.jammed,
+        mission23PlatformBuilt: coalitionLogisticsPlatform.isBuilt,
+        mission23PlatformVisible: coalitionLogisticsPlatform.isVisible,
+        mission23PlatformActiveModules: coalitionLogisticsPlatform.activeModuleCount,
+        mission23JumpBeaconBuilt: coalitionJumpBeacon.isBuilt,
+        mission23JumpBeaconVisible: coalitionJumpBeacon.isVisible,
+        mission23VisibleAnchorCount: coalitionJumpBeacon.visibleAnchorCount,
+        mission23ActiveHostiles: coalitionDrones.activeCount + Number(coalitionJammer.alive),
+        mission23EscapeDistance: mission23.state.jumpBeaconDestroyed
+          ? Number(ship.position.distanceTo(coalitionJumpBeacon.position).toFixed(1))
+          : 0,
+        mission24Started: mission24.started,
+        mission24Step: mission24.step,
+        returnRouteDecoded: mission24.state.returnRouteDecoded,
+        launchPrepared: mission24.state.launchPrepared,
+        shipBoardedForReturn: mission24.state.shipBoardedForReturn,
+        ignitionComplete: mission24.state.ignitionComplete,
+        takeoffComplete: mission24.state.takeoffComplete,
+        lowAtmosphereComplete: mission24.state.lowAtmosphereComplete,
+        cloudLayerComplete: mission24.state.cloudLayerComplete,
+        midAtmosphereComplete: mission24.state.midAtmosphereComplete,
+        upperAtmosphereComplete: mission24.state.upperAtmosphereComplete,
+        vacuumTransitionComplete: mission24.state.vacuumTransitionComplete,
+        orbitalInsertionComplete: mission24.state.orbitalInsertionComplete,
+        orbitStabilized: mission24.state.orbitStabilized,
+        mission24ArkReached: mission24.state.mission24ArkReached,
+        mission24ArkSystemsAssessed: mission24.arkSystemsAssessedCount,
+        mission24EnclaveLinksRestored: mission24.enclaveLinksRestoredCount,
+        mission24ArkSystemsPrepared: mission24.arkSystemsPreparedCount,
+        mission24PleyadianNodesIntegrated: mission24.pleyadianNodesIntegratedCount,
+        civilianSheltersPrepared: mission24.state.civilianSheltersPrepared,
+        alliedForcesAssembled: mission24.state.alliedForcesAssembled,
+        startingSectorRevisited: mission24.state.startingSectorRevisited,
+        defenseRehearsalComplete: mission24.state.defenseRehearsalComplete,
+        finalFleetDetected: mission24.state.finalFleetDetected,
+        finalFormationEntered: mission24.state.finalFormationEntered,
+        mission24Completed: mission24.completed,
+        mission25Unlocked: mission24.state.mission25Unlocked,
+        mission24Altitude: atmosphericAscent.metrics.altitude,
+        mission24WorldClearance: atmosphericAscent.metrics.worldClearance,
+        mission24VerticalSpeed: atmosphericAscent.metrics.verticalSpeed,
+        mission24HorizontalSpeed: atmosphericAscent.metrics.horizontalSpeed,
+        mission24Pressure: atmosphericAscent.metrics.pressure,
+        mission24Density: atmosphericAscent.metrics.density,
+        mission24Wind: atmosphericAscent.metrics.wind,
+        mission24CloudOpacity: atmosphericAscent.metrics.cloudOpacity,
+        mission24StarOpacity: atmosphericAscent.metrics.starOpacity,
+        mission24Curvature: atmosphericAscent.metrics.curvature,
+        mission24OrbitalStability: atmosphericAscent.metrics.orbitalStability,
+        mission24MaxFrameDisplacement: atmosphericAscent.metrics.maxFrameDisplacement,
+        mission24Checkpoint: atmosphericAscent.metrics.checkpoint,
+        mission24AtmosphereBuilt: atmosphericAscentEffect.isBuilt,
+        mission24CloudLayerVisible: atmosphericAscentEffect.cloudLayerVisible,
+        mission24PlanetLimbVisible: atmosphericAscentEffect.planetLimbVisible,
+        mission24NetworkBuilt: arkFinalPreparationNetwork.isBuilt,
+        mission24NetworkVisible: arkFinalPreparationNetwork.isVisible,
+        mission24PleyadianNodesVisible: arkFinalPreparationNetwork.visiblePleyadianNodeCount,
+        mission24RehearsalTargets: arkFinalPreparationNetwork.rehearsalTargetCount,
+        mission24RehearsalTargetsVisible: arkFinalPreparationNetwork.rehearsalTargetsVisible,
+        mission24FinalFleetVisible: arkFinalPreparationNetwork.finalFleetVisible,
+        mission24FinalFleetAttackable: arkFinalPreparationNetwork.finalFleetAttackable,
+        mission24ActiveTimers: 0,
+        mission24MothershipUuid: mothership.group.uuid,
+        mission24MothershipInstances: mothership.group.parent === scene ? 1 : 0,
+        mission12Started: mission12.started,
+        mission12Step: mission12.step,
+        auroraFirstCrewAuthorized: mission12.state.auroraFirstCrewAuthorized,
+        auroraLifeSupportHumanReady: mission12.state.auroraLifeSupportHumanReady,
+        auroraHabitationConfigured: mission12.state.auroraHabitationConfigured,
+        auroraLandingZoneMarked: mission12.state.auroraLandingZoneMarked,
+        auroraCrewCapsuleLanded: mission12.state.auroraCrewCapsuleLanded,
+        auroraFirstCrewDisembarked: mission12.state.auroraFirstCrewDisembarked,
+        auroraHumanLoadProgress: Number(mission12.state.auroraHumanLoadProgress.toFixed(1)),
+        auroraHumanLoadRecalibrated: mission12.state.auroraHumanLoadRecalibrated,
+        auroraRecalibrationProgress: Number(mission12.state.auroraRecalibrationProgress.toFixed(1)),
+        auroraInhabitedCoreStable: mission12.state.auroraInhabitedCoreStable,
+        auroraFirstNightRecorded: mission12.state.auroraFirstNightRecorded,
+        mission12Completed: mission12.completed,
+        mission13Unlocked: mission12.state.mission13Unlocked,
+        currentCrewCount: mission12.crewCount,
+        habitationStability: mission12.load.habitationStability,
+        mission11Started: mission11.started,
+        mission11Step: mission11.step,
+        auroraCoreDiagnosticComplete: mission11.state.auroraCoreDiagnosticComplete,
+        auroraSecondModuleDeployed: mission11.state.auroraSecondModuleDeployed,
+        auroraEnergyLinkOnline: mission11.state.auroraEnergyLinkOnline,
+        auroraWaterFilterInstalled: mission11.state.auroraWaterFilterInstalled,
+        auroraWaterFlowCalibrated: mission11.state.auroraWaterFlowCalibrated,
+        auroraCultivationBedPrepared: mission11.state.auroraCultivationBedPrepared,
+        auroraBioTrialStarted: mission11.state.auroraBioTrialStarted,
+        auroraImpactAssessmentComplete: mission11.state.auroraImpactAssessmentComplete,
+        auroraCoreOperational: mission11.state.auroraCoreOperational,
+        mission11Completed: mission11.completed,
+        mission12Unlocked: mission11.state.mission12Unlocked,
+        mission10Started: mission10.started,
+        mission10Step: mission10.step,
+        auroraInitialSurveyComplete: mission10.state.auroraInitialSurveyComplete,
+        auroraWaterAnalyzed: mission10.state.auroraWaterAnalyzed,
+        auroraSoilAnalyzed: mission10.state.auroraSoilAnalyzed,
+        auroraAtmosphereAnalyzed: mission10.state.auroraAtmosphereAnalyzed,
+        auroraBioSafetyChecked: mission10.state.auroraBioSafetyChecked,
+        auroraSettlementSiteMarked: mission10.state.auroraSettlementSiteMarked,
+        auroraModuleDeployed: mission10.state.auroraModuleDeployed,
+        auroraModuleOperational: mission10.state.auroraModuleOperational,
+        auroraStabilizationProgress: Number(mission10.state.auroraStabilizationProgress.toFixed(1)),
+        mission10Completed: mission10.completed,
+        mission11Unlocked: mission10.state.mission11Unlocked,
+        currentAuroraTravelSegment: mission09.started ? auroraTravelDirector.state.segment : 'inactive',
+        auroraMusicSegment: mission09.started ? auroraTravelDirector.state.segment : 'none',
+        auroraEnvironmentalEvent: auroraTravelDirector.state.event,
+        auroraEnvironmentalEventActive: auroraTravelDirector.state.eventActive,
+        auroraStormIntensity: auroraTravelDirector.state.stormIntensity,
+        auroraWindIntensity: auroraTravelDirector.state.windIntensity,
+        auroraFogIntensity: auroraTravelDirector.state.fogIntensity,
+        auroraCinematicTravelActive: auroraTravelDirector.state.cinematicActive,
+        auroraRevealActive: auroraRevealEffect.revealed,
+        currentMusicState: musicManager.requestedTrack?.replace('music-', '') ?? 'silent',
+        currentMusicTrack: musicManager.currentTrack ?? 'none',
+        activeMusicLayers: musicManager.activeLayers,
+        engineAudioState: engineAudio.engineState,
+        propulsionIntensity: Number(engineAudio.propulsionIntensity.toFixed(3)),
+        hoverAudioIntensity: Number(engineAudio.hoverIntensity.toFixed(3)),
+        verticalThrustAudioIntensity: Number(engineAudio.verticalThrustIntensity.toFixed(3)),
+        boostAudioIntensity: Number(engineAudio.boostIntensity.toFixed(3)),
+        groundWashAudioIntensity: Number(engineAudio.groundWashIntensity.toFixed(3)),
+        spaceCruiseAudioActive: engineAudio.spaceCruiseActive,
+        atmosphericAudioActive: engineAudio.atmosphericAudioActive,
+        interferenceAudioActive: musicManager.activeLayers.includes('music-layer-interference'),
+        dialogueDuckingActive: musicManager.duckingActive || engineAudio.dialogueDuckingActive,
+        musicDuckingAmount: Number(musicManager.duckingAmount.toFixed(3)),
+        missingAudioAssets: audioManager.missingAssetIds,
+        missingMusicAssets: audioManager.missingMusicAssetIds,
+        commanderVoiceEnabled: voiceManager.state.enabled,
+        voiceManifestLoaded: voiceManager.state.manifestLoaded,
+        currentVoiceDialogueId: voiceManager.state.currentDialogueId,
+        voicePlaying: voiceManager.state.playing,
+        voiceMissingCount: voiceManager.state.missingCount,
+        pleyadanVoiceEnabled: voiceManager.state.pleyadanEnabled,
+        commanderVoiceAvailableCount: voiceManager.state.commanderAvailableCount,
+        pleyadanVoiceAvailableCount: voiceManager.state.pleyadanAvailableCount,
+        voiceVolume: audioManager.getSettings().voice,
+        voiceDuckingActive: voiceManager.state.playing && musicManager.duckingActive,
+        lastVoiceError: voiceManager.state.lastError,
+        footstepAudioActive: footstepAudio.state.active,
+        footstepMode: footstepAudio.state.mode,
+        lastFootstepTime: Number(footstepAudio.state.lastFootstepTime.toFixed(3)),
+        footstepSurface: footstepAudio.state.surface,
+        footstepMissingAssets: footstepAudio.state.missingAssets,
+        waterStatus: colonyManager.state.waterStatus,
+        mineralStatus: colonyManager.state.mineralStatus,
+        energyStatus: colonyManager.state.energyStatus,
+        surfaceSitesRevealed: colonyManager.state.surfaceSitesRevealed,
+        resourceAnalysisReady: colonyManager.state.resourceAnalysisReady,
+        baseOperationalReady: colonyManager.state.baseSystemsReady,
+        siteTerrainBlendActive: planetaryWorld.siteTerrainBlendActive,
+        resourceSiteGroundOffset: Object.fromEntries(
+          Object.entries(resourceTerrainMetrics).map(([type, metric]) => [type, Number(metric.groundOffset.toFixed(2))])
+        ),
+        resourceSiteSlope: Object.fromEntries(
+          Object.entries(resourceTerrainMetrics).map(([type, metric]) => [type, Number(metric.slope.toFixed(2))])
+        ),
+        resourceSiteVisibilityScore: Object.fromEntries(
+          Object.entries(resourceTerrainMetrics).map(([type, metric]) => [type, Number(metric.visibilityScore.toFixed(2))])
+        ),
+        lagoonWaterAnimated: lagoonResourceNode?.lagoonWaterAnimated ?? false,
+        lagoonWaterFxCost: lagoonResourceNode?.lagoonWaterFxCost ?? 0,
+        fissureThermalMapHint:
+          colonyManager.state.energyStatus === 'detected' || colonyManager.state.energyStatus === 'located',
+        surfaceShipSpeed: Number(Math.hypot(velocity.x, velocity.z).toFixed(2)),
+        surfaceBoostActive: inSurfacePhase && input.has('shift') && surfaceBoostIntensity > 0.1,
+        surfaceCruiseSpeed: SURFACE_SHIP_TUNING.CRUISE_SPEED,
+        surfaceBoostSpeed: SURFACE_SHIP_TUNING.BOOST_SPEED,
+        surfaceAcceleration: SURFACE_SHIP_TUNING.ACCELERATION,
+        surfaceDeceleration: SURFACE_SHIP_TUNING.DECELERATION,
+        surfaceTurnSpeed: SURFACE_SHIP_TUNING.TURN_SPEED,
+        surfaceHoverHeight: SURFACE_SHIP_TUNING.HOVER_HEIGHT,
+        surfaceMaxBank: SURFACE_SHIP_TUNING.MAX_BANK,
+        surfaceBoostFxIntensity: surfaceBoostIntensity,
+        gamePaused,
+        colonyStage: colonyManager.state.currentStage,
+        colonyReadiness: colonyManager.state.colonizationReadiness,
+        colonyReadinessBreakdown: colonyManager.getReadinessBreakdown(),
+        nextColonyAction: colonyManager.getNextColonyAction(),
+        baseSystemsReady: colonyManager.state.baseSystemsReady,
+        habitatOnline: colonyManager.state.habitatOnline,
+        habitatActivationStage: planetaryWorld.colonyModule.activationStage,
+        waterFound: colonyManager.state.waterFound,
+        mineralsFound: colonyManager.state.mineralsFound,
+        energyFound: colonyManager.state.energyFound || colonyManager.state.energySourceFound,
+        baseNereidaOperational: colonyManager.state.baseNereidaOperational || colonyManager.state.operational,
+        saveExists: saveSystem.hasSave(),
+        lastSaveTime: saveSystem.lastSaveTime,
+        saveLoadStatus: saveSystem.lastLoadStatus,
+        saveWarning: saveSystem.lastWarning,
+        scannerPulses: scannerPulse.activeCount
+      });
+  } else {
+    diagnostics.update(renderer, rawDelta, EMPTY_DIAGNOSTICS_PATCH);
+  }
+  requestAnimationFrame(animate);
+}
+
+// ---------------------------------------------------------------------------
+// Boot flow
+// ---------------------------------------------------------------------------
+
+void (async () => {
+  loadingStatus.textContent = 'Cargando Arca Epsilon, nave, Marcador Atlas, cabina y piloto...';
+  await mothership.load({
+    medium: '/models/optimized/arca-epsilon.medium.glb',
+    low: '/models/optimized/arca-epsilon.low.glb',
+    original: '/models/arca-epsilon.glb'
+  });
+  await playerShip.load({
+    medium: '/models/optimized/scout-ship.medium.glb',
+    low: '/models/optimized/scout-ship.low.glb',
+    original: '/models/player-scout.glb'
+  });
+  await orbitalMarker.load({
+    medium: '/models/optimized/atlas-marker.medium.glb',
+    low: '/models/optimized/atlas-marker.low.glb',
+    original: '/models/wayfinder-monument.glb'
+  });
+  await cockpitInterior.load('/models/cockpit-interior.glb');
+  await surfaceCharacter.load('/models/characters/arca-pilot-walk.glb', [
+    '/models/characters/arca-pilot-run-animation.glb'
+  ]);
+  engineTrail.setSocketPositions(playerShip.getEngineSocketPositions());
+  diagnostics.update(renderer, 0, {
+    ...getPerformanceDiagnosticsPatch(true),
+    activePOIs: pointsOfInterest.length,
+    mothershipStatus: mothership.diagnostics.status,
+    mothershipPath: mothership.diagnostics.path,
+    mothershipMeshCount: mothership.diagnostics.meshCount,
+    mothershipTriangles: mothership.diagnostics.triangles,
+    mothershipScale: mothership.diagnostics.scale,
+    mothershipVisible: mothership.diagnostics.visible,
+    playerShipStatus: playerShip.diagnostics.status,
+    playerShipPath: playerShip.diagnostics.path,
+    playerShipMeshCount: playerShip.diagnostics.meshCount,
+    playerShipTriangles: playerShip.diagnostics.triangles,
+    playerShipScale: playerShip.diagnostics.scale,
+    playerShipVisible: playerShip.diagnostics.visible,
+    orbitalMarkerStatus: orbitalMarker.diagnostics.status,
+    orbitalMarkerPath: orbitalMarker.diagnostics.path,
+    orbitalMarkerMeshCount: orbitalMarker.diagnostics.meshCount,
+    orbitalMarkerMaterialCount: orbitalMarker.diagnostics.materialCount,
+    orbitalMarkerTriangles: orbitalMarker.diagnostics.triangles,
+    orbitalMarkerObjectCount: orbitalMarker.diagnostics.objectCount,
+    orbitalMarkerScale: orbitalMarker.diagnostics.scale,
+    orbitalMarkerVisible: orbitalMarker.diagnostics.visible,
+    orbitalMarkerLodLevel: orbitalMarker.diagnostics.lodLevel,
+    cockpitGlbStatus: cockpitInterior.glbDiagnostics.status,
+    cockpitGlbPath: cockpitInterior.glbDiagnostics.path,
+    cockpitGlbMeshCount: cockpitInterior.glbDiagnostics.meshCount,
+    cockpitGlbMaterialCount: cockpitInterior.glbDiagnostics.materialCount,
+    cockpitGlbTriangleCount: cockpitInterior.glbDiagnostics.triangles,
+    cockpitGlbScale: cockpitInterior.glbDiagnostics.scale,
+    cockpitDrawCalls: cockpitInterior.estimatedDrawCalls,
+    cockpitScreenUpdateRate: cockpitInterior.screenUpdateRate,
+    cockpitScreenCount: cockpitInterior.dynamicScreenCount,
+    cockpitScreenAnchorsVisible: cockpitInterior.screenAnchorsVisible,
+    cockpitDustParticleCount: cockpitInterior.dustParticleCount,
+    cockpitActiveDustParticles: cockpitInterior.activeDustParticleCount,
+    cockpitCanopyReflectionOpacity: cockpitInterior.canopyReflectionOpacity,
+    playerMode: playerModeSystem.mode,
+    onFootActive: false,
+    characterGlbStatus: surfaceCharacter.diagnostics.status,
+    characterMeshCount: surfaceCharacter.diagnostics.meshCount,
+    characterMaterialCount: surfaceCharacter.diagnostics.materialCount,
+    characterTriangleCount: surfaceCharacter.diagnostics.triangles,
+    characterAnimationClips: [...surfaceCharacter.diagnostics.animationClips],
+    characterAnimation: surfaceCharacter.diagnostics.currentAnimation,
+    characterMoveState: surfaceCharacter.moveState,
+    characterInputVector: [0, 0],
+    characterVelocity: [0, 0, 0],
+    characterFacingYaw: 0,
+    cameraYaw: footCameraYaw,
+    cameraPitch: footCameraPitch,
+    characterPosition: [0, 0, 0],
+    characterSpeed: 0,
+    characterGrounded: false,
+    nearestInteractionTarget: '',
+    interactionDistance: Number.POSITIVE_INFINITY,
+    insideShip: true,
+    rampState: 'retracted',
+    shipExitAvailable: false,
+    currentPhase: getCurrentPhase(),
+    currentMissionId: inSurfacePhase ? surfaceMission.missionId : 'mission-01-search-home',
+    currentMissionStep: inSurfacePhase ? surfaceMission.currentStep.id : missionManager.step,
+    colonyStage: colonyManager.state.currentStage,
+    colonyReadiness: colonyManager.state.colonizationReadiness,
+    habitatOnline: colonyManager.state.habitatOnline,
+    waterFound: colonyManager.state.waterFound,
+    mineralsFound: colonyManager.state.mineralsFound,
+    energyFound: colonyManager.state.energyFound || colonyManager.state.energySourceFound,
+    baseNereidaOperational: colonyManager.state.baseNereidaOperational || colonyManager.state.operational,
+    saveExists: saveSystem.hasSave(),
+    lastSaveTime: saveSystem.lastSaveTime
+  });
+
+  if (
+    mothership.diagnostics.status === 'loaded' &&
+    playerShip.diagnostics.status === 'loaded' &&
+    orbitalMarker.diagnostics.status === 'loaded' &&
+    cockpitInterior.glbDiagnostics.status === 'loaded' &&
+    surfaceCharacter.diagnostics.status === 'loaded'
+  ) {
+    loadingStatus.textContent = `GLB cargados: Arca ${mothership.diagnostics.meshCount}, nave ${playerShip.diagnostics.meshCount}, Atlas ${orbitalMarker.diagnostics.meshCount}, cabina ${cockpitInterior.glbDiagnostics.meshCount}, piloto ${surfaceCharacter.diagnostics.meshCount} mesh`;
+    missionText.textContent = 'La Arca Epsilon y la nave de manejo estan listas. Sal, explora y vuelve a la zona segura si los sistemas caen.';
+  } else {
+    loadingStatus.textContent = `Fallback activo. Arca: ${mothership.diagnostics.status}. Atlas: ${orbitalMarker.diagnostics.status}. Cabina: ${cockpitInterior.glbDiagnostics.status}. Piloto: ${surfaceCharacter.diagnostics.status}.`;
+    if (mothership.diagnostics.status !== 'loaded' || orbitalMarker.diagnostics.status !== 'loaded') {
+      console.error('Arca Epsilon critical GLB fallback', mothership.diagnostics, orbitalMarker.diagnostics);
+    }
+  }
+  if (saveSystem.hasSave()) {
+    launchButton.textContent = 'Continuar exploracion';
+    missionText.textContent = 'Partida local detectada. Puedes continuar el progreso de Base Nereida.';
+  }
+  launchButton.disabled = false;
+  // Adopt every point light the world was built with before the first frame,
+  // so the budget is already correct when the player presses launch.
+  lightPool.registerSubtree(scene);
+  applyRenderProfile(renderProfile);
+  window.__arcaGameReady = true;
+  animate();
+})().catch((error) => {
+  loadingStatus.textContent = `No se pudo cargar la nave de manejo: ${error instanceof Error ? error.message : String(error)}`;
+  console.error('Boot asset load failed', error);
+  animate();
+});
+
+colonyPanel.mount(hud);
+audioManager.mountControls(hud);
+
+function enterSurfacePhase(shouldSave = true): void {
+  // Anything that teleports the ship must first get it out of the Ark's
+  // cradle: while docked its position is expressed in the anchor's local
+  // space, so a world coordinate written straight onto it would land the hull
+  // somewhere meaningless. Reaching the surface at all means the departure is
+  // long behind us — including for debug jumps that skip straight here.
+  standDownArkDeparture();
+  if (inSurfacePhase) return;
+  inSurfacePhase = true;
+  inBasin = true;
+  surfacePhaseStartedAt = clock.elapsedTime;
+  if (basinRevealStartedAt < 0) {
+    basinRevealStartedAt = clock.elapsedTime - 9;
+  }
+  colonyManager.registerLandingSecured();
+
+  missionCompleteOverlay.classList.remove('is-active');
+  missionCompleteOverlay.setAttribute('aria-hidden', 'true');
+  descentPanel.classList.remove('is-active');
+
+  planetaryWorld.activate();
+  planetaryWorld.setRevealProgress(1);
+  planetaryWorld.revealLandingImpact(SURFACE_LANDING_LOCAL);
+  if (!landingZone.active) {
+    landingZone.activate(new THREE.Vector3(0, 1.5, 0), new THREE.Vector3(0, 1, 0));
+  }
+  landingZone.setApproachVisibility(1);
+  surfaceResourceSystem.activate((x, z) => planetaryWorld.getHeightAt(x, z));
+  surfaceMission.start();
+  anchorMission03SurfaceObjects();
+  syncMission03Visuals();
+  anchorMission04SurfaceObjects();
+  syncMission04Visuals();
+  syncMission05Visuals();
+  syncMission07Visuals();
+
+  // The surface world lives in its own local space at the origin: bring the
+  // ship there so terrain, module and resource nodes are actually reachable.
+  ship.position.set(0, 18, 42);
+  velocity.set(0, 0, 0);
+  shipAltitudeHoldY = ship.position.y;
+  shipPreviousY = ship.position.y;
+  previousVerticalInput = 0;
+  pitch = -0.12;
+  smoothPitch = pitch;
+  playerModeSystem.forceShip(true, cameraModeSystem.mode === 'cockpit');
+  requestCameraFollowSync('surface-phase');
+  surfaceCharacter.setVisible(false);
+  surfaceCharacter.velocity.set(0, 0, 0);
+  shipAccessLift.state = 'retracted';
+  shipAccessLift.group.visible = false;
+
+  // Atmosphere takes over from space: warm haze, closer fog, no starlight.
+  scene.background = new THREE.Color(0x7f9d8c);
+  scene.fog = new THREE.FogExp2(0x7f9d8c, 0.00255);
+  scene.environmentIntensity = 0.22;
+  keyStar.intensity = 0;
+  coldRim.intensity = 0;
+  redDeadStar.intensity = 0;
+  ambient.intensity = 0.12;
+  keyStarSprite.visible = false;
+
+  // Space-only systems sleep while we are on the ground.
+  mothership.group.visible = false;
+  candidatePlanet.group.visible = false;
+  orbitalMarker.group.visible = false;
+  landingZone.group.visible = true;
+  if (corridorPips) corridorPips.visible = false;
+  starfield.group.visible = false;
+  nebula.group.visible = false;
+  planets.group.visible = false;
+  asteroidField.group.visible = false;
+  cinematicDust.points.visible = false;
+  radiationStorm.group.visible = false;
+  gravityAnomaly.group.visible = false;
+  for (const point of pointsOfInterest) {
+    point.object.visible = false;
+  }
+  for (const threat of threats) {
+    threat.effect.group.visible = false;
+  }
+  homeMarker.style.display = 'none';
+  // Space-mission overlays yield to the colony interface.
+  habitabilityPanel.classList.remove('is-active');
+  // In daylight the fresnel shield shell reads as a soap bubble: hide it
+  // while grounded (no orbital threats reach the basin).
+  shieldEffect.mesh.visible = false;
+
+  colonyPanel.update(colonyManager.state);
+  missionText.textContent = 'Modo exploración de superficie activo. Despliega el hábitat; luego puedes descender con F para explorar a pie.';
+  showPhaseBanner('SUPERFICIE E-01 / CUENCA NEREIDA', 'Modo exploración de superficie activo. Usa WASD para desplazarte.');
+  setControlHints('surface');
+  if (!mission24.started) triggerDialogue('m02_surface_start', 'surface-phase-start');
+  if (shouldSave) {
+    saveProgress();
+  }
+  playTone(520, 0.15);
+  window.setTimeout(() => playTone(880, 0.22), 140);
+}
+
+function setGamePaused(paused: boolean): void {
+  if (!launched && paused) return;
+  gamePaused = paused;
+  pauseMenu.setOpen(paused);
+  input.clear();
+  tutorialManager.recordActivity();
+  if (paused) {
+    void document.exitPointerLock?.();
+  } else {
+    requestGamePointerLock();
+  }
+}
+
+function requestGamePointerLock(): void {
+  if (diagnosticsMode) return;
+  try {
+    const request = canvas.requestPointerLock?.();
+    if (request && 'catch' in request) {
+      void request.catch(() => undefined);
+    }
+  } catch {
+    // Pointer lock is optional in embedded browsers and touch devices.
+  }
+}
+
+function returnToMainMenu(): void {
+  saveProgress();
+  gamePaused = false;
+  pauseMenu.setOpen(false);
+  input.clear();
+  void document.exitPointerLock?.();
+  launched = false;
+  hud.classList.remove('is-active');
+  bootScreen.classList.remove('is-hidden');
+  bootScreen.inert = false;
+  dialogueManager.clearQueue();
+  launchButton.textContent = 'Continuar exploracion';
+  launchButton.disabled = false;
+  missionText.textContent = 'Progreso guardado. La expedicion puede continuar desde este punto.';
+}
+
+const pauseMenu = new PauseMenu({
+  onResume: () => setGamePaused(false),
+  onSave: () => saveProgress(),
+  onReturnToMainMenu: returnToMainMenu,
+  onResetProgress: () => {
+    saveSystem.clearSave();
+    window.location.reload();
+  }
+});
+
+const startPhase2Btn = document.getElementById('start-phase2-btn');
+if (startPhase2Btn) {
+  startPhase2Btn.addEventListener('click', () => enterSurfacePhase());
+}
+
+launchButton.addEventListener('click', () => {
+  launchButton.blur();
+  launchButton.disabled = true;
+  bootScreen.inert = true;
+  const savedGame = saveSystem.loadGame();
+  if (savedGame) {
+    applySaveGame(savedGame);
+    requestGamePointerLock();
+    startAudio();
+    playTone(520, 0.18);
+    return;
+  }
+
+  launched = true;
+  bootScreen.classList.add('is-hidden');
+  hud.classList.add('is-active');
+  missionManager.start();
+  requestCameraFollowSync('launch');
+  // A new game now opens clamped to the Ark. The old opening line is the
+  // commander talking to a pilot already in open space, so the prologue
+  // replaces it with its own introduction; M01 itself is untouched and
+  // resumes at `scannerTutorial` the moment the corridor is cleared.
+  beginArkDeparture();
+  if (!arkDeparture.started || arkDeparture.completed) {
+    triggerDialogue('m01_start_commander', 'mission-start');
+  }
+  missionText.textContent = saveSystem.lastWarning
+    ? `${saveSystem.lastWarning} ${missionManager.briefing}`
+    : missionManager.briefing;
+  // Chapter card last, so it is what the pilot actually reads first.
+  if (arkDeparture.started && !arkDeparture.completed) showArkDepartureTitle();
+  updateHud(Number.POSITIVE_INFINITY);
+  requestGamePointerLock();
+  startAudio();
+  playTone(440, 0.22);
+});
+
+scanButton.addEventListener('click', () => dispatchInputAction('scan', 'ScanButton'));
+
+window.addEventListener('keydown', (event) => {
+  inputActionRouter.recordKey(event.code || event.key);
+  if (event.code === 'Space' && launched) event.preventDefault();
+  if (!event.repeat && event.code === 'Escape' && launched) {
+    event.preventDefault();
+    dispatchInputAction('pause', event.code);
+    return;
+  }
+
+  if (!event.repeat && event.code === 'Enter' && dialogueManager.current) {
+    event.preventDefault();
+    dialogueManager.advance();
+    return;
+  }
+  if (!event.repeat && event.code === 'Space' && dialogueManager.awaitingInput) {
+    event.preventDefault();
+    dialogueManager.advance();
+    return;
+  }
+
+  if (dialogueManager.current?.pausesGameplay && event.code !== 'KeyM') return;
+
+  if (!event.repeat && event.code === 'KeyM') {
+    dispatchInputAction('map', event.code);
+    return;
+  }
+  if (!event.repeat && event.code === 'KeyE') {
+    dispatchInputAction('scan', event.code);
+    return;
+  }
+  if (!event.repeat && event.code === 'KeyF') {
+    dispatchInputAction('shipAccess', event.code);
+    return;
+  }
+  if (!event.repeat && event.code === 'KeyV') {
+    dispatchInputAction('toggleCamera', event.code);
+    return;
+  }
+
+  if (gamePaused || starMap.active || playerModeSystem.transitionActive) return;
+  const key = event.key.toLowerCase();
+  input.add(key);
+  tutorialManager.recordActivity();
+  if (['w', 'a', 's', 'd'].includes(key)) {
+    tutorialManager.complete(inSurfacePhase ? 'surfaceMove' : 'moveShip');
+  }
+  // Weapons stay cold from the cradle until the exit corridor is behind us.
+  if (!event.repeat && event.code === 'Space' && playerModeSystem.insideShip && !mission24.ascentActive && !arkDeparture.weaponsLocked) fireLaser();
+  if (!event.repeat && key === 'r' && playerModeSystem.insideShip && !arkDeparture.weaponsLocked) fireMissile();
+});
+
+window.addEventListener('keyup', (event) => {
+  input.delete(event.key.toLowerCase());
+});
+
+window.addEventListener('mousemove', (event) => {
+  if (!launched || gamePaused) return;
+  if (playerModeSystem.characterVisible) {
+    footCameraTargetYaw -= event.movementX * settings.mouseSensitivity;
+    footCameraTargetPitch -= event.movementY * settings.mouseSensitivity;
+    footCameraTargetPitch = THREE.MathUtils.clamp(
+      footCameraTargetPitch,
+      onFootCameraTuning.PITCH_MIN,
+      onFootCameraTuning.PITCH_MAX
+    );
+    return;
+  }
+  yaw -= event.movementX * settings.mouseSensitivity;
+  pitch -= event.movementY * settings.mouseSensitivity;
+  pitch = THREE.MathUtils.clamp(pitch, -0.82, 0.82);
+});
+
+window.addEventListener('mousedown', (event) => {
+  if (gamePaused || !playerModeSystem.insideShip) return;
+  if (event.button === 0) fireLaser();
+  if (event.button === 2) fireMissile();
+});
+
+window.addEventListener('contextmenu', (event) => {
+  event.preventDefault();
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  post.setSize(window.innerWidth, window.innerHeight);
+});
+
+// A long Playwright worker can open many WebGL pages in sequence. Release the
+// M24-owned GPU/audio resources as the old document leaves so Chromium does not
+// carry them into the next context. The shared renderer is intentionally left
+// alone; the browser owns its teardown during navigation.
+window.addEventListener('pagehide', (event) => {
+  if (event.persisted) return;
+  musicManager.stop(0);
+  engineAudio.stopAll(0);
+  voiceManager.stopCurrent(0);
+  atmosphericAscentEffect.dispose();
+  arkFinalPreparationNetwork.dispose();
+  mission24AscentHud.dispose();
+}, { once: true });
+
+type ShipAltitudeHoldTestResult = {
+  beforeY: number;
+  peakY: number;
+  afterY: number;
+  snappedBack: boolean;
+};
+
+function getShipRealWorldY(): number {
+  playerShip.group.updateWorldMatrix(true, false);
+  return playerShip.group.matrixWorld.elements[13];
+}
+
+async function testShipAltitudeHold(): Promise<ShipAltitudeHoldTestResult> {
+  if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+  if (!playerModeSystem.insideShip) window.__arcaDebug?.setPlayerMode('ship');
+  gamePaused = false;
+  starMap.close();
+  dialogueManager.clearQueue();
+  launchButton.blur();
+  input.clear();
+  velocity.y = 0;
+  shipAltitudeHoldY = ship.position.y;
+  previousVerticalInput = 0;
+
+  const beforeY = getShipRealWorldY();
+  let peakY = beforeY;
+  input.add(' ');
+  for (let sample = 0; sample < 12; sample += 1) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
+    peakY = Math.max(peakY, getShipRealWorldY());
+  }
+  input.delete(' ');
+  for (let sample = 0; sample < 26; sample += 1) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
+  }
+  const afterY = getShipRealWorldY();
+  const retainedGain = afterY - beforeY;
+  const peakGain = peakY - beforeY;
+  return {
+    beforeY,
+    peakY,
+    afterY,
+    snappedBack: peakGain > 1 && retainedGain < Math.max(0.8, peakGain * 0.35)
+  };
+}
+
+if (urlParams.has('debug')) {
+  void import('lil-gui').then(({ default: GUI }) => {
+    const gui = new GUI();
+    gui.add(settings, 'thrust', 10, 90, 1);
+    gui.add(settings, 'boost', 1, 4, 0.1);
+    gui.add(settings, 'drag', 0.9, 0.995, 0.001);
+    gui.add(settings, 'threatDamage', 1, 20, 1);
+    gui.add(settings, 'scannerRange', 80, 200, 1);
+    gui.add(renderer, 'toneMappingExposure', 0.5, 2, 0.01).name('exposure');
+    gui.add(post.bloomPass, 'strength', 0, 1.6, 0.01).name('bloom');
+    gui.add(post.bloomPass, 'threshold', 0, 1, 0.01).name('bloomThreshold');
+  });
+}
+
+if (diagnosticsMode) {
+  // Test/debug hook: lets automation inspect the live scene graph.
+  window.__arcaScene = scene;
+  // Renderer handle for the performance harness; diagnostics builds only.
+  window.__arcaRenderer = renderer;
+  window.__arcaDebug = {
+    setCameraMode: (mode) => setCameraMode(mode),
+    setCameraLookAt: (target) => setDebugCameraLookAt(target),
+    lookAtDefenseBeacon: (index) => {
+      const beacon = defensiveBeacons[Math.floor(index)];
+      return beacon ? setDebugCameraLookAt(beacon.site.name) : undefined;
+    },
+    lookAtThreatSignature: () => setDebugCameraLookAt('Firma Anomala'),
+    getDefenseNetworkVisualState,
+    getAudioState: () => getAudioDebugState(),
+    testShipEngineAudio: () => previewAudioAsset('sfx-ship-idle'),
+    testPropulsionAcceleration: () => previewAudioAsset('sfx-ship-accelerate'),
+    testVerticalThrustAudio: () => previewAudioAsset('sfx-vertical-thrust'),
+    testBoostAudio: () => previewAudioAsset('sfx-boost-intensity'),
+    testWalkFootsteps: () => footstepAudio.testWalkFootsteps(),
+    testRunFootsteps: () => footstepAudio.testRunFootsteps(),
+    getFootstepAudioState: () => footstepAudio.state,
+    setMusicState: (state) => setDebugMusicState(state),
+    playSfx: (id) => playDebugSfx(id),
+    testShipAltitudeHold,
+    toggleCockpitView: () => toggleCockpitView(),
+    getInputActionState: () => getInputActionState(),
+    simulateAction: (action) => dispatchInputAction(action, `Debug:${action}`),
+    forceCameraMode: (mode) => {
+      if (mode === 'onFoot') {
+        window.__arcaDebug?.setPlayerMode('onFoot');
+        return 'onFoot';
+      }
+      if (!playerModeSystem.insideShip) window.__arcaDebug?.setPlayerMode('ship');
+      return setCameraMode(mode);
+    },
+    getCharacterControlState: () => {
+      const basis = getOnFootCameraBasis();
+      return {
+        playerMode: playerModeSystem.mode,
+        moveState: surfaceCharacter.moveState,
+        animation: surfaceCharacter.diagnostics.currentAnimation,
+        inputVector: [surfaceCharacter.inputVector.x, surfaceCharacter.inputVector.y],
+        velocity: [surfaceCharacter.velocity.x, surfaceCharacter.velocity.y, surfaceCharacter.velocity.z],
+        position: [surfaceCharacter.group.position.x, surfaceCharacter.group.position.y, surfaceCharacter.group.position.z],
+        facingYaw: surfaceCharacter.facingYaw,
+        cameraYaw: footCameraYaw,
+        cameraPitch: footCameraPitch,
+        cameraForward: [basis.forward.x, basis.forward.y, basis.forward.z],
+        grounded: surfaceCharacter.grounded
+      } satisfies CharacterControlState;
+    },
+    setOnFootCameraYaw: (value) => {
+      if (!Number.isFinite(value)) return footCameraYaw;
+      footCameraYaw = value;
+      footCameraTargetYaw = value;
+      return footCameraYaw;
+    },
+    setOnFootCameraPitch: (value) => {
+      if (!Number.isFinite(value)) return footCameraPitch;
+      footCameraPitch = THREE.MathUtils.clamp(value, onFootCameraTuning.PITCH_MIN, onFootCameraTuning.PITCH_MAX);
+      footCameraTargetPitch = footCameraPitch;
+      return footCameraPitch;
+    },
+    toggleCharacterDebug: () => surfaceCharacter.toggleDebug(),
+    reloadCockpitGlb: () => cockpitInterior.reload(),
+    showCockpitScreenAnchors: (visible) => cockpitInterior.showScreenAnchors(visible),
+    hideExternalHudForCockpitCapture: (hidden) => {
+      hud.classList.toggle('capture-clean', hidden);
+      return hud.classList.contains('capture-clean');
+    },
+    startCockpitShowcase: () => {
+      if (!launched) {
+        launched = true;
+        hud.classList.add('is-active');
+        bootScreen.classList.add('is-hidden');
+        missionManager.start();
+        startAudio();
+      }
+      setCameraMode('cockpit');
+      hud.classList.add('capture-clean');
+      return 'cockpit-showcase';
+    },
+    advanceToMarker: () => {
+      launched = true;
+      hud.classList.add('is-active');
+      bootScreen.classList.add('is-hidden');
+      missionManager.start();
+      missionManager.activateScanner();
+      descentSafetyGate.markE01Detected();
+      missionManager.reachPlanetRange();
+      missionManager.startHabitabilityScan();
+      const report = habitabilitySystem.report ?? habitabilitySystem.forceComplete();
+      habitabilityReportShown = true;
+      missionManager.completeHabitability(report);
+      descentSafetyGate.completeOrbitalScan(report.viability);
+      renderHabitabilityReport();
+      ship.position.copy(orbitalMarker.group.position).add(new THREE.Vector3(0, 0, 84));
+      velocity.set(0, 0, 0);
+      updateHud(Number.POSITIVE_INFINITY);
+      return missionManager.step;
+    },
+    decodeMarker: () => {
+      if (missionManager.step !== 'scanOrbitalMarker') {
+        window.__arcaDebug?.advanceToMarker();
+      }
+      missionManager.startMarkerDecode();
+      descentSafetyGate.markAtlasScanned();
+      orbitalMarkerSystem.forceDecoded();
+      missionManager.completeMarkerDecode();
+      descentSystem.lockCorridor();
+      descentSafetyGate.markCorridorDecoded();
+      buildCorridorPips();
+      orbitalMarker.flashHighlight();
+      triggerDialogue('m01_descent_authorized', 'debug-atlas-decoded');
+      missionText.textContent = orbitalMarkerLore.decoded;
+      updateHud(Number.POSITIVE_INFINITY);
+      return missionManager.step;
+    },
+    startEntry: () => {
+      if (missionManager.step !== 'approachPlanet') {
+        window.__arcaDebug?.decodeMarker();
+      }
+      const surfaceNormal = new THREE.Vector3(0, 0, 1);
+      ship.position.copy(candidatePlanet.group.position).addScaledVector(surfaceNormal, candidatePlanet.definition.radius + 118);
+      velocity.set(0, 0, -0.8);
+      descentSystem.beginEntry();
+      missionManager.beginAtmosphericEntry();
+      triggerDialogue('m01_atmospheric_entry', 'debug-atmospheric-entry');
+      updateHud(Number.POSITIVE_INFINITY);
+      return missionManager.step;
+    },
+    /**
+     * Parks the entry at an exact progress percentage.
+     *
+     * The entry is time-driven, and under a software renderer the simulation
+     * runs an order of magnitude slower than real time, so "wait and watch"
+     * is not a reproducible way to capture a given stage. Setting progress
+     * directly makes each stage addressable for captures and assertions
+     * without changing how the entry plays for a real pilot.
+     */
+    setEntryProgress: (percent: number) => {
+      if (descentSystem.state.phase !== 'entry') return descentSystem.state.entryProgress;
+      descentSystem.state.entryProgress = THREE.MathUtils.clamp(percent, 0, 99.5);
+      descentSystem.state.altitude = Math.max(1200, 8200 - descentSystem.state.entryProgress * 70);
+      updateEntryProfile(entryProfile, descentSystem.state, velocity.length());
+      return descentSystem.state.entryProgress;
+    },
+    attemptEarlyDescent: () => {
+      const outward = new THREE.Vector3(0, 0, 1);
+      ship.position.copy(candidatePlanet.group.position).addScaledVector(
+        outward,
+        candidatePlanet.definition.radius + 120
+      );
+      velocity.set(0, 0, -1);
+      const authorized = descentSafetyGate.requestDescent();
+      if (!authorized) {
+        triggerDialogue('m01_descent_blocked', 'debug-descent-blocked');
+        const missing = descentSafetyGate.state.missingDescentRequirements.join(', ');
+        transientWarning = 'DESCENSO DENEGADO // DATOS ORBITALES INSUFICIENTES';
+        missionText.textContent = `Descenso denegado. Faltan datos críticos: ${missing}.`;
+        updateHud(Number.POSITIVE_INFINITY);
+      }
+      return authorized;
+    },
+    getDescentSafetyState: () => descentSafetyGate.state,
+    finishEntry: () => {
+      if (missionManager.step !== 'atmosphericEntry') {
+        window.__arcaDebug?.startEntry();
+      }
+      descentSystem.state.phase = 'cloudBreak';
+      descentSystem.state.entryProgress = 100;
+      descentSystem.state.heat = 34;
+      descentSystem.state.stability = 92;
+      descentSystem.state.altitude = 920;
+      missionManager.completeAtmosphericEntry();
+      descentSystem.beginLandingApproach();
+      enterBasinApproach();
+      const normal = ship.position.clone().sub(candidatePlanet.group.position).normalize();
+      ship.position.copy(landingZone.group.position).addScaledVector(normal, 62);
+      velocity.set(0, 0, -0.2);
+      snapBasinCameraFraming();
+      updateHud(Number.POSITIVE_INFINITY);
+      return missionManager.step;
+    },
+      touchdown: () => {
+        if (missionManager.step !== 'landingApproach' && missionManager.step !== 'touchdown') {
+          window.__arcaDebug?.finishEntry();
+        }
+        missionManager.enterTouchdown();
+        ship.position.copy(landingZone.group.position);
+        velocity.set(0, 0, 0);
+        completeSurfaceTouchdown();
+        completeMissionAtSurface();
+        updateHud(Number.POSITIVE_INFINITY);
+        return missionManager.step;
+      },
+    startSurfacePhase: () => {
+      window.__arcaDebug?.touchdown();
+      enterSurfacePhase();
+      return 'surfacePhase';
+    },
+    exitShip: () => {
+      if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+      requestExitShip();
+      return playerModeSystem.mode;
+    },
+    enterShip: () => {
+      requestEnterShip(true);
+      return playerModeSystem.mode;
+    },
+    setPlayerMode: (mode) => {
+      if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+      if (mode === 'onFoot') {
+        transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+        // Debug on-foot parks the hull like a real disembark so screenshots
+        // match live play.
+        settleParkedShipOnTerrain(true);
+        previousVerticalInput = 0;
+        shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
+        const exitPosition = shipAccessLift.getGroundExitPosition();
+        exitPosition.y = planetaryWorld.getHeightAt(exitPosition.x, exitPosition.z) + 0.04;
+        surfaceCharacter.placeAt(exitPosition, smoothYaw - Math.PI / 2);
+        orientOnFootCameraAwayFromShip(surfaceCharacter.group.position);
+        surfaceCharacter.setVisible(true);
+        playerModeSystem.forceOnFoot();
+        snapOnFootCameraNextFrame = true;
+        shipAccessLift.state = 'deployed';
+        hud.classList.remove('cockpit-active');
+        setControlHints('foot');
+      } else {
+        parkedShipResolved = false;
+        playerModeSystem.forceShip(true, cameraModeSystem.mode === 'cockpit');
+        surfaceCharacter.setVisible(false);
+        shipAccessLift.state = 'retracted';
+        shipAccessLift.group.visible = false;
+        hud.classList.toggle('cockpit-active', cameraModeSystem.mode === 'cockpit');
+        setControlHints('surface');
+      }
+      updateHud(Number.POSITIVE_INFINITY);
+      return playerModeSystem.mode;
+    },
+    spawnCharacterAtShip: () => {
+      window.__arcaDebug?.setPlayerMode('onFoot');
+      return [
+        surfaceCharacter.group.position.x,
+        surfaceCharacter.group.position.y,
+        surfaceCharacter.group.position.z
+      ] as [number, number, number];
+    },
+    teleportCharacterToHabitat: () => {
+      if (!playerModeSystem.onFootActive) window.__arcaDebug?.setPlayerMode('onFoot');
+      const habitat = planetaryWorld.colonyModule.group.position;
+      const x = habitat.x + 7.2;
+      const z = habitat.z;
+      surfaceCharacter.placeAt(new THREE.Vector3(x, planetaryWorld.getHeightAt(x, z) + 0.04, z), -Math.PI / 2);
+      updateHud(Number.POSITIVE_INFINITY);
+      return [x, surfaceCharacter.group.position.y, z] as [number, number, number];
+    },
+    teleportCharacterToResource: (type) => {
+      if (!playerModeSystem.onFootActive) window.__arcaDebug?.setPlayerMode('onFoot');
+      const node = surfaceResourceSystem.nodes.find((candidate) => candidate.definition.type === type);
+      if (!node) return undefined;
+      const x = node.interactionPosition.x;
+      const z = node.interactionPosition.z;
+      surfaceCharacter.placeAt(new THREE.Vector3(x, planetaryWorld.getHeightAt(x, z) + 0.04, z), -Math.PI / 2);
+      updateHud(Number.POSITIVE_INFINITY);
+      return [x, surfaceCharacter.group.position.y, z] as [number, number, number];
+    },
+    teleportToWaterSite: () => window.__arcaDebug?.teleportCharacterToResource('water'),
+    teleportToMineralSite: () => window.__arcaDebug?.teleportCharacterToResource('minerals'),
+    teleportToEnergySite: () => window.__arcaDebug?.teleportCharacterToResource('energy'),
+    locateSurfaceSite: (type) => {
+      window.__arcaDebug?.revealSurfaceSites();
+      window.__arcaDebug?.setPlayerMode('ship');
+      const node = surfaceResourceSystem.nodes.find((candidate) => candidate.definition.type === type);
+      if (!node) return 'unknown';
+      const approachDirection = HABITAT_SITE_LOCAL.clone().sub(node.interactionPosition).setY(0).normalize();
+      const approachPosition = node.interactionPosition.clone().addScaledVector(approachDirection, 38);
+      approachPosition.y = planetaryWorld.getHeightAt(approachPosition.x, approachPosition.z) + surfaceHoverHeight + 2;
+      ship.position.copy(approachPosition);
+      const viewDirection = node.interactionPosition.clone().sub(approachPosition).setY(0).normalize();
+      yaw = Math.atan2(-viewDirection.x, -viewDirection.z);
+      smoothYaw = yaw;
+      ship.rotation.set(smoothPitch, smoothYaw, 0);
+      velocity.set(0, 0, 0);
+      surfaceResourceSystem.scanNearby(ship.position, colonyManager, resourceInventory, 130, false);
+      surfaceMission.updateFromColonyState(colonyManager.state);
+      triggerResourceDialogue();
+      updateHud(Number.POSITIVE_INFINITY);
+      return colonyManager.getResourceStatus(type);
+    },
+    sampleSurfaceSite: (type) => {
+      window.__arcaDebug?.revealSurfaceSites();
+      const node = surfaceResourceSystem.nodes.find((candidate) => candidate.definition.type === type);
+      if (!node) return 'unknown';
+      window.__arcaDebug?.setPlayerMode('onFoot');
+      const x = node.interactionPosition.x;
+      const z = node.interactionPosition.z;
+      surfaceCharacter.placeAt(new THREE.Vector3(x, planetaryWorld.getHeightAt(x, z) + 0.04, z));
+      surfaceResourceSystem.scanNearby(surfaceCharacter.group.position, colonyManager, resourceInventory, 14, true);
+      surfaceMission.updateFromColonyState(colonyManager.state);
+      triggerResourceDialogue();
+      saveProgress();
+      updateHud(Number.POSITIVE_INFINITY);
+      return colonyManager.getResourceStatus(type);
+    },
+    getResourceInteractionPosition: (type) => {
+      const node = surfaceResourceSystem.nodes.find((candidate) => candidate.definition.type === type);
+      if (!node) return undefined;
+      return [
+        node.interactionPosition.x,
+        node.interactionPosition.y,
+        node.interactionPosition.z
+      ] as [number, number, number];
+    },
+    getResourceSiteDiagnostics: () => planetaryWorld.getResourceSiteTerrainDiagnostics(),
+    completeLanding: () => {
+      window.__arcaDebug?.touchdown();
+      return descentSystem.state.phase;
+    },
+    deployHabitat: () => {
+        if (!inSurfacePhase) {
+          window.__arcaDebug?.startSurfacePhase();
+        }
+        if (!colonyManager.state.habitatOnline) {
+          colonyManager.registerModuleDeployment();
+          const habitatPosition = HABITAT_SITE_LOCAL.clone();
+          habitatPosition.y = planetaryWorld.getHeightAt(habitatPosition.x, habitatPosition.z);
+          planetaryWorld.colonyModule.deployAt(habitatPosition);
+        }
+        surfaceMission.updateFromColonyState(colonyManager.state);
+        colonyPanel.update(colonyManager.state);
+        triggerDialogue('m02_habitat_deployed', 'debug-habitat-deployed');
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return colonyManager.state.currentStage;
+      },
+      revealSurfaceSites: () => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        if (!colonyManager.state.habitatOnline) window.__arcaDebug?.deployHabitat();
+        colonyManager.revealSurfaceSites();
+        surfaceResourceSystem.syncFromColony(colonyManager);
+        surfaceMission.updateFromColonyState(colonyManager.state);
+        triggerDialogue('m02_sites_revealed', 'debug-resource-sites-revealed');
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return colonyManager.state.surfaceSitesRevealed;
+      },
+      scanAllSurfaceResources: () => {
+        if (!inSurfacePhase) {
+          window.__arcaDebug?.startSurfacePhase();
+        }
+        if (!colonyManager.state.habitatOnline) {
+          window.__arcaDebug?.deployHabitat();
+        }
+        surfaceResourceSystem.markAllScanned(colonyManager, resourceInventory);
+        surfaceMission.updateFromColonyState(colonyManager.state);
+        colonyPanel.update(colonyManager.state);
+        upgradeSystem.updateUnlocks(resourceInventory.state, colonyManager.state.colonizationReadiness);
+        triggerDialogue('m02_all_samples', 'debug-all-samples-collected');
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return colonyManager.state.colonizationReadiness;
+      },
+      makeBaseOperational: () => {
+        window.__arcaDebug?.scanAllSurfaceResources();
+        surfaceResourceSystem.analyzeSamples(colonyManager);
+        triggerDialogue('m02_samples_analyzed', 'debug-samples-analyzed');
+        colonyManager.confirmBaseOperational();
+        triggerDialogue('m02_base_operational', 'debug-base-operational');
+        surfaceMission.updateFromColonyState(colonyManager.state);
+        colonyPanel.update(colonyManager.state);
+        saveProgress();
+        return colonyManager.state.baseNereidaOperational;
+      },
+      analyzeSurfaceSamples: () => {
+        const analyzed = surfaceResourceSystem.analyzeSamples(colonyManager);
+        if (analyzed) triggerDialogue('m02_samples_analyzed', 'debug-samples-analyzed');
+        surfaceMission.updateFromColonyState(colonyManager.state);
+        colonyPanel.update(colonyManager.state);
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return analyzed;
+      },
+      startMission03: () => {
+        const started = startMission03IfReady();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission03.started;
+      },
+      calibrateMission03Communications: () => {
+        if (!mission03.started) startMission03IfReady();
+        if (mission03.step === 'deepSignal') mission03.reviewSignal();
+        mission03.forceCalibrationComplete();
+        pleyadanRelayBeacon.reveal();
+        syncMission03Visuals();
+        triggerDialogue('m03_resonator_revealed', 'debug-mission03-calibration');
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission03.state.communicationCalibrated;
+      },
+      teleportToResonadorAtlas: () => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        const target = pleyadanRelayBeacon.interactionPosition;
+        const x = target.x - (playerModeSystem.onFootActive ? 0 : 18);
+        const z = target.z + (playerModeSystem.onFootActive ? 0 : 12);
+        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        if (playerModeSystem.onFootActive) surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
+        else {
+          ship.position.set(x, y, z);
+          shipAltitudeHoldY = y;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        velocity.set(0, 0, 0);
+        if (mission03.step === 'resonancePoint') mission03.reachResonator();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      placeRelayBeacon: () => {
+        if (mission03.step === 'resonancePoint') mission03.reachResonator();
+        const placed = mission03.placeRelay();
+        if (placed) {
+          pleyadanRelayBeacon.placeRelay();
+          triggerDialogue('m03_relay_placed', 'debug-mission03-relay');
+          saveProgress();
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission03.state.relayBeaconPlaced;
+      },
+      completeSignalSync: () => {
+        if (!mission03.state.relayBeaconPlaced) window.__arcaDebug?.placeRelayBeacon();
+        mission03.forceSignalSynchronized();
+        signalTranslation.receiveRawSignal();
+        triggerDialogue('m03_signal_synchronized', 'debug-mission03-signal');
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission03.state.signalStability;
+      },
+      returnToBaseForTranslation: () => {
+        const target = planetaryWorld.colonyModule.group.position;
+        const x = target.x + 7.2;
+        const z = target.z;
+        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        if (playerModeSystem.onFootActive) surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), Math.PI / 2);
+        else {
+          ship.position.set(x, y, z);
+          shipAltitudeHoldY = y;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        velocity.set(0, 0, 0);
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      completeMission03Translation: () => {
+        if (mission03.step === 'returnToBase') {
+          mission03.beginTranslation();
+          signalTranslation.receiveRawSignal();
+          signalTranslation.beginTranslation();
+        }
+        signalTranslation.forceStable();
+        if (mission03.step === 'atlasTranslation') mission03.markTranslationStable();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission03.step;
+      },
+      completePleyadanContact: () => {
+        if (mission03.step === 'returnToBase') mission03.beginTranslation();
+        signalTranslation.forceStable();
+        if (mission03.step === 'atlasTranslation') mission03.markTranslationStable();
+        if (mission03.step === 'firstContact') mission03.establishContact();
+        signalTranslation.establishContact();
+        pleyadanHologram.setActive(true);
+        triggerDialogue('m03_pleyadan_transmission', 'debug-mission03-contact');
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission03.state.pleyadanContactEstablished;
+      },
+      completeMission03: () => {
+        window.__arcaDebug?.completePleyadanContact();
+        if (mission03.step === 'warning') mission03.deliverWarning();
+        signalTranslation.deliverWarning();
+        if (mission03.step === 'prepare') mission03.complete();
+        syncMission03Visuals();
+        triggerDialogue('m03_complete', 'debug-mission03-complete');
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission03.completed;
+      },
+      getMission03State: () => ({
+        ...mission03.snapshot(),
+        translationState: signalTranslation.state,
+        translationProgress: signalTranslation.progress,
+        translatedFragments: signalTranslation.translatedFragments
+      }),
+      resetMission03State: () => {
+        mission03.reset();
+        mission04.reset();
+        mission05.reset();
+        signalTranslation.reset();
+        lastTranslatedFragmentCount = 0;
+        syncMission03Visuals();
+        syncMission04Visuals();
+        syncMission05Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission03.started;
+      },
+      startMission04: () => {
+        const started = startMission04IfReady();
+        syncMission04Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission04.started;
+      },
+      calibrateMission04DefenseLink: () => {
+        if (!mission04.started) return false;
+        if (mission04.step === 'returnToBase') mission04.reviewProtocol();
+        mission04.forceDefenseLinkCalibrated();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission04.state.defenseLinkCalibrated;
+      },
+      teleportToDefenseBeacon: (index) => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        const safeIndex = THREE.MathUtils.clamp(Math.floor(index), 0, defensiveBeacons.length - 1);
+        const beacon = defensiveBeacons[safeIndex];
+        if (!beacon) return undefined;
+        if (mission04.started && !mission04.state.defensiveBeaconsPlaced[safeIndex]) {
+          mission04.state.activeDefenseBeaconTarget = safeIndex;
+        }
+        const target = beacon.interactionPosition;
+        const x = target.x - (playerModeSystem.onFootActive ? 0 : 18);
+        const z = target.z + (playerModeSystem.onFootActive ? 0 : 12);
+        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        if (playerModeSystem.onFootActive) {
+          surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
+        } else {
+          ship.position.set(x, y, z);
+          shipAltitudeHoldY = y;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        velocity.set(0, 0, 0);
+        if (mission04.step === 'travelToBeacon' && safeIndex === mission04.state.activeDefenseBeaconTarget) {
+          mission04.reachActiveBeacon();
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      placeDefenseBeacon: (index) => {
+        if (!mission04.started) return false;
+        const safeIndex = THREE.MathUtils.clamp(Math.floor(index), 0, defensiveBeacons.length - 1);
+        if (!mission04.state.defenseLinkCalibrated) mission04.forceDefenseLinkCalibrated();
+        if (!mission04.state.orbitalSensorActivated) mission04.activateOrbitalSensor();
+        mission04.state.activeDefenseBeaconTarget = safeIndex;
+        if (mission04.step === 'travelToBeacon') mission04.reachActiveBeacon();
+        const placed = mission04.placeDefenseBeacon(safeIndex);
+        syncMission04Visuals();
+        if (placed) {
+          triggerDialogue('m04_beacon_linked', `debug-mission04-beacon-${safeIndex + 1}`);
+          saveProgress();
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission04.state.defensiveBeaconsPlaced[safeIndex];
+      },
+      placeAllDefenseBeacons: () => {
+        if (!mission04.started) return 0;
+        if (!mission04.state.defenseLinkCalibrated) mission04.forceDefenseLinkCalibrated();
+        if (!mission04.state.orbitalSensorActivated) mission04.activateOrbitalSensor();
+        mission04.forceAllBeaconsPlaced();
+        syncMission04Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission04.state.defensiveBeaconsPlaced.filter(Boolean).length;
+      },
+      completeDefenseSync: () => {
+        if (!mission04.state.defensiveBeaconsPlaced.every(Boolean)) window.__arcaDebug?.placeAllDefenseBeacons();
+        mission04.forceDefenseSyncComplete();
+        syncMission04Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission04.state.defenseSyncProgress;
+      },
+      detectThreatSignature: () => {
+        if (mission04.step === 'returnToShip') mission04.confirmReturnedToShip();
+        if (mission04.step === 'orbitalScan') mission04.detectThreatSignature();
+        if (mission04.state.threatSignatureDetected) {
+          triggerDialogue('m04_signature_detected', 'debug-mission04-signature');
+          saveProgress();
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission04.state.threatSignatureDetected;
+      },
+      completeMission04: () => {
+        if (!mission04.state.defenseNetworkSynchronized) window.__arcaDebug?.completeDefenseSync();
+        window.__arcaDebug?.detectThreatSignature();
+        if (mission04.step === 'threatSignature') mission04.complete();
+        if (mission04.completed) {
+          triggerDialogue('m04_complete', 'debug-mission04-complete');
+          saveProgress();
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission04.completed;
+      },
+      getMission04State: () => mission04.snapshot(),
+      resetMission04State: () => {
+        mission04.reset();
+        mission05.reset();
+        syncMission04Visuals();
+        syncMission05Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission04.started;
+      },
+      startMission05: () => {
+        const started = startMission05IfReady();
+        syncMission05Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission05.started;
+      },
+      teleportToSilentProbe: () => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        if (!playerModeSystem.insideShip) window.__arcaDebug?.setPlayerMode('ship');
+        const target = MISSION05_PROBE_POSITION.clone();
+        const position = target.clone().add(new THREE.Vector3(-48, -4, 34));
+        const minimumY = planetaryWorld.getHeightAt(position.x, position.z) + mission05Tuning.minimumScanAltitude;
+        position.y = Math.max(position.y, minimumY);
+        ship.position.copy(position);
+        velocity.set(0, 0, 0);
+        shipAltitudeHoldY = position.y;
+        shipPreviousY = position.y;
+        previousVerticalInput = 0;
+        updateHud(Number.POSITIVE_INFINITY);
+        return [position.x, position.y, position.z] as [number, number, number];
+      },
+      detectSilentProbe: () => {
+        if (!mission05.started) return false;
+        if (mission05.step === 'boardShip') mission05.confirmAboard();
+        if (mission05.step === 'gainScanAltitude') mission05.reachScanAltitude();
+        if (mission05.step === 'orbitalScan') mission05.detectProbe();
+        syncMission05Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission05.state.probeDetected;
+      },
+      triggerInterference: () => {
+        if (!mission05.state.probeDetected) window.__arcaDebug?.detectSilentProbe();
+        if (mission05.step === 'approachProbe') mission05.triggerInterference();
+        syncMission05Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission05.state.interferenceActive;
+      },
+      resolveEcho: (index) => {
+        if (mission05.step === 'atlasRecalibration') mission05.recalibrateAtlasFrequency();
+        const resolved = mission05.resolveEcho(Math.floor(index));
+        syncMission05Visuals();
+        if (resolved) saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return resolved;
+      },
+      resolveAllEchoes: () => {
+        if (mission05.step === 'atlasRecalibration') mission05.recalibrateAtlasFrequency();
+        while (mission05.step === 'trackEcho') {
+          mission05.resolveEcho(mission05.state.activeEchoIndex);
+        }
+        syncMission05Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission05.state.echoesResolved;
+      },
+      completeCounterSignal: () => {
+        if (mission05.step === 'atlasRecalibration') mission05.recalibrateAtlasFrequency();
+        if (mission05.step === 'trackEcho') window.__arcaDebug?.resolveAllEchoes();
+        if (mission05.step === 'counterSignal') mission05.forceCounterSignalComplete();
+        syncMission05Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission05.state.counterSignalProgress;
+      },
+      completeMission05: () => {
+        if (!mission05.state.probeRetreated) window.__arcaDebug?.completeCounterSignal();
+        mission05.markProbeEscaped();
+        if (mission05.step === 'returnToBase') mission05.completeAtBase();
+        syncMission05Visuals();
+        if (mission05.completed) {
+          triggerDialogue('m05_complete', 'debug-mission05-complete');
+          saveProgress();
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission05.completed;
+      },
+      getMission05State: () => mission05.snapshot(),
+      resetMission05State: () => {
+        mission05.reset();
+        syncMission05Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission05.started;
+      },
+      startMission06: () => {
+        const started = startMission06IfReady();
+        syncMission06Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission06.started;
+      },
+      teleportToCloakingProjector: (index) => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        const projector = cloakingProjectors[Math.floor(index)];
+        if (!projector) return undefined;
+        const x = projector.group.position.x + 6;
+        const z = projector.group.position.z + 6;
+        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        if (playerModeSystem.onFootActive) {
+          surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), Math.PI / 2);
+        } else {
+          ship.position.set(x, y, z);
+          velocity.set(0, 0, 0);
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      placeCloakingProjector: (index) => {
+        const projectorIndex = Math.floor(index);
+        if (mission06.step === 'returnToBase') mission06.reachBase();
+        if (mission06.step === 'analyzeResidue') mission06.analyzeResidues();
+        if (mission06.step === 'calibrateMatrix') mission06.calibrateMatrix();
+        const placed = mission06.deployProjector(projectorIndex);
+        if (placed) {
+          cloakingProjectors[projectorIndex].calibrate();
+          saveProgress();
+        }
+        syncMission06Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return placed;
+      },
+      placeAllCloakingProjectors: () => {
+        mission06.forceProjectorsPlaced();
+        syncMission06Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission06.state.cloakingProjectorsCalibrated.every(Boolean);
+      },
+      completeCloakingSync: () => {
+        mission06.forceSyncComplete();
+        mission06SyncEngaged = false;
+        syncMission06Visuals();
+        if (mission06.completed) {
+          triggerDialogue('m06_complete', 'debug-mission06-complete');
+          saveProgress();
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission06.state.cloakingSyncProgress;
+      },
+      completeMission06: () => {
+        if (!mission06.completed) window.__arcaDebug?.completeCloakingSync();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission06.completed;
+      },
+      getMission06State: () => mission06.snapshot(),
+      startMission07: () => {
+        const started = startMission07IfReady();
+        syncMission07Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission07.started;
+      },
+      teleportToAtlasFracture: () => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        if (!mission07.started) startMission07IfReady();
+        const x = atlasSeedArchive.interactionPosition.x + 12;
+        const z = atlasSeedArchive.interactionPosition.z + 8;
+        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        if (playerModeSystem.onFootActive) {
+          surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
+        } else {
+          ship.position.set(x, y, z);
+          velocity.set(0, 0, 0);
+          shipAltitudeHoldY = y;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        if (mission07.step === 'travelToFracture') mission07.reachFracture();
+        syncMission07Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      scanAtlasEchoNode: (index) => {
+        const nodeIndex = Math.floor(index);
+        if (!atlasEchoNodes[nodeIndex]) return false;
+        if (!mission07.started && !startMission07IfReady()) return false;
+        if (mission07.step === 'analyzeSignal') mission07.analyzeSubsurfaceSignal();
+        if (mission07.step === 'travelToFracture') mission07.reachFracture();
+        while (getActiveAtlasEchoNodeIndex() >= 0 && getActiveAtlasEchoNodeIndex() < nodeIndex) {
+          const currentIndex = getActiveAtlasEchoNodeIndex();
+          if (mission07.scanEchoNode(currentIndex)) atlasEchoNodes[currentIndex].markScanned();
+        }
+        if (mission07.state.atlasEchoNodesScanned[nodeIndex]) {
+          syncMission07Visuals();
+          return true;
+        }
+        const scanned = mission07.scanEchoNode(nodeIndex);
+        if (scanned) {
+          atlasEchoNodes[nodeIndex].markScanned();
+          if (mission07.state.atlasSeedArchiveUnlocked) atlasSeedArchive.unlock();
+          syncMission07Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return scanned;
+      },
+      scanAllAtlasEchoNodes: () => {
+        if (!mission07.started && !startMission07IfReady()) return 0;
+        mission07.forceAllEchoNodesScanned();
+        atlasEchoNodes.forEach((node) => node.markScanned());
+        atlasSeedArchive.unlock();
+        syncMission07Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission07.state.atlasEchoNodesScanned.filter(Boolean).length;
+      },
+      activateAtlasSeedArchive: () => {
+        if (!mission07.started && !startMission07IfReady()) return false;
+        if (!mission07.state.atlasSeedArchiveUnlocked) window.__arcaDebug?.scanAllAtlasEchoNodes();
+        const activated = mission07.activateSeedArchive();
+        if (activated) {
+          atlasSeedArchive.activate();
+          syncMission07Visuals();
+          triggerDialogue('m07_archive_active', 'debug-mission07-archive-active');
+          triggerDialogue('m07_pleyadan_guarded', 'debug-mission07-pleyadan-guarded', 1.4);
+          triggerDialogue('m07_seed_worlds', 'debug-mission07-seed-worlds', 2.8);
+          triggerDialogue('m07_silent_fear', 'debug-mission07-silent-fear', 4.2);
+          triggerDialogue('m07_complete', 'debug-mission07-complete', 5.5);
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission07.completed;
+      },
+      completeMission07: () => {
+        if (!mission07.completed) window.__arcaDebug?.activateAtlasSeedArchive();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission07.completed;
+      },
+      getMission07State: () => mission07.snapshot(),
+      startMission08: () => {
+        const started = startMission08IfReady();
+        syncMission08Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission08.started;
+      },
+      teleportToSignalFracture: () => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        if (!mission08.started) startMission08IfReady();
+        if (mission08.step === 'analyzeTrace') mission08.analyzeTrace();
+        const center = getSignalFractureCenter();
+        const x = center.x + 12;
+        const z = center.z + 8;
+        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        if (playerModeSystem.onFootActive) {
+          surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
+        } else {
+          ship.position.set(x, y, z);
+          velocity.set(0, 0, 0);
+          shipAltitudeHoldY = y;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        if (mission08.step === 'travelToFracture') mission08.reachFracture();
+        syncMission08Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      stabilizeFractureFocus: (index) => {
+        const focusIndex = Math.floor(index);
+        if (!signalFractureNodes[focusIndex]) return false;
+        if (!mission08.started && !startMission08IfReady()) return false;
+        if (mission08.step === 'analyzeTrace') mission08.analyzeTrace();
+        if (mission08.step === 'travelToFracture') mission08.reachFracture();
+        while (getActiveFractureFocusIndex() >= 0 && getActiveFractureFocusIndex() < focusIndex) {
+          const currentIndex = getActiveFractureFocusIndex();
+          if (mission08.stabilizeFocus(currentIndex)) signalFractureNodes[currentIndex].markStabilized();
+        }
+        if (mission08.state.fractureNodesStabilized[focusIndex]) {
+          syncMission08Visuals();
+          return true;
+        }
+        const stabilized = mission08.stabilizeFocus(focusIndex);
+        if (stabilized) {
+          signalFractureNodes[focusIndex].markStabilized();
+          syncMission08Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return stabilized;
+      },
+      stabilizeAllFractureFoci: () => {
+        if (!mission08.started && !startMission08IfReady()) return 0;
+        mission08.forceAllFociStabilized();
+        signalFractureNodes.forEach((node) => node.markStabilized());
+        syncMission08Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission08.state.fractureNodesStabilized.filter(Boolean).length;
+      },
+      completeSignalPurge: () => {
+        if (!mission08.started && !startMission08IfReady()) return 0;
+        mission08.forcePurgeComplete();
+        mission08PurgeEngaged = false;
+        syncMission08Visuals();
+        if (mission08.completed) {
+          triggerDialogue('m08_complete', 'debug-mission08-complete');
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission08.state.signalPurgeProgress;
+      },
+      completeMission08: () => {
+        if (!mission08.completed) window.__arcaDebug?.completeSignalPurge();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission08.completed;
+      },
+      getMission08State: () => mission08.snapshot(),
+      startMission09: () => {
+        const started = startMission09IfReady();
+        syncMission09Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission09.started;
+      },
+      analyzeResidualTrace: () => {
+        if (!mission09.started && !startMission09IfReady()) return false;
+        const analyzed = mission09.analyzeResidual();
+        syncMission09Visuals();
+        if (analyzed) saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission09.state.auroraRouteDecoded;
+      },
+      teleportToAuroraBeacon: (index) => {
+        const beaconIndex = Math.floor(index);
+        const beacon = atlasRouteBeacons[beaconIndex];
+        if (!beacon) return undefined;
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        if (!mission09.started) startMission09IfReady();
+        if (mission09.step === 'analyzeResidual') mission09.forceRouteDecoded();
+        const x = beacon.interactionPosition.x + 10;
+        const z = beacon.interactionPosition.z + 10;
+        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        if (playerModeSystem.onFootActive) {
+          surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
+        } else {
+          ship.position.set(x, y, z);
+          velocity.set(0, 0, 0);
+          shipAltitudeHoldY = y;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        syncMission09Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      scanAuroraBeacon: (index) => {
+        const beaconIndex = Math.floor(index);
+        if (!atlasRouteBeacons[beaconIndex]) return false;
+        if (!mission09.started && !startMission09IfReady()) return false;
+        if (mission09.step === 'analyzeResidual') mission09.forceRouteDecoded();
+        while (getActiveRouteBeaconIndex() >= 0 && getActiveRouteBeaconIndex() < beaconIndex) {
+          const currentIndex = getActiveRouteBeaconIndex();
+          if (mission09.scanBeacon(currentIndex)) atlasRouteBeacons[currentIndex].markScanned();
+        }
+        if (mission09.state.auroraRouteBeaconsScanned[beaconIndex]) {
+          syncMission09Visuals();
+          return true;
+        }
+        const scanned = mission09.scanBeacon(beaconIndex);
+        if (scanned) {
+          atlasRouteBeacons[beaconIndex].markScanned();
+          syncMission09Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return scanned;
+      },
+      scanAllAuroraBeacons: () => {
+        if (!mission09.started && !startMission09IfReady()) return 0;
+        mission09.forceAllBeaconsScanned();
+        atlasRouteBeacons.forEach((beacon) => beacon.markScanned());
+        syncMission09Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission09.beaconsScannedCount;
+      },
+      teleportToAuroraThreshold: () => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        if (!mission09.started) startMission09IfReady();
+        if (!mission09.state.auroraRouteBeaconsScanned.every(Boolean)) window.__arcaDebug?.scanAllAuroraBeacons();
+        const threshold = getAuroraThresholdCenter();
+        const x = threshold.x;
+        const z = threshold.z + 40;
+        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        if (playerModeSystem.onFootActive) {
+          surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), Math.PI);
+        } else {
+          ship.position.set(x, y, z);
+          velocity.set(0, 0, 0);
+          shipAltitudeHoldY = y;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        syncMission09Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      // --- Aurora expedition staging: probe hooks for the journey itself ---
+      teleportToAuroraSegment: (index) => {
+        if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
+        if (!mission09.started) startMission09IfReady();
+        if (!mission09.state.auroraRouteDecoded) window.__arcaDebug?.analyzeResidualTrace();
+        const center = auroraSectorRoute.getSectorCenter(THREE.MathUtils.clamp(index, 0, 4));
+        if (!center) return [0, 0, 0] as [number, number, number];
+        const y = planetaryWorld.getHeightAt(center.x, center.z) + surfaceHoverHeight;
+        if (playerModeSystem.onFootActive) {
+          surfaceCharacter.placeAt(new THREE.Vector3(center.x, y, center.z), Math.PI);
+        } else {
+          ship.position.set(center.x, y, center.z);
+          velocity.set(0, 0, 0);
+          shipAltitudeHoldY = y;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        syncMission09Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [center.x, y, center.z] as [number, number, number];
+      },
+      triggerAuroraStormMoment: () => {
+        auroraTravelDirector.forceSegment('stormPlateau', clock.elapsedTime, 20);
+        return auroraTravelDirector.state.segment;
+      },
+      triggerAuroraPreReveal: () => {
+        auroraTravelDirector.forceSegment('preReveal', clock.elapsedTime, 20);
+        auroraRevealEffect.setApproachMist(true);
+        return auroraTravelDirector.state.segment;
+      },
+      triggerAuroraReveal: () => window.__arcaDebug!.discoverAuroraSector(),
+      getAuroraTravelState: () => ({ ...auroraTravelDirector.state }),
+      discoverAuroraSector: () => {
+        if (!mission09.started && !startMission09IfReady()) return false;
+        if (!mission09.state.auroraRouteBeaconsScanned.every(Boolean)) mission09.forceAllBeaconsScanned();
+        const discovered = mission09.scanHorizon();
+        if (discovered) {
+          auroraRevealEffect.reveal();
+          planetaryWorld.setRevealProgress(1);
+          triggerDialogue('m09_aurora_reveal', 'debug-mission09-reveal');
+          triggerDialogue('m09_complete', 'debug-mission09-complete', 1.6);
+          saveProgress();
+        }
+        syncMission09Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission09.state.auroraSectorDiscovered;
+      },
+      completeMission09: () => {
+        if (!mission09.completed) {
+          if (!mission09.started) startMission09IfReady();
+          mission09.forceComplete();
+          auroraRevealEffect.reveal();
+          planetaryWorld.setRevealProgress(1);
+          syncMission09Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission09.completed;
+      },
+      getMission09State: () => mission09.snapshot(),
+      // --- Mission 10: Primer Módulo Aurora ---
+      startMission10: () => {
+        if (!mission09.completed) window.__arcaDebug?.completeMission09();
+        const started = startMission10IfReady();
+        syncMission10Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission10.started;
+      },
+      surveyAuroraValley: () => {
+        if (!mission10.started && !window.__arcaDebug?.startMission10()) return false;
+        const surveyed = mission10.completeInitialSurvey();
+        syncMission10Visuals();
+        if (surveyed) saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission10.state.auroraInitialSurveyComplete;
+      },
+      teleportToAuroraSample: (kind) => {
+        if (!mission10.started) window.__arcaDebug?.startMission10();
+        if (!mission10.state.auroraInitialSurveyComplete) window.__arcaDebug?.surveyAuroraValley();
+        if (mission10.step === 'descendToClearing') mission10.confirmDescent();
+        const index = auroraSamplePointDefinitions.findIndex((definition) => definition.kind === kind);
+        const probe = auroraSurveyProbes[Math.max(0, index)];
+        syncMission10Visuals();
+        const x = probe.interactionPosition.x + 3;
+        const z = probe.interactionPosition.z + 3;
+        const y = planetaryWorld.getHeightAt(x, z);
+        // Bring the ship along, then the pilot: an on-foot teleport that
+        // leaves the ship 4 km away strands the player mid-probe.
+        ship.position.set(x + 12, y + surfaceHoverHeight, z + 12);
+        velocity.set(0, 0, 0);
+        shipAltitudeHoldY = ship.position.y;
+        shipPreviousY = ship.position.y;
+        previousVerticalInput = 0;
+        if (!playerModeSystem.onFootActive) window.__arcaDebug?.setPlayerMode('onFoot');
+        surfaceCharacter.placeAt(new THREE.Vector3(x, y + 0.04, z), Math.PI);
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      teleportToAuroraWater: () => window.__arcaDebug!.teleportToAuroraSample('water'),
+      teleportToAuroraSoil: () => window.__arcaDebug!.teleportToAuroraSample('soil'),
+      teleportToAuroraAtmospherePoint: () => window.__arcaDebug!.teleportToAuroraSample('atmosphere'),
+      teleportToAuroraBioSample: () => window.__arcaDebug!.teleportToAuroraSample('biosafety'),
+      analyzeAuroraSample: (kind) => {
+        if (!mission10.started) window.__arcaDebug?.startMission10();
+        if (!mission10.state.auroraInitialSurveyComplete) window.__arcaDebug?.surveyAuroraValley();
+        if (mission10.step === 'descendToClearing') mission10.confirmDescent();
+        const index = auroraSamplePointDefinitions.findIndex((definition) => definition.kind === kind);
+        const analyzed = mission10.analyzeSample(kind);
+        if (analyzed && index >= 0) auroraSurveyProbes[index].markAnalyzed();
+        syncMission10Visuals();
+        if (analyzed) saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission10.analyzedSampleCount;
+      },
+      analyzeAllAuroraSamples: () => {
+        if (!mission10.started) window.__arcaDebug?.startMission10();
+        mission10.forceAllSamplesAnalyzed();
+        auroraSurveyProbes.forEach((probe) => probe.markAnalyzed());
+        syncMission10Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission10.analyzedSampleCount;
+      },
+      markAuroraSettlementSite: () => {
+        if (!mission10.started) window.__arcaDebug?.startMission10();
+        mission10.forceSiteMarked();
+        syncMission10Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission10.state.auroraSettlementSiteMarked;
+      },
+      deployAuroraModule: () => {
+        if (!mission10.state.auroraSettlementSiteMarked) window.__arcaDebug?.markAuroraSettlementSite();
+        mission10.forceModuleDeployed();
+        auroraHabitatModule.beginDeploy();
+        mission10DeployStartedAt = -Infinity;
+        syncMission10Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission10.state.auroraModuleDeployed;
+      },
+      stabilizeAuroraModule: () => {
+        if (!mission10.state.auroraModuleDeployed) window.__arcaDebug?.deployAuroraModule();
+        mission10.advanceStabilization(mission10Tuning.stabilizationSeconds);
+        syncMission10Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission10.state.auroraStabilizationProgress;
+      },
+      completeMission10: () => {
+        if (!mission10.completed) {
+          if (!mission10.started) window.__arcaDebug?.startMission10();
+          mission10.forceComplete();
+          auroraHabitatModule.beginDeploy();
+          mission10DeployStartedAt = -Infinity;
+          syncMission10Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission10.completed;
+      },
+      getMission10State: () => mission10.snapshot(),
+      // --- Mission 11: Expansión Aurora ---
+      startMission11: () => {
+        if (!mission10.completed) window.__arcaDebug?.completeMission10();
+        const started = startMission11IfReady();
+        syncMission11Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission11.started;
+      },
+      teleportToAuroraStation: (station) => {
+        if (!mission11.started) window.__arcaDebug?.startMission11();
+        const target =
+          station === 'secondModule'
+            ? auroraStationPosition(auroraSecondModuleSiteDefinition.position)
+            : station === 'link'
+              ? auroraEnergyLink.interactionPosition.clone()
+              : station === 'water'
+                ? auroraStationPosition(auroraWaterFilterDefinition.position)
+                : station === 'bed'
+                  ? auroraStationPosition(auroraCultivationBedDefinition.position)
+                  : auroraHabitatModule.interactionPosition.clone();
+        const x = target.x + 2;
+        const z = target.z + 2;
+        const y = planetaryWorld.getHeightAt(x, z);
+        // Keep the ship with the pilot so a station teleport never strands.
+        ship.position.set(x + 12, y + surfaceHoverHeight, z + 12);
+        velocity.set(0, 0, 0);
+        shipAltitudeHoldY = ship.position.y;
+        shipPreviousY = ship.position.y;
+        previousVerticalInput = 0;
+        if (!playerModeSystem.onFootActive) window.__arcaDebug?.setPlayerMode('onFoot');
+        surfaceCharacter.placeAt(new THREE.Vector3(x, y + 0.04, z), Math.PI);
+        syncMission11Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      teleportToAuroraSecondModuleSite: () => window.__arcaDebug!.teleportToAuroraStation('secondModule'),
+      teleportToAuroraWaterFilter: () => window.__arcaDebug!.teleportToAuroraStation('water'),
+      teleportToAuroraCultivationBed: () => window.__arcaDebug!.teleportToAuroraStation('bed'),
+      runAuroraCoreDiagnostic: () => {
+        if (!mission11.started) window.__arcaDebug?.startMission11();
+        const done = mission11.runCoreDiagnostic();
+        syncMission11Visuals();
+        if (done) saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraCoreDiagnosticComplete;
+      },
+      markAuroraSecondModuleSite: () => {
+        if (!mission11.started) window.__arcaDebug?.startMission11();
+        if (!mission11.state.auroraCoreDiagnosticComplete) window.__arcaDebug?.runAuroraCoreDiagnostic();
+        const marked = mission11.markSecondModuleSite();
+        syncMission11Visuals();
+        if (marked) saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraSecondModuleSiteMarked;
+      },
+      deployAuroraSecondModule: () => {
+        if (!mission11.started) window.__arcaDebug?.startMission11();
+        mission11.forceSecondModuleDeployed();
+        auroraSecondModule.beginDeploy();
+        mission11DeployStartedAt = -Infinity;
+        syncMission11Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraSecondModuleDeployed;
+      },
+      connectAuroraEnergyLink: () => {
+        if (!mission11.state.auroraSecondModuleDeployed) window.__arcaDebug?.deployAuroraSecondModule();
+        mission11.forceEnergyLinkOnline();
+        syncMission11Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraEnergyLinkOnline;
+      },
+      installAuroraWaterFilter: () => {
+        if (!mission11.state.auroraEnergyLinkOnline) window.__arcaDebug?.connectAuroraEnergyLink();
+        mission11.forceWaterFilterInstalled();
+        syncMission11Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraWaterFilterInstalled;
+      },
+      calibrateAuroraWaterFlow: () => {
+        if (!mission11.state.auroraWaterFilterInstalled) window.__arcaDebug?.installAuroraWaterFilter();
+        mission11.forceWaterFlowCalibrated();
+        syncMission11Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraWaterFlowProgress;
+      },
+      prepareAuroraCultivationBed: () => {
+        if (!mission11.state.auroraWaterFlowCalibrated) window.__arcaDebug?.calibrateAuroraWaterFlow();
+        mission11.forceCultivationBedPrepared();
+        syncMission11Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraCultivationBedPrepared;
+      },
+      startAuroraBioTrial: () => {
+        if (!mission11.state.auroraCultivationBedPrepared) window.__arcaDebug?.prepareAuroraCultivationBed();
+        mission11.forceBioTrialStarted();
+        auroraCultivationBed.startTrial();
+        syncMission11Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraBioTrialStarted;
+      },
+      completeAuroraImpactAssessment: () => {
+        if (!mission11.state.auroraBioTrialStarted) window.__arcaDebug?.startAuroraBioTrial();
+        mission11.forceImpactAssessed();
+        syncMission11Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission11.state.auroraImpactAssessmentComplete;
+      },
+      completeMission11: () => {
+        if (!mission11.completed) {
+          if (!mission11.started) window.__arcaDebug?.startMission11();
+          mission11.forceComplete();
+          auroraSecondModule.beginDeploy();
+          auroraCultivationBed.startTrial();
+          mission11DeployStartedAt = -Infinity;
+          syncMission11Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission11.completed;
+      },
+      getMission11State: () => mission11.snapshot(),
+      // --- Mission 12: Primeros Habitantes ---
+      startMission12: () => {
+        if (!mission11.completed) window.__arcaDebug?.completeMission11();
+        const started = startMission12IfReady();
+        syncMission12Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission12.started;
+      },
+      prepareAuroraLifeSupport: () => {
+        if (!mission12.started) window.__arcaDebug?.startMission12();
+        mission12.forceLifeSupportReady();
+        syncMission12Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission12.state.auroraLifeSupportHumanReady;
+      },
+      configureAuroraHabitation: () => {
+        if (!mission12.state.auroraLifeSupportHumanReady) window.__arcaDebug?.prepareAuroraLifeSupport();
+        mission12.forceHabitationConfigured();
+        syncMission12Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission12.state.auroraHabitationConfigured;
+      },
+      teleportToAuroraLandingZone: () => {
+        if (!mission12.started) window.__arcaDebug?.startMission12();
+        const pad = getAuroraLandingZone();
+        const x = pad.x + 3;
+        const z = pad.z + 3;
+        const y = planetaryWorld.getHeightAt(x, z);
+        // Bring the ship along so an on-foot teleport never strands anyone.
+        ship.position.set(x + 14, y + surfaceHoverHeight, z + 14);
+        velocity.set(0, 0, 0);
+        shipAltitudeHoldY = ship.position.y;
+        shipPreviousY = ship.position.y;
+        previousVerticalInput = 0;
+        if (!playerModeSystem.onFootActive) window.__arcaDebug?.setPlayerMode('onFoot');
+        surfaceCharacter.placeAt(new THREE.Vector3(x, y + 0.04, z), Math.PI);
+        syncMission12Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      markAuroraLandingZone: () => {
+        if (!mission12.state.auroraHabitationConfigured) window.__arcaDebug?.configureAuroraHabitation();
+        mission12.forceLandingZoneMarked();
+        auroraCrewCapsule.beginDescent();
+        mission12DescentElapsed = 0;
+        syncMission12Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission12.state.auroraLandingZoneMarked;
+      },
+      landAuroraCrewCapsule: () => {
+        if (!mission12.state.auroraLandingZoneMarked) window.__arcaDebug?.markAuroraLandingZone();
+        mission12.forceCapsuleLanded();
+        auroraCrewCapsule.restore(true, true);
+        mission12DescentElapsed = mission12Tuning.capsuleDescentSeconds;
+        syncMission12Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission12.state.auroraCrewCapsuleLanded;
+      },
+      disembarkAuroraCrew: () => {
+        if (!mission12.state.auroraCrewCapsuleLanded) window.__arcaDebug?.landAuroraCrewCapsule();
+        mission12.forceCrewDisembarked();
+        auroraFirstCrew.beginDisembark();
+        syncMission12Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission12.crewCount;
+      },
+      startAuroraHumanLoadCycle: () => {
+        if (!mission12.state.auroraFirstCrewDisembarked) window.__arcaDebug?.disembarkAuroraCrew();
+        mission12.forceLoadCycleComplete();
+        syncMission12Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission12.state.auroraHumanLoadProgress;
+      },
+      recalibrateAuroraLifeSupport: () => {
+        if (!mission12.state.auroraHumanLoadCycleStarted) window.__arcaDebug?.startAuroraHumanLoadCycle();
+        mission12.forceRecalibrated();
+        syncMission12Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission12.state.auroraHumanLoadRecalibrated;
+      },
+      completeAuroraFirstNight: () => {
+        if (!mission12.state.auroraHumanLoadRecalibrated) window.__arcaDebug?.recalibrateAuroraLifeSupport();
+        mission12.forceStabilityVerified();
+        mission12.forceComplete();
+        auroraNightBlend = 1;
+        syncMission12Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission12.state.auroraFirstNightRecorded;
+      },
+      completeMission12: () => {
+        if (!mission12.completed) {
+          if (!mission12.started) window.__arcaDebug?.startMission12();
+          mission12.forceComplete();
+          auroraCrewCapsule.restore(true, true);
+          auroraFirstCrew.restore(true, true);
+          auroraNightBlend = 1;
+          mission12DescentElapsed = mission12Tuning.capsuleDescentSeconds;
+          syncMission12Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission12.completed;
+      },
+      getMission12State: () => mission12.snapshot(),
+      // --- Mission 13: La Primera Tormenta ---
+      startMission13: () => {
+        if (!mission12.completed) window.__arcaDebug?.completeMission12();
+        const started = startMission13IfReady();
+        syncMission13Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission13.started;
+      },
+      teleportToStormStation: (station) => {
+        if (!mission13.started) window.__arcaDebug?.startMission13();
+        const target =
+          station === 'generator'
+            ? auroraStormStations.generatorPosition
+            : station === 'antenna'
+              ? auroraStormStations.antennaPosition
+              : station === 'anchor1'
+                ? auroraStormStations.anchorPositions[0]
+                : station === 'anchor2'
+                  ? auroraStormStations.anchorPositions[1]
+                  : auroraStormStations.shieldPosition;
+        const x = target.x + 2;
+        const z = target.z + 2;
+        const y = planetaryWorld.getHeightAt(x, z);
+        // Keep the ship with the pilot so a station teleport never strands.
+        ship.position.set(x + 14, y + surfaceHoverHeight, z + 14);
+        velocity.set(0, 0, 0);
+        shipAltitudeHoldY = ship.position.y;
+        shipPreviousY = ship.position.y;
+        previousVerticalInput = 0;
+        if (!playerModeSystem.onFootActive) window.__arcaDebug?.setPlayerMode('onFoot');
+        surfaceCharacter.placeAt(new THREE.Vector3(x, y + 0.04, z), Math.PI);
+        syncMission13Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      acknowledgeStormAlert: () => {
+        if (!mission13.started) window.__arcaDebug?.startMission13();
+        mission13.forceAlertAcknowledged();
+        syncMission13Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission13.state.auroraStormAlertAcknowledged;
+      },
+      secureStormGenerator: () => {
+        if (!mission13.started) window.__arcaDebug?.startMission13();
+        mission13.forceGeneratorSecured();
+        auroraStormStations.triggerSparks();
+        syncMission13Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission13.state.auroraGeneratorSecured;
+      },
+      anchorStormAntenna: () => {
+        if (!mission13.state.auroraGeneratorSecured) window.__arcaDebug?.secureStormGenerator();
+        mission13.forceAntennaAnchored();
+        syncMission13Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission13.anchorsSecuredCount;
+      },
+      activateStormAntenna: () => {
+        if (mission13.anchorsSecuredCount < 2) window.__arcaDebug?.anchorStormAntenna();
+        mission13.forceAntennaOnline();
+        syncMission13Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission13.state.auroraAntennaOnline;
+      },
+      chargeStormShield: () => {
+        if (!mission13.state.auroraAntennaOnline) window.__arcaDebug?.activateStormAntenna();
+        mission13.forceShieldOnline();
+        syncMission13Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission13.state.auroraShieldOnline;
+      },
+      completeMission13: () => {
+        if (!mission13.completed) {
+          if (!mission13.started) window.__arcaDebug?.startMission13();
+          mission13.forceComplete();
+          auroraStormEffect.setIntensity(0);
+          auroraStormFogBoost = 0;
+          syncMission13Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission13.completed;
+      },
+      getMission13State: () => mission13.snapshot(),
+      getStormReadout: () => ({ ...mission13.readout }),
+      // --- Mission 14: La Marca que Quedó ---
+      startMission14: () => {
+        if (!mission13.completed) window.__arcaDebug?.completeMission13();
+        const started = startMission14IfReady();
+        syncMission14Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission14.started;
+      },
+      teleportToTraceStation: (station) => {
+        if (!mission14.started) window.__arcaDebug?.startMission14();
+        const target =
+          station === 'power'
+            ? auroraStormStations.generatorPosition
+            : station === 'comms'
+              ? auroraStormStations.antennaPosition
+              : station === 'habitat'
+                ? auroraHabitatModule.interactionPosition
+                : station === 'hidden'
+                  ? auroraTraceNodes.hiddenNodePosition
+                  : auroraTraceNodes.terminalPosition;
+        const x = target.x + 2;
+        const z = target.z + 2;
+        const y = planetaryWorld.getHeightAt(x, z);
+        // Keep the ship with the pilot so a station teleport never strands.
+        ship.position.set(x + 14, y + surfaceHoverHeight, z + 14);
+        velocity.set(0, 0, 0);
+        shipAltitudeHoldY = ship.position.y;
+        shipPreviousY = ship.position.y;
+        previousVerticalInput = 0;
+        if (!playerModeSystem.onFootActive) window.__arcaDebug?.setPlayerMode('onFoot');
+        surfaceCharacter.placeAt(new THREE.Vector3(x, y + 0.04, z), Math.PI);
+        syncMission14Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      completeTraceInspections: () => {
+        if (!mission14.started) window.__arcaDebug?.startMission14();
+        mission14.forceInspectionsComplete();
+        syncMission14Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission14.inspectionsDone;
+      },
+      analyzeCoalitionSignature: () => {
+        if (!mission14.started) window.__arcaDebug?.startMission14();
+        mission14.forceSignatureAnalyzed();
+        syncMission14Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission14.state.coalitionSignatureAnalyzed;
+      },
+      purgeCoalitionPowerNode: () => {
+        if (!mission14.state.coalitionSignatureAnalyzed) window.__arcaDebug?.analyzeCoalitionSignature();
+        mission14.forcePowerNodePurged();
+        syncMission14Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission14.state.coalitionPowerNodePurged;
+      },
+      purgeCoalitionCommsNode: () => {
+        if (!mission14.state.coalitionPowerNodePurged) window.__arcaDebug?.purgeCoalitionPowerNode();
+        mission14.forceCommsNodePurged();
+        syncMission14Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission14.state.coalitionCommsNodePurged;
+      },
+      locateCoalitionHiddenNode: () => {
+        if (!mission14.state.coalitionCommsNodePurged) window.__arcaDebug?.purgeCoalitionCommsNode();
+        mission14.forceHiddenNodeLocated();
+        syncMission14Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission14.state.coalitionHiddenNodeLocated;
+      },
+      extractCoalitionSample: () => {
+        if (!mission14.state.coalitionHiddenNodeLocated) window.__arcaDebug?.locateCoalitionHiddenNode();
+        mission14.forceSampleRecovered();
+        syncMission14Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission14.state.coalitionTraceSampleRecovered;
+      },
+      completeReverseTriangulation: () => {
+        if (!mission14.state.coalitionTraceSampleRecovered) window.__arcaDebug?.extractCoalitionSample();
+        mission14.forceTriangulationComplete();
+        syncMission14Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission14.state.coalitionReverseTriangulationComplete;
+      },
+      completeMission14: () => {
+        if (!mission14.completed) {
+          if (!mission14.started) window.__arcaDebug?.startMission14();
+          mission14.forceComplete();
+          coalitionTraceEffect.setIntensity(0);
+          syncMission14Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission14.completed;
+      },
+      getMission14State: () => mission14.snapshot(),
+      // --- Mission 15: Sabotaje en Aurora ---
+      startMission15: () => {
+        if (!mission14.completed) window.__arcaDebug?.completeMission14();
+        const started = startMission15IfReady();
+        syncMission15Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission15.started;
+      },
+      teleportToSabotageStation: (station) => {
+        if (!mission15.started) window.__arcaDebug?.startMission15();
+        const target =
+          station === 'supply'
+            ? auroraSupplyPosition
+            : station === 'door'
+              ? auroraSealedDoorPosition
+              : station === 'terminal'
+                ? auroraTraceNodes.terminalPosition
+                : station === 'core'
+                  ? auroraHabitatModule.interactionPosition
+                  : station === 'energy'
+                    ? auroraParasiteNodes.positions[0]
+                    : station === 'life'
+                      ? auroraParasiteNodes.positions[1]
+                      : auroraParasiteNodes.positions[2];
+        const x = target.x + 2;
+        const z = target.z + 2;
+        const y = planetaryWorld.getHeightAt(x, z);
+        // Keep the ship with the pilot so a station teleport never strands.
+        ship.position.set(x + 14, y + surfaceHoverHeight, z + 14);
+        velocity.set(0, 0, 0);
+        shipAltitudeHoldY = ship.position.y;
+        shipPreviousY = ship.position.y;
+        previousVerticalInput = 0;
+        if (!playerModeSystem.onFootActive) window.__arcaDebug?.setPlayerMode('onFoot');
+        surfaceCharacter.placeAt(new THREE.Vector3(x, y + 0.04, z), Math.PI);
+        syncMission15Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return [x, y, z] as [number, number, number];
+      },
+      completeAuroraRoutine: () => {
+        if (!mission15.started) window.__arcaDebug?.startMission15();
+        mission15.forceRoutineComplete();
+        syncMission15Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission15.state.auroraRoutineComplete;
+      },
+      releaseSealedModule: () => {
+        if (!mission15.started) window.__arcaDebug?.startMission15();
+        mission15.forceModuleReleased();
+        syncMission15Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission15.state.auroraModuleReleased;
+      },
+      confirmCoordinatedFailure: () => {
+        if (!mission15.started) window.__arcaDebug?.startMission15();
+        mission15.forceFailureConfirmed();
+        syncMission15Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission15.state.auroraCoordinatedFailureConfirmed;
+      },
+      locateParasite: (index) => {
+        if (!mission15.started) window.__arcaDebug?.startMission15();
+        mission15.forceParasiteLocated(index);
+        syncMission15Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission15.parasitesFound;
+      },
+      disableParasite: (index) => {
+        if (!mission15.started) window.__arcaDebug?.startMission15();
+        mission15.forceParasiteDisabled(index);
+        syncMission15Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission15.parasitesDisabled;
+      },
+      resolveCentralOverload: () => {
+        if (!mission15.started) window.__arcaDebug?.startMission15();
+        mission15.forceOverloadResolved();
+        coalitionSabotageEffect.setOverload(0);
+        syncMission15Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission15.state.auroraCentralOverloadResolved;
+      },
+      completeMission15: () => {
+        if (!mission15.completed) {
+          if (!mission15.started) window.__arcaDebug?.startMission15();
+          mission15.forceComplete();
+          coalitionSabotageEffect.setStress(0);
+          coalitionSabotageEffect.setOverload(0);
+          syncMission15Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission15.completed;
+      },
+      getMission15State: () => mission15.snapshot(),
+      getMission15SequenceState: () => ({
+        sequence: [...mission15.sequenceSymbols],
+        visualStep: mission15.sequenceVisualStep,
+        logicalStep: mission15.sequenceMatchedCount,
+        expectedSymbol: mission15.sequenceExpectedSymbol,
+        highlightedSymbol: mission15.sequenceHighlightedSymbol,
+        interactedSymbol: mission15.sequenceLastInteractedSymbol,
+        inputConsumed: mission15.sequenceInputWasConsumed,
+        inputLockRemaining: mission15.sequenceInputLockRemaining(clock.elapsedTime),
+        errorActive: mission15.sequenceErrorActive,
+        feedback: mission15.sequenceFeedbackState,
+        completed: mission15.state.auroraCommsSequenceCompleted
+      }),
+      answerMission15Symbol: (symbolId) => {
+        const result = mission15.answerSequence(symbolId, clock.elapsedTime, true);
+        if (result !== 'ignored') {
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return result;
+      },
+      getSabotageReadout: () => ({ ...mission15.readout }),
+      getCoalitionTraceReadout: () => ({ ...mission14.readout }),
+      // --- Mission 16: Protocolo Pleyadiano ---
+      startMission16: () => {
+        if (!mission15.completed) window.__arcaDebug?.completeMission15();
+        const started = startMission16IfReady();
+        syncMission16Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission16.started;
+      },
+      establishTripleLink: () => {
+        if (!mission16.started) window.__arcaDebug?.startMission16();
+        mission16.forceTripleLink();
+        syncMission16Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission16.state.tripleLinkEstablished;
+      },
+      recoverAtlasKey: () => {
+        if (!mission16.started) window.__arcaDebug?.startMission16();
+        mission16.forceAtlasKey();
+        syncMission16Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission16.state.atlasKeyRecovered;
+      },
+      revealSeedWorld: () => {
+        if (!mission16.started) window.__arcaDebug?.startMission16();
+        mission16.forceRevelation();
+        mission16SeedWorldAnnounced = true;
+        syncMission16Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission16.state.pleyadianSeedRevealed;
+      },
+      unlockDefenseProtocol: (index) => {
+        if (!mission16.started) window.__arcaDebug?.startMission16();
+        mission16.forceProtocolUnlocked(Math.floor(index));
+        syncMission16Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission16.protocolsUnlockedCount;
+      },
+      synchronizePleyadianNode: (index) => {
+        if (!mission16.started) window.__arcaDebug?.startMission16();
+        mission16.forceNodeSynchronized(Math.floor(index));
+        syncMission16Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission16.nodesSynchronizedCount;
+      },
+      runDefenseSimulation: () => {
+        if (!mission16.started) window.__arcaDebug?.startMission16();
+        mission16.forceSimulationComplete();
+        syncMission16Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission16.state.simulationComplete;
+      },
+      completeMission16: () => {
+        if (!mission16.completed) {
+          if (!mission16.started) window.__arcaDebug?.startMission16();
+          mission16.forceComplete();
+          mission16SeedWorldAnnounced = true;
+          syncMission16Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission16.completed;
+      },
+      getMission16State: () => mission16.snapshot(),
+      getPleyadianProtocolReadout: () => ({ ...mission16.readout }),
+      // --- Mission 17: Preparativos de Defensa ---
+      startMission17: () => {
+        if (!mission16.completed) window.__arcaDebug?.completeMission16();
+        const started = startMission17IfReady();
+        syncMission17Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission17.started;
+      },
+      reviewDefenseCouncil: () => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceCouncil();
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.state.councilReviewed;
+      },
+      activateEnergyReserve: () => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceEnergyReserve();
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.state.energyReserveOnline;
+      },
+      deployDefenseSensor: (index) => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceSensorsDeployed(Math.floor(index));
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.sensorsDeployedCount;
+      },
+      calibrateDefenseDetection: () => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceCalibration();
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.state.sensorsCalibrated;
+      },
+      installShieldEmitter: (index) => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceEmittersInstalled(Math.floor(index));
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.emittersInstalledCount;
+      },
+      establishAlertNetwork: () => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceAlertNetwork();
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.state.alertNetworkOnline;
+      },
+      markEvacuationRoutes: () => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceEvacuation();
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.state.evacuationRoutesMarked;
+      },
+      runDefenseDrill: () => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceDrill();
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.state.defenseDrillComplete;
+      },
+      stabilizeDefenseOverload: () => {
+        if (!mission17.started) window.__arcaDebug?.startMission17();
+        mission17.forceOverloadStabilized();
+        syncMission17Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission17.state.overloadStabilized;
+      },
+      completeMission17: () => {
+        if (!mission17.completed) {
+          if (!mission17.started) window.__arcaDebug?.startMission17();
+          mission17.forceComplete();
+          mission17SignaturesAnnounced = true;
+          syncMission17Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission17.completed;
+      },
+      getMission17State: () => mission17.snapshot(),
+      getDefensePreparationsReadout: () => ({ ...mission17.readout }),
+      // --- Mission 18: Primer Fuego ---
+      startMission18: () => {
+        if (!mission17.completed) window.__arcaDebug?.completeMission17();
+        const started = startMission18IfReady();
+        syncMission18Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission18.started;
+      },
+      activateEmergencyProtocol: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceEmergencyProtocol();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.emergencyProtocolActive;
+      },
+      identifyHostileDrones: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceHostilesIdentified();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.hostilesIdentified;
+      },
+      authorizeDefenseWeapons: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceWeaponsAuthorized();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.defenseWeaponsAuthorized;
+      },
+      clearFirstWave: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceFirstWaveCleared();
+        coalitionDrones.clearAll();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.firstWaveCleared;
+      },
+      stabilizeCriticalSystem: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceCriticalStabilized();
+        coalitionDrones.clearAll();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.criticalSystemStabilized;
+      },
+      completeDroneIntercept: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceInterceptComplete();
+        coalitionDrones.clearAll();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.interceptComplete;
+      },
+      defendAuroraShield: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceShieldDefended();
+        coalitionDrones.clearAll();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.shieldDefended;
+      },
+      completeEnemyTransmission: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceTransmissionSent();
+        coalitionDrones.clearAll();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.enemyTransmissionSent;
+      },
+      recoverDroneWreckage: () => {
+        if (!mission18.started) window.__arcaDebug?.startMission18();
+        mission18.forceWreckageRecovered();
+        syncMission18Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission18.state.wreckageRecovered;
+      },
+      completeMission18: () => {
+        if (!mission18.completed) {
+          if (!mission18.started) window.__arcaDebug?.startMission18();
+          mission18.forceComplete();
+          coalitionDrones.clearAll();
+          mission18.setActiveDrones(0);
+          syncMission18Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission18.completed;
+      },
+      getMission18State: () => mission18.snapshot(),
+      getFirstFireReadout: () => ({ ...mission18.readout }),
+      // --- Mission 19: Nereida bajo Ataque ---
+      startMission19: () => {
+        if (!mission18.completed) window.__arcaDebug?.completeMission18();
+        const started = startMission19IfReady();
+        syncMission19Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission19.started;
+      },
+      confirmNereidaEmergency: () => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceEmergencyConfirmed();
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.emergencyCallConfirmed;
+      },
+      clearNereidaAirspace: () => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceAirspaceCleared();
+        coalitionDrones.clearAll();
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.airspaceCleared;
+      },
+      landAtNereida: () => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceLanded();
+        coalitionDrones.clearAll();
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.landedAtNereida;
+      },
+      restoreNereidaDefense: (index) => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceDefensesRestored(Math.floor(index));
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.defensesRestoredCount;
+      },
+      repelNereidaIncursion: () => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceIncursionRepelled();
+        coalitionBreachDrones.clearAll();
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.groundIncursionRepelled;
+      },
+      protectAtlasCore: () => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceAtlasProtected();
+        coalitionBreachDrones.clearAll();
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.atlasProtected;
+      },
+      setOperationalPriority: (priority) => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forcePriority(priority);
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.operationalPriority;
+      },
+      activateNereidaCounterattack: () => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceCounterattack();
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.counterattackActivated;
+      },
+      confirmNereidaDataLeak: () => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceDataLeak();
+        coalitionBreachDrones.clearAll();
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.dataLeakConfirmed;
+      },
+      recoverNereidaWreckage: () => {
+        if (!mission19.started) window.__arcaDebug?.startMission19();
+        mission19.forceWreckageRecovered();
+        syncMission19Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission19.state.nereidaWreckageRecovered;
+      },
+      completeMission19: () => {
+        if (!mission19.completed) {
+          if (!mission19.started) window.__arcaDebug?.startMission19();
+          mission19.forceComplete();
+          coalitionBreachDrones.clearAll();
+          coalitionDrones.clearAll();
+          syncMission19Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission19.completed;
+      },
+      getMission19State: () => mission19.snapshot(),
+      getNereidaDefenseReadout: () => ({ ...mission19.readout }),
+      // --- Mission 20: Batalla por el Arca ---
+      startMission20: () => {
+        if (!mission19.completed) window.__arcaDebug?.completeMission19();
+        const started = startMission20IfReady();
+        syncMission20Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission20.started;
+      },
+      completeArkAscent: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceAscent();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.ascentComplete;
+      },
+      rendezvousWithArk: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceRendezvous();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.arkReached;
+      },
+      restoreArkLink: (index) => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceLinksRestored(Math.floor(index));
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.linksRestoredCount;
+      },
+      clearArkFirstWave: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceFirstWave();
+        coalitionDrones.clearAll();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.arkFirstWaveCleared;
+      },
+      locateArkJammer: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceJammerLocated();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.jammerLocated;
+      },
+      disableArkJammer: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceJammerDisabled();
+        coalitionJammer.clear();
+        coalitionDrones.clearAll();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.jammerDisabled;
+      },
+      defendArkEngines: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceEnginesDefended();
+        coalitionDrones.clearAll();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.enginesDefended;
+      },
+      protectCivilianModules: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceModulesProtected();
+        coalitionDrones.clearAll();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.civilianModulesProtected;
+      },
+      stopArkDataBreach: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceBreachStopped();
+        coalitionDrones.clearAll();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.dataBreachStopped;
+      },
+      activateArkCounterattack: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceCounterattack();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.arkCounterattackActive;
+      },
+      clearArkFinalWave: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceFinalWave();
+        coalitionDrones.clearAll();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.finalWaveCleared;
+      },
+      stabilizeArk: () => {
+        if (!mission20.started) window.__arcaDebug?.startMission20();
+        mission20.forceStabilized();
+        syncMission20Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission20.state.arkStabilized;
+      },
+      completeMission20: () => {
+        if (!mission20.completed) {
+          if (!mission20.started) window.__arcaDebug?.startMission20();
+          mission20.forceComplete();
+          coalitionDrones.clearAll();
+          coalitionJammer.clear();
+          syncMission20Visuals();
+          saveProgress();
+          updateHud(Number.POSITIVE_INFINITY);
+        }
+        return mission20.completed;
+      },
+      getMission20State: () => mission20.snapshot(),
+      getArkBattleReadout: () => ({ ...mission20.readout }),
+      // --- Mission 21: La ruptura del Silencio ---
+      startMission21: () => {
+        if (!mission20.completed) window.__arcaDebug?.completeMission20();
+        const started = startMission21IfReady();
+        syncMission21Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission21.started;
+      },
+      alignMission21Channel: (index) => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceTransmissionChannels(Math.floor(index));
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.alignedChannelCount;
+      },
+      decryptCoalitionTransmission: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceTransmissionDecoded();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.state.transmissionDecoded;
+      },
+      detectCoalitionCapitalShip: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceCapitalDetected();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.state.capitalShipDetected;
+      },
+      analyzeCoalitionCapitalSignature: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceSignatureAnalyzed();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.state.capitalSignatureAnalyzed;
+      },
+      receiveCoalitionUltimatum: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceUltimatum();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.state.ultimatumReceived;
+      },
+      chooseCoalitionResponse: (tone) => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceUltimatum();
+        chooseMission21Response(tone);
+        syncMission21Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.state.coalitionResponseTone;
+      },
+      restoreMission21Channel: (index) => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceEnclaveChannels(Math.floor(index));
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.restoredChannelCount;
+      },
+      restoreAllMission21Channels: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceChannelsRestored();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.restoredChannelCount;
+      },
+      witnessCoalitionDemonstration: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceDemonstration();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.state.demonstrationObserved;
+      },
+      classifyMission21Route: (index) => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceAttackRoutes(Math.floor(index));
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.classifiedRouteCount;
+      },
+      classifyAllMission21Routes: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceRoutesClassified();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.classifiedRouteCount;
+      },
+      activateMission21PleyadianNetwork: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceNetworkActivated();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.state.pleyadianNetworkActivated;
+      },
+      completeMission21: () => {
+        if (!mission21.started) window.__arcaDebug?.startMission21();
+        mission21.forceComplete();
+        syncMission21Visuals();
+        saveProgress();
+        updateHud(Number.POSITIVE_INFINITY);
+        return mission21.completed;
+      },
+      getMission21State: () => mission21.snapshot(),
+      getMission21Readout: () => ({ ...mission21.readout }),
+      // --- Mission 22: Frentes rotos ---
+      startMission22: () => {
+        const started = startMission22IfReady();
+        syncMission22Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission22.started;
+      },
+      acknowledgeMission22Alarm: () => {
+        mission22.forceAlarm();
+        commitMission22DebugMutation();
+        return mission22.step;
+      },
+      accessMission22CommandTerminal: () => {
+        mission22.forceCommandTerminal();
+        commitMission22DebugMutation();
+        return mission22.step;
+      },
+      assignMission22InitialResource: (resource, front) => {
+        const assigned = mission22.assignInitialResource(resource, front);
+        commitMission22DebugMutation();
+        return assigned;
+      },
+      assignAllMission22InitialResources: () => {
+        mission22.forceCommandTerminal();
+        if (mission22.activeInitialResource === 'energy') mission22.assignInitialResource('energy', 'aurora');
+        if (mission22.activeInitialResource === 'defense') mission22.assignInitialResource('defense', 'nereida');
+        if (mission22.activeInitialResource === 'communications') mission22.assignInitialResource('communications', 'orbital');
+        return commitMission22DebugMutation();
+      },
+      applyMission22Pressure: (seconds) => {
+        mission22.updateStrategicPressure(Math.max(0, Math.min(120, seconds)));
+        return commitMission22DebugMutation();
+      },
+      completeMission22AuroraFront: () => {
+        mission22.forceAuroraFront();
+        return commitMission22DebugMutation(true);
+      },
+      completeMission22NereidaFront: () => {
+        mission22.forceNereidaFront();
+        return commitMission22DebugMutation(true);
+      },
+      protectMission22Relay: (index) => {
+        mission22.forceNereidaFront();
+        if (mission22.step === 'defendOrbitalFront') mission22.protectOrbitalRelay(index);
+        commitMission22DebugMutation(true);
+        return mission22.relaysProtected;
+      },
+      protectAllMission22Relays: () => {
+        mission22.forceOrbitalFront();
+        return commitMission22DebugMutation(true);
+      },
+      manageMission22CrossFrontCrisis: () => {
+        mission22.forceCrisis();
+        return commitMission22DebugMutation(true);
+      },
+      chooseMission22Support: (front) => {
+        mission22.forceSupport(front);
+        return commitMission22DebugMutation();
+      },
+      restoreMission22JointNetwork: () => {
+        mission22.forceJointNetwork();
+        return commitMission22DebugMutation();
+      },
+      detectMission22CoordinationNode: (index) => {
+        mission22.forceCoordinationNodes(index);
+        commitMission22DebugMutation();
+        return mission22.nodesDetected;
+      },
+      detectAllMission22CoordinationNodes: () => {
+        mission22.forceCoordinationNodes();
+        return commitMission22DebugMutation();
+      },
+      completeMission22: () => {
+        if (!mission22.started) window.__arcaDebug?.startMission22();
+        mission22.forceComplete();
+        return commitMission22DebugMutation(true);
+      },
+      getMission22State: () => mission22.snapshot(),
+      getMission22Readout: () => ({ ...mission22.readout }),
+      // --- Mission 23: La contraofensiva ---
+      startMission23: () => {
+        if (!mission22.completed) window.__arcaDebug?.completeMission22();
+        const started = startMission23IfReady();
+        syncMission23Visuals();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission23.started;
+      },
+      completeMission23Council: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceCouncil();
+        return commitMission23DebugMutation();
+      },
+      synchronizeMission23Forces: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceSynchronization();
+        return commitMission23DebugMutation();
+      },
+      chooseMission23TargetOrder: (first) => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceSynchronization();
+        if (mission23.step === 'chooseTargetOrder') chooseMission23TargetOrder(first);
+        return commitMission23DebugMutation();
+      },
+      recordMission23JammerReading: (index) => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceOrder(mission23.state.mission23TargetOrder[0] === 'logistics' ? 'logistics' : 'jammer');
+        if (mission23.step === 'approachLogisticsPlatform') mission23.forcePlatformDestroyed();
+        if (mission23.step === 'approachJammerNode') mission23.recordJammerReading(Math.floor(index));
+        commitMission23DebugMutation();
+        return mission23.readingsCount;
+      },
+      recordAllMission23JammerReadings: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceJammerReadings();
+        commitMission23DebugMutation();
+        return mission23.readingsCount;
+      },
+      destroyMission23Jammer: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceJammerDestroyed();
+        coalitionJammer.clear();
+        coalitionDrones.clearAll();
+        return commitMission23DebugMutation();
+      },
+      reachMission23Platform: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forcePlatformReached();
+        return commitMission23DebugMutation();
+      },
+      disableMission23PlatformDefense: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forcePlatformReached();
+        if (mission23.step === 'disablePlatformDefenses' && !mission23.state.platformDefensesDisabled) {
+          mission23.disablePlatformModule('defense');
+        }
+        return commitMission23DebugMutation(true);
+      },
+      disableMission23PlatformEnergy: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forcePlatformReached();
+        if (mission23.step === 'disablePlatformDefenses' && !mission23.state.platformDefensesDisabled) mission23.disablePlatformModule('defense');
+        if (mission23.step === 'disablePlatformDefenses' && !mission23.state.platformEnergyDisabled) mission23.disablePlatformModule('energy');
+        return commitMission23DebugMutation(true);
+      },
+      chooseMission23PlatformMethod: (method) => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forcePlatformModules();
+        if (mission23.step === 'destroyLogisticsCore') chooseMission23PlatformMethod(method);
+        return commitMission23DebugMutation();
+      },
+      destroyMission23Platform: (method = 'controlledDestruction') => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forcePlatformDestroyed(method);
+        return commitMission23DebugMutation(true);
+      },
+      reachMission23JumpBeacon: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forcePrimaryTargets();
+        if (mission23.step === 'approachJumpBeacon') mission23.reachJumpBeacon();
+        return commitMission23DebugMutation(true);
+      },
+      disableMission23BeaconAnchor: (index) => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceBeaconAnchors(Math.floor(index));
+        commitMission23DebugMutation(true);
+        return mission23.anchorsDisabled;
+      },
+      disableAllMission23BeaconAnchors: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceBeaconAnchors();
+        commitMission23DebugMutation(true);
+        return mission23.anchorsDisabled;
+      },
+      collapseMission23JumpBeacon: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceBeaconCollapsed();
+        return commitMission23DebugMutation(true);
+      },
+      completeMission23Escape: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceEscape();
+        return commitMission23DebugMutation(true);
+      },
+      recoverMission23EnemyRoute: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceRouteRecovered();
+        return commitMission23DebugMutation(true);
+      },
+      completeMission23: () => {
+        if (!mission23.started) window.__arcaDebug?.startMission23();
+        mission23.forceComplete();
+        return commitMission23DebugMutation(true);
+      },
+      teleportToMission23Target: () => {
+        const target = getMission23StationPosition();
+        ship.position.copy(target).add(mission23Scratch.set(0, 12, 90));
+        velocity.set(0, 0, 0);
+        requestCameraFollowSync('mission23-debug-target');
+        updateHud(Number.POSITIVE_INFINITY);
+        return ship.position.toArray() as [number, number, number];
+      },
+      getMission23State: () => mission23.snapshot(),
+      getMission23Readout: () => ({ ...mission23.readout }),
+      getMission23VisualState: () => {
+        let platformMeshes = 0;
+        let beaconMeshes = 0;
+        coalitionLogisticsPlatform.group.traverse((object) => { if ((object as THREE.Mesh).isMesh) platformMeshes += 1; });
+        coalitionJumpBeacon.group.traverse((object) => { if ((object as THREE.Mesh).isMesh) beaconMeshes += 1; });
+        return {
+          platformBuilt: coalitionLogisticsPlatform.isBuilt,
+          platformVisible: coalitionLogisticsPlatform.isVisible,
+          platformMeshes,
+          platformSceneInstances: scene.children.filter((object) => object === coalitionLogisticsPlatform.group).length,
+          platformActiveModules: coalitionLogisticsPlatform.activeModuleCount,
+          beaconBuilt: coalitionJumpBeacon.isBuilt,
+          beaconVisible: coalitionJumpBeacon.isVisible,
+          beaconMeshes,
+          beaconSceneInstances: scene.children.filter((object) => object === coalitionJumpBeacon.group).length,
+          anchorTargetCount: coalitionJumpBeacon.anchorTargets.length,
+          visibleAnchorCount: coalitionJumpBeacon.visibleAnchorCount,
+          jammerActive: coalitionJammer.isActive,
+          activeHostiles: coalitionDrones.activeCount,
+          lockDegraded: mission23.jammed
+        };
+      },
+      // --- Mission 24: Regreso al origen ---
+      startMission24: () => {
+        if (!mission23.completed) window.__arcaDebug?.completeMission23();
+        const started = startMission24IfReady();
+        updateHud(Number.POSITIVE_INFINITY);
+        return started || mission24.started;
+      },
+      decodeMission24ReturnRoute: () => {
+        if (!mission24.started) window.__arcaDebug?.startMission24();
+        mission24.decodeReturnRoute();
+        return commitMission24DebugMutation();
+      },
+      prepareMission24Launch: () => {
+        if (!mission24.started) window.__arcaDebug?.startMission24();
+        mission24.forceTo('prepareLaunch');
+        mission24.prepareLaunch();
+        return commitMission24DebugMutation();
+      },
+      boardMission24Ship: () => {
+        if (!mission24.started) window.__arcaDebug?.startMission24();
+        mission24.forceTo('boardShip');
+        playerModeSystem.forceShip(true, cameraModeSystem.mode === 'cockpit');
+        surfaceCharacter.setVisible(false);
+        shipAccessLift.group.visible = false;
+        mission24.confirmBoarded();
+        return commitMission24DebugMutation();
+      },
+      startMission24Ignition: () => {
+        if (!mission24.started) window.__arcaDebug?.startMission24();
+        mission24.forceTo('ignitionSequence');
+        return mission24.armIgnition();
+      },
+      completeMission24Ignition: () => {
+        if (!mission24.started) window.__arcaDebug?.startMission24();
+        mission24.forceTo('lowAtmosphereAscent');
+        atmosphericAscent.begin(ship.position, smoothYaw);
+        atmosphericAscentEffect.activate(ship.position);
+        return commitMission24DebugMutation();
+      },
+      restoreMission24Checkpoint: (step) => restoreMission24DebugCheckpoint(step),
+      completeMission24Ascent: () => restoreMission24DebugCheckpoint('stabilizeOrbit'),
+      completeMission24OrbitalInsertion: () => restoreMission24DebugCheckpoint('stabilizeOrbit'),
+      stabilizeMission24Orbit: () => restoreMission24DebugCheckpoint('approachArk'),
+      orientMission24ShipToTarget: () => {
+        mission24Scratch.copy(getMission24StationPosition()).sub(ship.position);
+        const distance = mission24Scratch.length();
+        if (distance > 0.001) {
+          mission24Scratch.multiplyScalar(1 / distance);
+          yaw = Math.atan2(-mission24Scratch.x, -mission24Scratch.z);
+          pitch = Math.asin(THREE.MathUtils.clamp(mission24Scratch.y, -1, 1));
+          smoothYaw = yaw;
+          smoothPitch = pitch;
+          ship.rotation.set(smoothPitch, smoothYaw, 0);
+          velocity.set(0, 0, 0);
+          requestCameraFollowSync('mission24-debug-orient');
+        }
+        return distance;
+      },
+      teleportToMission24Target: () => {
+        const target = getMission24StationPosition();
+        ship.position.copy(target).add(mission24Scratch.set(0, 0, mission24.step === 'detectFinalFleet' ? 0 : 18));
+        velocity.set(0, 0, 0);
+        requestCameraFollowSync('mission24-debug-target');
+        updateHud(Number.POSITIVE_INFINITY);
+        return ship.position.toArray() as [number, number, number];
+      },
+      advanceMission24Interaction: () => {
+        performMission24Interaction(ship.position);
+        return commitMission24DebugMutation();
+      },
+      assessAllMission24ArkSystems: () => {
+        mission24.forceTo('assessArkDamage');
+        while (mission24.step === 'assessArkDamage' && mission24.activeArkSystemIndex >= 0) {
+          mission24.assessArkSystem(mission24.activeArkSystemIndex);
+        }
+        return commitMission24DebugMutation();
+      },
+      restoreAllMission24EnclaveLinks: () => {
+        mission24.forceTo('restoreEnclaveLinks');
+        while (mission24.step === 'restoreEnclaveLinks' && mission24.activeEnclaveLinkIndex >= 0) {
+          mission24.restoreEnclaveLink(mission24.activeEnclaveLinkIndex);
+        }
+        return commitMission24DebugMutation();
+      },
+      prepareAllMission24ArkSystems: () => {
+        mission24.forceTo('prepareArkSystems');
+        while (mission24.step === 'prepareArkSystems' && mission24.activeArkPreparationIndex >= 0) {
+          mission24.prepareArkSystem(mission24.activeArkPreparationIndex);
+        }
+        return commitMission24DebugMutation();
+      },
+      integrateAllMission24PleyadianNodes: () => {
+        mission24.forceTo('integratePleyadianNetwork');
+        while (mission24.step === 'integratePleyadianNetwork' && mission24.activePleyadianNodeIndex >= 0) {
+          mission24.integratePleyadianNode(mission24.activePleyadianNodeIndex);
+        }
+        return commitMission24DebugMutation();
+      },
+      prepareMission24CivilianShelters: () => {
+        mission24.forceTo('prepareCivilianShelters');
+        mission24.prepareCivilianShelters();
+        return commitMission24DebugMutation();
+      },
+      assembleMission24AlliedForces: () => {
+        mission24.forceTo('assembleAlliedForces');
+        mission24.assembleAlliedForces();
+        return commitMission24DebugMutation();
+      },
+      revisitAllMission24StartingSectorPoints: () => {
+        mission24.forceTo('revisitStartingSector');
+        while (mission24.step === 'revisitStartingSector' && mission24.activeStartingSectorIndex >= 0) {
+          mission24.visitStartingSectorPoint(mission24.activeStartingSectorIndex);
+        }
+        return commitMission24DebugMutation();
+      },
+      completeMission24DefenseRehearsal: () => {
+        mission24.forceTo('runDefenseRehearsal');
+        mission24.updateDefenseRehearsal(mission24Tuning.rehearsalSeconds, true);
+        return commitMission24DebugMutation();
+      },
+      detectMission24FinalFleet: () => {
+        mission24.forceTo('detectFinalFleet');
+        mission24.detectFinalFleet();
+        return commitMission24DebugMutation();
+      },
+      completeMission24: () => {
+        if (!mission24.started) window.__arcaDebug?.startMission24();
+        mission24.forceTo('completed');
+        return commitMission24DebugMutation();
+      },
+      getMission24State: () => mission24.snapshot(),
+      getArkDepartureState: () => ({
+        ...arkDeparture.snapshot(),
+        docked: arkDeparture.docked,
+        translationLocked: arkDeparture.translationLocked,
+        weaponsLocked: arkDeparture.weaponsLocked,
+        thrustLimit: arkDeparture.thrustLimit,
+        preflightProgress: Number(arkDeparture.preflightProgress.toFixed(1)),
+        clampProgress: Number(arkDeparture.clampProgress.toFixed(3)),
+        systemsConfirmed: arkDeparture.systemsConfirmed,
+        statusLabel: arkDeparture.statusLabel,
+        anchorDistance: Number(arkDeparture.anchorDistance.toFixed(2)),
+        shipSpeed: Number(velocity.length().toFixed(2)),
+        // Scene-graph facts the probe needs to prove nothing was duplicated
+        // and that the Ark itself was never rebuilt or moved.
+        shipParentIsArk: ship.parent !== scene,
+        shipCount: countSceneObjectsByName('Player Scout Ship'),
+        mothershipCount: countSceneObjectsByName('Arca Epsilon Mothership'),
+        mothershipUuid: mothership.group.uuid,
+        mothershipPosition: mothership.group.position.toArray() as [number, number, number],
+        mothershipScale: mothership.group.scale.toArray() as [number, number, number],
+        dockingAssemblyBuilt: arkDockingAssembly.isBuilt,
+        currentDialogue: dialogueManager.getState().currentDialogueId || 'none'
+      }),
+      advanceArkDeparture: () => handleArkDepartureInteraction(),
+      forceArkPreflight: () => {
+        arkDeparture.forcePreflight();
+        return arkDeparture.step;
+      },
+      getMission24AscentState: () => ({ ...atmosphericAscent.metrics }),
+      getMission24Target: () => ({
+        name: getMission24StationLabel(),
+        position: getMission24StationPosition().toArray() as [number, number, number],
+        distance: getActivePlayerPosition().distanceTo(getMission24StationPosition())
+      }),
+      getMission24VisualState: () => ({
+        atmosphereBuilt: atmosphericAscentEffect.isBuilt,
+        cloudLayerVisible: atmosphericAscentEffect.cloudLayerVisible,
+        planetLimbVisible: atmosphericAscentEffect.planetLimbVisible,
+        starOpacity: atmosphericAscentEffect.starOpacity,
+        networkBuilt: arkFinalPreparationNetwork.isBuilt,
+        networkVisible: arkFinalPreparationNetwork.isVisible,
+        pleyadianNodeCount: arkFinalPreparationNetwork.visiblePleyadianNodeCount,
+        rehearsalTargetCount: arkFinalPreparationNetwork.rehearsalTargetCount,
+        rehearsalTargetsVisible: arkFinalPreparationNetwork.rehearsalTargetsVisible,
+        finalFleetVisible: arkFinalPreparationNetwork.finalFleetVisible,
+        finalFleetAttackable: arkFinalPreparationNetwork.finalFleetAttackable,
+        mothershipSceneInstances: scene.children.filter((object) => object === mothership.group).length
+      }),
+      getMission24PerformanceState: () => ({
+        activeTimers: 0,
+        maxFrameDisplacement: atmosphericAscent.metrics.maxFrameDisplacement,
+        atmosphereBuilt: atmosphericAscentEffect.isBuilt,
+        networkBuilt: arkFinalPreparationNetwork.isBuilt
+      }),
+      getMothershipIdentity: () => ({
+        uuid: mothership.group.uuid,
+        position: mothership.group.position.toArray() as [number, number, number],
+        scale: mothership.group.scale.toArray() as [number, number, number],
+        sceneInstances: scene.children.filter((object) => object === mothership.group).length
+      }),
+      getThreeFrontVisualState: () => {
+        let meshCount = 0;
+        threeFrontCommandNetwork.group.traverse((object) => {
+          if ((object as THREE.Mesh).isMesh) meshCount += 1;
+        });
+        return {
+          built: threeFrontCommandNetwork.isBuilt,
+          visible: threeFrontCommandNetwork.isVisible,
+          meshCount,
+          sceneInstances: scene.children.filter((object) => object === threeFrontCommandNetwork.group).length,
+          visibleRelayCount: threeFrontCommandNetwork.visibleRelayCount,
+          visibleNodeCount: threeFrontCommandNetwork.visibleNodeCount,
+          jointNetworkVisible: threeFrontCommandNetwork.jointNetworkVisible,
+          activeAirHostiles: coalitionDrones.activeCount,
+          activeBreachHostiles: coalitionBreachDrones.activeCount
+        };
+      },
+      getCoalitionCapitalVisualState: () => {
+        let meshCount = 0;
+        coalitionCapitalPresence.group.traverse((object) => {
+          if ((object as THREE.Mesh).isMesh) meshCount += 1;
+        });
+        return {
+          built: coalitionCapitalPresence.isBuilt,
+          visible: coalitionCapitalPresence.isVisible,
+          attackable: getWeaponTargets().some((target) => target.object === coalitionCapitalPresence.group),
+          meshCount,
+          activeRouteCount: coalitionCapitalPresence.activeRouteCount,
+          networkVisible: coalitionCapitalPresence.networkVisible,
+          remoteBeaconDestroyed: coalitionCapitalPresence.remoteBeaconDestroyed,
+          capitalPosition: coalitionCapitalPresence.capitalPosition.toArray() as [number, number, number]
+        };
+      },
+      // --- Premium visual layer (optional, decorative only) ---
+      togglePremiumVisuals: () => {
+        premiumVisuals.setEnabled(!premiumVisuals.isEnabled);
+        updateHud(Number.POSITIVE_INFINITY);
+        return premiumVisuals.isEnabled;
+      },
+      getPremiumVisualState: () => premiumVisuals.getState(),
+      setRenderProfile: (profile) => {
+        applyRenderProfile(profile);
+        updateHud(Number.POSITIVE_INFINITY);
+        return renderProfile;
+      },
+      getRenderProfile: () => renderProfile,
+      setLightBudgetEnabled: (enabled) => {
+        lightPoolEnabled = enabled;
+        return lightPoolEnabled;
+      },
+      setPremiumVisualQuality: (quality) => {
+        premiumVisuals.setQuality(quality);
+        return premiumVisuals.getState();
+      },
+      setPremiumAutoQualityEnabled: (enabled) => {
+        premiumVisuals.setAutoQualityEnabled(enabled);
+        return premiumVisuals.getState();
+      },
+      /**
+       * Steps every quality level and samples the reported frame rate at each
+       * one, then restores the level it started on. Purely a measurement aid.
+       */
+      benchmarkPremiumVisuals: async () => {
+        const original = premiumVisuals.getState().premiumVisualQuality;
+        const results: { quality: string; fps: number; particles: number; draws: number }[] = [];
+        for (const quality of ['low', 'medium', 'high'] as PremiumVisualQuality[]) {
+          premiumVisuals.setQuality(quality);
+          await new Promise((resolve) => window.setTimeout(resolve, 1600));
+          const state = premiumVisuals.getState();
+          results.push({
+            quality,
+            fps: diagnostics.data.fps,
+            particles: state.premiumParticleCount,
+            draws: state.premiumVisualDrawCalls
+          });
+        }
+        premiumVisuals.setQuality(original);
+        return results;
+      },
+      getCurrentObjectiveDisplay: () => getCurrentObjectiveDisplay(),
+      showDialogue: (id) => {
+        const shown = dialogueManager.trigger(id, { force: true, triggerId: 'debug' });
+        commsDialoguePanel.sync(dialogueManager.current);
+        return shown;
+      },
+      advanceDialogue: () => dialogueManager.advance(),
+      playCommanderVoice: (dialogueId: string) => voiceManager.playById(dialogueId),
+      stopCommanderVoice: () => {
+        voiceManager.stopCurrent(0.1);
+        return true;
+      },
+      getVoiceAudioState: () => voiceManager.state,
+      clearDialogueQueue: () => {
+        dialogueManager.clearQueue();
+        commsDialoguePanel.sync(undefined);
+        return dialogueManager.getState().queueLength;
+      },
+      resetPlayedDialogues: () => {
+        dialogueManager.resetPlayed();
+        mission03.reset();
+        mission04.reset();
+        mission05.reset();
+        mission06.reset();
+        mission07.reset();
+        mission21.reset();
+        mission22.reset();
+        mission23.reset();
+        mission24.reset();
+        mission22AnnouncedBeats.clear();
+        mission23AnnouncedBeats.clear();
+        mission24AnnouncedBeats.clear();
+        mission24OrbitalEnvironmentActive = false;
+        mission24RehearsalEngaged = false;
+        atmosphericAscent.reset();
+        atmosphericAscentEffect.setVisible(false);
+        mission24VisualState.visible = false;
+        arkFinalPreparationNetwork.setState(mission24VisualState);
+        mission24AscentHud.setVisible(false);
+        mission22CommandPanel.setVisible(false);
+        mission23ChoicePanel.setVisible(false);
+        mission08.reset();
+        mission09.reset();
+        mission10.reset();
+        mission10DeployStartedAt = -Infinity;
+        mission11.reset();
+        mission11DeployStartedAt = -Infinity;
+        mission12.reset();
+        mission12DescentElapsed = -1;
+        auroraNightBlend = 0;
+        mission13.reset();
+        auroraStormFogBoost = 0;
+        auroraStormEffect.setIntensity(0);
+        mission13Audio.restore('inactive', false);
+        mission14.reset();
+        coalitionTraceEffect.setIntensity(0);
+        mission14ExtractionLostAt = -Infinity;
+        mission15.reset();
+        coalitionSabotageEffect.setStress(0);
+        coalitionSabotageEffect.setOverload(0);
+        mission15OverloadWarnedAt = -Infinity;
+        mission06SyncEngaged = false;
+        mission08PurgeEngaged = false;
+        mission09HadWeakSignalWarning = false;
+        auroraTravelDirector.reset();
+        announcedAuroraLegs.clear();
+        auroraTravelFovOffset = 0;
+        syncMission06Visuals();
+        syncMission07Visuals();
+        syncMission21Visuals();
+        syncMission22Visuals();
+        clearMission23Encounter();
+        syncMission23Visuals();
+        syncMission24Visuals();
+        mission21ResponsePanel.setVisible(false);
+        syncMission08Visuals();
+        syncMission09Visuals();
+        syncMission10Visuals();
+        syncMission11Visuals();
+        syncMission12Visuals();
+        syncMission13Visuals();
+        syncMission14Visuals();
+        syncMission15Visuals();
+        signalTranslation.reset();
+        lastTranslatedFragmentCount = 0;
+        syncMission03Visuals();
+        syncMission04Visuals();
+        syncMission05Visuals();
+        lastDialogueObjectiveKey = '';
+        commsDialoguePanel.sync(undefined);
+        return dialogueManager.getState().playedDialogueCount;
+      },
+      getDialogueState: () => dialogueManager.getState(),
+      getShipBoardingState: () => {
+        const groundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+        if (playerModeSystem.onFootActive) refreshParkedShipMetrics(groundHeight);
+        const proximity = getBoardingProximity();
+        return {
+          shipPosition: ship.position.toArray() as [number, number, number],
+          terrainHeight: groundHeight,
+          hullBottom: parkedShipHullBottom,
+          terrainSeparation: parkedShipTerrainSeparation,
+          boardingAnchor: proximity.anchor.toArray() as [number, number, number],
+          horizontalDistance: proximity.horizontal,
+          verticalDifference: proximity.vertical,
+          boardingAvailable: proximity.available,
+          parked: playerModeSystem.onFootActive && parkedShipResolved,
+          playerShipInstances: cachedPlayerShipInstances
+        };
+      },
+      reconcileParkedShip: () => settleParkedShipOnTerrain(false),
+      setPlayerPosition: (x, y, z) => {
+        if (playerModeSystem.onFootActive) {
+          surfaceCharacter.placeAt(new THREE.Vector3(x, planetaryWorld.getHeightAt(x, z) + 0.04, z));
+        } else {
+          // A world-coordinate teleport is incompatible with being clamped to
+          // the Ark, where the ship's position is anchor-local.
+          standDownArkDeparture();
+          ship.position.set(x, y, z);
+          velocity.set(0, 0, 0);
+          shipAltitudeHoldY = inSurfacePhase ? y : undefined;
+          shipPreviousY = y;
+          previousVerticalInput = 0;
+        }
+        updateHud(Number.POSITIVE_INFINITY);
+        const activePosition = getActivePlayerPosition();
+        return [activePosition.x, activePosition.y, activePosition.z] as [number, number, number];
+      },
+      togglePause: () => {
+        setGamePaused(!gamePaused);
+        return gamePaused;
+      },
+      listLoadedAssets: () => getRuntimeAssetAudit().filter((asset) => asset.status === 'loaded'),
+      getAssetAudit: () => getRuntimeAssetAudit(),
+      getPerformanceSnapshot: () => ({ ...diagnostics.data, ...getPerformanceDiagnosticsPatch(true) }),
+      validateNoDuplicateCharacterMeshes: () => surfaceCharacter.visibleMeshCount <= 1,
+      validateNoDuplicateCockpitMeshes: () => cockpitInterior.visibleMeshCount <= 1,
+      listActiveHighPolyAssets: () => getActiveHighPolyAssets(),
+      saveGame: () => saveProgress(),
+      loadGame: () => {
+        const save = saveSystem.loadGame();
+        if (save) {
+          applySaveGame(save);
+        }
+        return save;
+      },
+      clearSave: () => {
+        saveSystem.clearSave();
+        colonyManager.reset();
+        resourceInventory.reset();
+        tutorialManager.restore([]);
+        dialogueManager.resetPlayed();
+        mission04.reset();
+        mission05.reset();
+        mission06.reset();
+        mission07.reset();
+        mission22.reset();
+        mission23.reset();
+        mission24.reset();
+        mission22AnnouncedBeats.clear();
+        mission23AnnouncedBeats.clear();
+        mission24AnnouncedBeats.clear();
+        mission24OrbitalEnvironmentActive = false;
+        mission24RehearsalEngaged = false;
+        atmosphericAscent.reset();
+        atmosphericAscentEffect.setVisible(false);
+        mission24VisualState.visible = false;
+        arkFinalPreparationNetwork.setState(mission24VisualState);
+        mission24AscentHud.setVisible(false);
+        mission22CommandPanel.setVisible(false);
+        mission23ChoicePanel.setVisible(false);
+        coalitionDrones.clearAll();
+        coalitionBreachDrones.clearAll();
+        for (let index = 0; index < threats.length; index += 1) {
+          threats[index].effect.group.visible = threats[index].target.health > 0;
+        }
+        mission06SyncEngaged = false;
+        syncMission06Visuals();
+        syncMission04Visuals();
+        syncMission05Visuals();
+        syncMission07Visuals();
+        syncMission22Visuals();
+        clearMission23Encounter();
+        syncMission23Visuals();
+        syncMission24Visuals();
+        lastDialogueObjectiveKey = '';
+        surfaceMission.updateFromColonyState(colonyManager.state);
+        colonyPanel.update(colonyManager.state);
+        updateHud(Number.POSITIVE_INFINITY);
+        return saveSystem.hasSave();
+      }
+    };
+  }
+
+updateDiscoveryList();
+updateHud(Number.POSITIVE_INFINITY);
+
+declare global {
+  interface Window {
+    webkitAudioContext?: typeof AudioContext;
+    __arcaGameReady?: boolean;
+    __arcaScene?: THREE.Scene;
+    __arcaRenderer?: THREE.WebGLRenderer;
+    __arcaMissionState?: ReturnType<MissionManager['update']>;
+    __arcaDebug?: {
+      setCameraMode: (mode: CameraMode) => CameraMode;
+      setCameraLookAt: (target: CameraLookAtInput) => CameraProbeResult | undefined;
+      lookAtDefenseBeacon: (index: number) => CameraProbeResult | undefined;
+      lookAtThreatSignature: () => CameraProbeResult | undefined;
+      getDefenseNetworkVisualState: () => DefenseNetworkVisualState;
+      getAudioState: () => AudioDebugState;
+      testShipEngineAudio: () => Promise<boolean>;
+      testPropulsionAcceleration: () => Promise<boolean>;
+      testVerticalThrustAudio: () => Promise<boolean>;
+      testBoostAudio: () => Promise<boolean>;
+      testWalkFootsteps: () => Promise<boolean>;
+      testRunFootsteps: () => Promise<boolean>;
+      getFootstepAudioState: () => import('./audio/FootstepAudio').FootstepAudioState;
+      setMusicState: (state: string) => string;
+      playSfx: (id: string) => Promise<boolean>;
+      testShipAltitudeHold: () => Promise<ShipAltitudeHoldTestResult>;
+      toggleCockpitView: () => CameraMode;
+      getInputActionState: () => InputActionState;
+      simulateAction: (action: GameInputAction) => boolean;
+      forceCameraMode: (mode: CameraMode | 'onFoot') => CameraMode | 'onFoot';
+      getCharacterControlState: () => CharacterControlState;
+      setOnFootCameraYaw: (value: number) => number;
+      setOnFootCameraPitch: (value: number) => number;
+      toggleCharacterDebug: () => boolean;
+      reloadCockpitGlb: () => Promise<CockpitGlbStatus>;
+      showCockpitScreenAnchors: (visible: boolean) => boolean;
+      hideExternalHudForCockpitCapture: (hidden: boolean) => boolean;
+      startCockpitShowcase: () => string;
+      advanceToMarker: () => string;
+      decodeMarker: () => string;
+      startEntry: () => string;
+      setEntryProgress: (percent: number) => number;
+      attemptEarlyDescent: () => boolean;
+      getDescentSafetyState: () => DescentSafetySnapshot;
+      finishEntry: () => string;
+      touchdown: () => string;
+      startSurfacePhase: () => string;
+      exitShip: () => PlayerMode;
+      enterShip: () => PlayerMode;
+      setPlayerMode: (mode: 'ship' | 'onFoot') => PlayerMode;
+      spawnCharacterAtShip: () => [number, number, number];
+      teleportCharacterToHabitat: () => [number, number, number];
+      teleportCharacterToResource: (type: SurfaceResourceType) => [number, number, number] | undefined;
+      teleportToWaterSite: () => [number, number, number] | undefined;
+      teleportToMineralSite: () => [number, number, number] | undefined;
+      teleportToEnergySite: () => [number, number, number] | undefined;
+      locateSurfaceSite: (type: SurfaceResourceType) => string;
+      sampleSurfaceSite: (type: SurfaceResourceType) => string;
+      getResourceInteractionPosition: (type: SurfaceResourceType) => [number, number, number] | undefined;
+      getResourceSiteDiagnostics: () => Record<string, ResourceSiteTerrainMetric>;
+      completeLanding: () => string;
+      deployHabitat: () => number;
+      revealSurfaceSites: () => boolean;
+      scanAllSurfaceResources: () => number;
+      makeBaseOperational: () => boolean;
+      analyzeSurfaceSamples: () => boolean;
+      startMission03: () => boolean;
+      calibrateMission03Communications: () => boolean;
+      teleportToResonadorAtlas: () => [number, number, number];
+      placeRelayBeacon: () => boolean;
+      completeSignalSync: () => number;
+      returnToBaseForTranslation: () => [number, number, number];
+      completeMission03Translation: () => Mission03StepId;
+      completePleyadanContact: () => boolean;
+      completeMission03: () => boolean;
+      getMission03State: () => Mission03DebugState;
+      resetMission03State: () => boolean;
+      startMission04: () => boolean;
+      calibrateMission04DefenseLink: () => boolean;
+      teleportToDefenseBeacon: (index: number) => [number, number, number] | undefined;
+      placeDefenseBeacon: (index: number) => boolean;
+      placeAllDefenseBeacons: () => number;
+      completeDefenseSync: () => number;
+      detectThreatSignature: () => boolean;
+      completeMission04: () => boolean;
+      getMission04State: () => Mission04DebugState;
+      resetMission04State: () => boolean;
+      startMission05: () => boolean;
+      teleportToSilentProbe: () => [number, number, number];
+      detectSilentProbe: () => boolean;
+      triggerInterference: () => boolean;
+      resolveEcho: (index: number) => boolean;
+      resolveAllEchoes: () => number;
+      completeCounterSignal: () => number;
+      completeMission05: () => boolean;
+      getMission05State: () => Mission05DebugState;
+      resetMission05State: () => boolean;
+      startMission06: () => boolean;
+      teleportToCloakingProjector: (index: number) => [number, number, number] | undefined;
+      placeCloakingProjector: (index: number) => boolean;
+      placeAllCloakingProjectors: () => boolean;
+      completeCloakingSync: () => number;
+      completeMission06: () => boolean;
+      getMission06State: () => Partial<import('./game/Mission06NereidaShield').Mission06Snapshot>;
+      startMission07: () => boolean;
+      teleportToAtlasFracture: () => [number, number, number];
+      scanAtlasEchoNode: (index: number) => boolean;
+      scanAllAtlasEchoNodes: () => number;
+      activateAtlasSeedArchive: () => boolean;
+      completeMission07: () => boolean;
+      getMission07State: () => Mission07DebugState;
+      startMission08: () => boolean;
+      teleportToSignalFracture: () => [number, number, number];
+      stabilizeFractureFocus: (index: number) => boolean;
+      stabilizeAllFractureFoci: () => number;
+      completeSignalPurge: () => number;
+      completeMission08: () => boolean;
+      getMission08State: () => Mission08DebugState;
+      startMission09: () => boolean;
+      analyzeResidualTrace: () => boolean;
+      teleportToAuroraBeacon: (index: number) => [number, number, number] | undefined;
+      scanAuroraBeacon: (index: number) => boolean;
+      scanAllAuroraBeacons: () => number;
+      teleportToAuroraThreshold: () => [number, number, number];
+      teleportToAuroraSegment: (index: number) => [number, number, number];
+      triggerAuroraStormMoment: () => string;
+      triggerAuroraPreReveal: () => string;
+      triggerAuroraReveal: () => boolean;
+      getAuroraTravelState: () => import('./game/AuroraTravelDirector').AuroraTravelState;
+      discoverAuroraSector: () => boolean;
+      completeMission09: () => boolean;
+      getMission09State: () => Mission09DebugState;
+      startMission10: () => boolean;
+      surveyAuroraValley: () => boolean;
+      teleportToAuroraSample: (kind: AuroraSampleKind) => [number, number, number];
+      teleportToAuroraWater: () => [number, number, number];
+      teleportToAuroraSoil: () => [number, number, number];
+      teleportToAuroraAtmospherePoint: () => [number, number, number];
+      teleportToAuroraBioSample: () => [number, number, number];
+      analyzeAuroraSample: (kind: AuroraSampleKind) => number;
+      analyzeAllAuroraSamples: () => number;
+      markAuroraSettlementSite: () => boolean;
+      deployAuroraModule: () => boolean;
+      stabilizeAuroraModule: () => number;
+      completeMission10: () => boolean;
+      getMission10State: () => Mission10DebugState;
+      startMission11: () => boolean;
+      teleportToAuroraStation: (station: 'core' | 'secondModule' | 'link' | 'water' | 'bed') => [number, number, number];
+      teleportToAuroraSecondModuleSite: () => [number, number, number];
+      teleportToAuroraWaterFilter: () => [number, number, number];
+      teleportToAuroraCultivationBed: () => [number, number, number];
+      runAuroraCoreDiagnostic: () => boolean;
+      markAuroraSecondModuleSite: () => boolean;
+      deployAuroraSecondModule: () => boolean;
+      connectAuroraEnergyLink: () => boolean;
+      installAuroraWaterFilter: () => boolean;
+      calibrateAuroraWaterFlow: () => number;
+      prepareAuroraCultivationBed: () => boolean;
+      startAuroraBioTrial: () => boolean;
+      completeAuroraImpactAssessment: () => boolean;
+      completeMission11: () => boolean;
+      getMission11State: () => Mission11DebugState;
+      startMission12: () => boolean;
+      prepareAuroraLifeSupport: () => boolean;
+      configureAuroraHabitation: () => boolean;
+      teleportToAuroraLandingZone: () => [number, number, number];
+      markAuroraLandingZone: () => boolean;
+      landAuroraCrewCapsule: () => boolean;
+      disembarkAuroraCrew: () => number;
+      startAuroraHumanLoadCycle: () => number;
+      recalibrateAuroraLifeSupport: () => boolean;
+      completeAuroraFirstNight: () => boolean;
+      completeMission12: () => boolean;
+      getMission12State: () => Mission12DebugState;
+      startMission13: () => boolean;
+      teleportToStormStation: (
+        station: 'generator' | 'antenna' | 'anchor1' | 'anchor2' | 'shield'
+      ) => [number, number, number];
+      acknowledgeStormAlert: () => boolean;
+      secureStormGenerator: () => boolean;
+      anchorStormAntenna: () => number;
+      activateStormAntenna: () => boolean;
+      chargeStormShield: () => boolean;
+      completeMission13: () => boolean;
+      getMission13State: () => Mission13DebugState;
+      getStormReadout: () => import('./game/Mission13FirstStorm').AuroraStormReadout;
+      startMission14: () => boolean;
+      teleportToTraceStation: (
+        station: 'power' | 'comms' | 'habitat' | 'terminal' | 'hidden'
+      ) => [number, number, number];
+      completeTraceInspections: () => number;
+      analyzeCoalitionSignature: () => boolean;
+      purgeCoalitionPowerNode: () => boolean;
+      purgeCoalitionCommsNode: () => boolean;
+      locateCoalitionHiddenNode: () => boolean;
+      extractCoalitionSample: () => boolean;
+      completeReverseTriangulation: () => boolean;
+      completeMission14: () => boolean;
+      getMission14State: () => Mission14DebugState;
+      startMission15: () => boolean;
+      teleportToSabotageStation: (
+        station: 'supply' | 'door' | 'terminal' | 'core' | 'energy' | 'life' | 'comms'
+      ) => [number, number, number];
+      completeAuroraRoutine: () => boolean;
+      releaseSealedModule: () => boolean;
+      confirmCoordinatedFailure: () => boolean;
+      locateParasite: (index: number) => number;
+      disableParasite: (index: number) => number;
+      resolveCentralOverload: () => boolean;
+      completeMission15: () => boolean;
+      getMission15State: () => Mission15DebugState;
+      getMission15SequenceState: () => {
+        sequence: number[];
+        visualStep: number;
+        logicalStep: number;
+        expectedSymbol: number;
+        highlightedSymbol: number;
+        interactedSymbol: number;
+        inputConsumed: boolean;
+        inputLockRemaining: number;
+        errorActive: boolean;
+        feedback: string;
+        completed: boolean;
+      };
+      answerMission15Symbol: (symbolId: number) => 'matched' | 'missed' | 'ignored';
+      getSabotageReadout: () => import('./game/Mission15AuroraSabotage').AuroraSabotageReadout;
+      getCoalitionTraceReadout: () => import('./game/Mission14CoalitionTrace').CoalitionTraceReadout;
+      startMission16: () => boolean;
+      establishTripleLink: () => boolean;
+      recoverAtlasKey: () => boolean;
+      revealSeedWorld: () => boolean;
+      unlockDefenseProtocol: (index: number) => number;
+      synchronizePleyadianNode: (index: number) => number;
+      runDefenseSimulation: () => boolean;
+      completeMission16: () => boolean;
+      getMission16State: () => Mission16DebugState;
+      getPleyadianProtocolReadout: () => import('./game/Mission16PleyadianProtocol').PleyadianProtocolReadout;
+      startMission17: () => boolean;
+      reviewDefenseCouncil: () => boolean;
+      activateEnergyReserve: () => boolean;
+      deployDefenseSensor: (index: number) => number;
+      calibrateDefenseDetection: () => boolean;
+      installShieldEmitter: (index: number) => number;
+      establishAlertNetwork: () => boolean;
+      markEvacuationRoutes: () => boolean;
+      runDefenseDrill: () => boolean;
+      stabilizeDefenseOverload: () => boolean;
+      completeMission17: () => boolean;
+      getMission17State: () => Mission17DebugState;
+      getDefensePreparationsReadout: () => import('./game/Mission17DefensePreparations').DefensePreparationsReadout;
+      startMission18: () => boolean;
+      activateEmergencyProtocol: () => boolean;
+      identifyHostileDrones: () => boolean;
+      authorizeDefenseWeapons: () => boolean;
+      clearFirstWave: () => boolean;
+      stabilizeCriticalSystem: () => boolean;
+      completeDroneIntercept: () => boolean;
+      defendAuroraShield: () => boolean;
+      completeEnemyTransmission: () => boolean;
+      recoverDroneWreckage: () => boolean;
+      completeMission18: () => boolean;
+      getMission18State: () => Mission18DebugState;
+      getFirstFireReadout: () => import('./game/Mission18FirstFire').FirstFireReadout;
+      startMission19: () => boolean;
+      confirmNereidaEmergency: () => boolean;
+      clearNereidaAirspace: () => boolean;
+      landAtNereida: () => boolean;
+      restoreNereidaDefense: (index: number) => number;
+      repelNereidaIncursion: () => boolean;
+      protectAtlasCore: () => boolean;
+      setOperationalPriority: (priority: 'atlasCore' | 'pleyadianRecords' | 'defensePower') => string;
+      activateNereidaCounterattack: () => boolean;
+      confirmNereidaDataLeak: () => boolean;
+      recoverNereidaWreckage: () => boolean;
+      completeMission19: () => boolean;
+      getMission19State: () => Mission19DebugState;
+      getNereidaDefenseReadout: () => import('./game/Mission19NereidaUnderAttack').NereidaDefenseReadout;
+      startMission20: () => boolean;
+      completeArkAscent: () => boolean;
+      rendezvousWithArk: () => boolean;
+      restoreArkLink: (index: number) => number;
+      clearArkFirstWave: () => boolean;
+      locateArkJammer: () => boolean;
+      disableArkJammer: () => boolean;
+      defendArkEngines: () => boolean;
+      protectCivilianModules: () => boolean;
+      stopArkDataBreach: () => boolean;
+      activateArkCounterattack: () => boolean;
+      clearArkFinalWave: () => boolean;
+      stabilizeArk: () => boolean;
+      completeMission20: () => boolean;
+      getMission20State: () => Mission20DebugState;
+      getArkBattleReadout: () => import('./game/Mission20ArkBattle').ArkBattleReadout;
+      startMission21: () => boolean;
+      alignMission21Channel: (index: number) => number;
+      decryptCoalitionTransmission: () => boolean;
+      detectCoalitionCapitalShip: () => boolean;
+      analyzeCoalitionCapitalSignature: () => boolean;
+      receiveCoalitionUltimatum: () => boolean;
+      chooseCoalitionResponse: (tone: Exclude<CoalitionResponseTone, 'none'>) => CoalitionResponseTone;
+      restoreMission21Channel: (index: number) => number;
+      restoreAllMission21Channels: () => number;
+      witnessCoalitionDemonstration: () => boolean;
+      classifyMission21Route: (index: number) => number;
+      classifyAllMission21Routes: () => number;
+      activateMission21PleyadianNetwork: () => boolean;
+      completeMission21: () => boolean;
+      getMission21State: () => Mission21DebugState;
+      getMission21Readout: () => import('./game/Mission21SilenceRupture').Mission21Readout;
+      startMission22: () => boolean;
+      acknowledgeMission22Alarm: () => string;
+      accessMission22CommandTerminal: () => string;
+      assignMission22InitialResource: (resource: Mission22ResourceId, front: Mission22FrontId) => boolean;
+      assignAllMission22InitialResources: () => Mission22DebugState;
+      applyMission22Pressure: (seconds: number) => Mission22DebugState;
+      completeMission22AuroraFront: () => Mission22DebugState;
+      completeMission22NereidaFront: () => Mission22DebugState;
+      protectMission22Relay: (index: number) => number;
+      protectAllMission22Relays: () => Mission22DebugState;
+      manageMission22CrossFrontCrisis: () => Mission22DebugState;
+      chooseMission22Support: (front: Mission22FrontId) => Mission22DebugState;
+      restoreMission22JointNetwork: () => Mission22DebugState;
+      detectMission22CoordinationNode: (index: number) => number;
+      detectAllMission22CoordinationNodes: () => Mission22DebugState;
+      completeMission22: () => Mission22DebugState;
+      getMission22State: () => Mission22DebugState;
+      getMission22Readout: () => import('./game/Mission22BrokenFronts').Mission22Readout;
+      startMission23: () => boolean;
+      completeMission23Council: () => Mission23DebugState;
+      synchronizeMission23Forces: () => Mission23DebugState;
+      chooseMission23TargetOrder: (first: Mission23PrimaryTarget) => Mission23DebugState;
+      recordMission23JammerReading: (index: number) => number;
+      recordAllMission23JammerReadings: () => number;
+      destroyMission23Jammer: () => Mission23DebugState;
+      reachMission23Platform: () => Mission23DebugState;
+      disableMission23PlatformDefense: () => Mission23DebugState;
+      disableMission23PlatformEnergy: () => Mission23DebugState;
+      chooseMission23PlatformMethod: (method: Exclude<Mission23PlatformMethod, 'none'>) => Mission23DebugState;
+      destroyMission23Platform: (method?: Exclude<Mission23PlatformMethod, 'none'>) => Mission23DebugState;
+      reachMission23JumpBeacon: () => Mission23DebugState;
+      disableMission23BeaconAnchor: (index: number) => number;
+      disableAllMission23BeaconAnchors: () => number;
+      collapseMission23JumpBeacon: () => Mission23DebugState;
+      completeMission23Escape: () => Mission23DebugState;
+      recoverMission23EnemyRoute: () => Mission23DebugState;
+      completeMission23: () => Mission23DebugState;
+      teleportToMission23Target: () => [number, number, number];
+      getMission23State: () => Mission23DebugState;
+      getMission23Readout: () => import('./game/Mission23Counteroffensive').Mission23Readout;
+      getMission23VisualState: () => {
+        platformBuilt: boolean;
+        platformVisible: boolean;
+        platformMeshes: number;
+        platformSceneInstances: number;
+        platformActiveModules: number;
+        beaconBuilt: boolean;
+        beaconVisible: boolean;
+        beaconMeshes: number;
+        beaconSceneInstances: number;
+        anchorTargetCount: number;
+        visibleAnchorCount: number;
+        jammerActive: boolean;
+        activeHostiles: number;
+        lockDegraded: boolean;
+      };
+      startMission24: () => boolean;
+      decodeMission24ReturnRoute: () => Mission24DebugState;
+      prepareMission24Launch: () => Mission24DebugState;
+      boardMission24Ship: () => Mission24DebugState;
+      startMission24Ignition: () => boolean;
+      completeMission24Ignition: () => Mission24DebugState;
+      restoreMission24Checkpoint: (step: Mission24StepId) => Mission24DebugState;
+      completeMission24Ascent: () => Mission24DebugState;
+      completeMission24OrbitalInsertion: () => Mission24DebugState;
+      stabilizeMission24Orbit: () => Mission24DebugState;
+      orientMission24ShipToTarget: () => number;
+      teleportToMission24Target: () => [number, number, number];
+      advanceMission24Interaction: () => Mission24DebugState;
+      assessAllMission24ArkSystems: () => Mission24DebugState;
+      restoreAllMission24EnclaveLinks: () => Mission24DebugState;
+      prepareAllMission24ArkSystems: () => Mission24DebugState;
+      integrateAllMission24PleyadianNodes: () => Mission24DebugState;
+      prepareMission24CivilianShelters: () => Mission24DebugState;
+      assembleMission24AlliedForces: () => Mission24DebugState;
+      revisitAllMission24StartingSectorPoints: () => Mission24DebugState;
+      completeMission24DefenseRehearsal: () => Mission24DebugState;
+      detectMission24FinalFleet: () => Mission24DebugState;
+      completeMission24: () => Mission24DebugState;
+      getMission24State: () => Mission24DebugState;
+      getArkDepartureState: () => ArkDepartureDebugState;
+      advanceArkDeparture: () => boolean;
+      forceArkPreflight: () => ArkDepartureStepId;
+      getMission24AscentState: () => import('./game/AtmosphericAscentController').AtmosphericAscentMetrics;
+      getMission24Target: () => { name: string; position: [number, number, number]; distance: number };
+      getMission24VisualState: () => {
+        atmosphereBuilt: boolean;
+        cloudLayerVisible: boolean;
+        planetLimbVisible: boolean;
+        starOpacity: number;
+        networkBuilt: boolean;
+        networkVisible: boolean;
+        pleyadianNodeCount: number;
+        rehearsalTargetCount: number;
+        rehearsalTargetsVisible: boolean;
+        finalFleetVisible: boolean;
+        finalFleetAttackable: boolean;
+        mothershipSceneInstances: number;
+      };
+      getMission24PerformanceState: () => {
+        activeTimers: number;
+        maxFrameDisplacement: number;
+        atmosphereBuilt: boolean;
+        networkBuilt: boolean;
+      };
+      getMothershipIdentity: () => {
+        uuid: string;
+        position: [number, number, number];
+        scale: [number, number, number];
+        sceneInstances: number;
+      };
+      getThreeFrontVisualState: () => {
+        built: boolean;
+        visible: boolean;
+        meshCount: number;
+        sceneInstances: number;
+        visibleRelayCount: number;
+        visibleNodeCount: number;
+        jointNetworkVisible: boolean;
+        activeAirHostiles: number;
+        activeBreachHostiles: number;
+      };
+      getCoalitionCapitalVisualState: () => {
+        built: boolean;
+        visible: boolean;
+        attackable: boolean;
+        meshCount: number;
+        activeRouteCount: number;
+        networkVisible: boolean;
+        remoteBeaconDestroyed: boolean;
+        capitalPosition: [number, number, number];
+      };
+      togglePremiumVisuals: () => boolean;
+      getPremiumVisualState: () => PremiumVisualState;
+      setRenderProfile: (profile: RenderProfile) => RenderProfile;
+      getRenderProfile: () => RenderProfile;
+      setLightBudgetEnabled: (enabled: boolean) => boolean;
+      setPremiumVisualQuality: (quality: PremiumVisualQuality) => PremiumVisualState;
+      setPremiumAutoQualityEnabled: (enabled: boolean) => PremiumVisualState;
+      benchmarkPremiumVisuals: () => Promise<{ quality: string; fps: number; particles: number; draws: number }[]>;
+      getCurrentObjectiveDisplay: () => ObjectiveDisplay;
+      showDialogue: (id: string) => boolean;
+      advanceDialogue: () => boolean;
+      playCommanderVoice: (dialogueId: string) => boolean;
+      stopCommanderVoice: () => boolean;
+      getVoiceAudioState: () => import('./audio/VoiceManager').VoiceAudioState;
+      clearDialogueQueue: () => number;
+      resetPlayedDialogues: () => number;
+      getDialogueState: () => DialogueState;
+      getShipBoardingState: () => {
+        shipPosition: [number, number, number];
+        terrainHeight: number;
+        hullBottom: number;
+        terrainSeparation: number;
+        boardingAnchor: [number, number, number];
+        horizontalDistance: number;
+        verticalDifference: number;
+        boardingAvailable: boolean;
+        parked: boolean;
+        playerShipInstances: number;
+      };
+      reconcileParkedShip: () => boolean;
+      setPlayerPosition: (x: number, y: number, z: number) => [number, number, number];
+      togglePause: () => boolean;
+      listLoadedAssets: () => RuntimeAssetAuditEntry[];
+      getAssetAudit: () => RuntimeAssetAuditEntry[];
+      getPerformanceSnapshot: () => ArcaDiagnostics;
+      validateNoDuplicateCharacterMeshes: () => boolean;
+      validateNoDuplicateCockpitMeshes: () => boolean;
+      listActiveHighPolyAssets: () => string[];
+      saveGame: () => SaveGameData;
+      loadGame: () => SaveGameData | undefined;
+      clearSave: () => boolean;
+    };
+  }
+}

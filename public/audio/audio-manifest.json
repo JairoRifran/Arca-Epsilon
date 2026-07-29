@@ -1,0 +1,1115 @@
+{
+  "version": 2,
+  "generatedAt": "2026-07-27T23:29:52.973Z",
+  "assets": [
+    {
+      "id": "music-main-theme",
+      "path": "/audio/music/music_main_theme.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 55,
+      "tags": [
+        "music",
+        "main",
+        "theme"
+      ]
+    },
+    {
+      "id": "music-space-exploration",
+      "path": "/audio/music/music_space_exploration.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 55,
+      "tags": [
+        "music",
+        "space",
+        "exploration"
+      ]
+    },
+    {
+      "id": "music-orbit-atlas",
+      "path": "/audio/music/music_orbit_atlas.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 48,
+      "tags": [
+        "music",
+        "orbit",
+        "atlas"
+      ]
+    },
+    {
+      "id": "music-atmospheric-entry",
+      "path": "/audio/music/music_atmospheric_entry.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 45,
+      "tags": [
+        "music",
+        "atmospheric",
+        "entry"
+      ]
+    },
+    {
+      "id": "music-surface-nereida",
+      "path": "/audio/music/music_surface_nereida.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 55,
+      "tags": [
+        "music",
+        "surface",
+        "nereida"
+      ]
+    },
+    {
+      "id": "music-first-contact",
+      "path": "/audio/music/music_pleyadan_contact.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 48,
+      "tags": [
+        "music",
+        "pleyadan",
+        "contact"
+      ]
+    },
+    {
+      "id": "music-defense-network",
+      "path": "/audio/music/music_defense_protocol.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 48,
+      "tags": [
+        "music",
+        "defense",
+        "protocol"
+      ]
+    },
+    {
+      "id": "music-shadow-orbit",
+      "path": "/audio/music/music_silent_probe.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 48,
+      "tags": [
+        "music",
+        "silent",
+        "probe"
+      ]
+    },
+    {
+      "id": "music-layer-tension",
+      "path": "/audio/music/music_danger_rising.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 40,
+      "tags": [
+        "music",
+        "danger",
+        "rising"
+      ]
+    },
+    {
+      "id": "music-layer-interference",
+      "path": "/audio/music/music_interference_layer.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 36,
+      "tags": [
+        "music",
+        "interference",
+        "layer"
+      ]
+    },
+    {
+      "id": "music-sting-discovery",
+      "path": "/audio/music/music_sting_discovery.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 6,
+      "tags": [
+        "music",
+        "sting",
+        "discovery"
+      ]
+    },
+    {
+      "id": "music-sting-complete",
+      "path": "/audio/music/music_sting_complete.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 8,
+      "tags": [
+        "music",
+        "sting",
+        "complete"
+      ]
+    },
+    {
+      "id": "music-resolution-pad",
+      "path": "/audio/music/music_relief_resolution.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 30,
+      "tags": [
+        "music",
+        "relief",
+        "resolution"
+      ]
+    },
+    {
+      "id": "music-calm-exploration",
+      "path": "/audio/music/music_calm_exploration.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 55,
+      "tags": [
+        "music",
+        "calm",
+        "exploration"
+      ]
+    },
+    {
+      "id": "music-deep-space",
+      "path": "/audio/music/music_deep_space.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 55,
+      "tags": [
+        "music",
+        "deep",
+        "space"
+      ]
+    },
+    {
+      "id": "music-atlas-mystery",
+      "path": "/audio/music/music_atlas_mystery.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 48,
+      "tags": [
+        "music",
+        "atlas",
+        "mystery"
+      ]
+    },
+    {
+      "id": "music-aurora-departure",
+      "path": "/audio/music/music_aurora_departure.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 60,
+      "tags": [
+        "music",
+        "aurora",
+        "departure"
+      ]
+    },
+    {
+      "id": "music-aurora-ash-plains",
+      "path": "/audio/music/music_aurora_ash_plains.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 60,
+      "tags": [
+        "music",
+        "aurora",
+        "ash",
+        "plains"
+      ]
+    },
+    {
+      "id": "music-aurora-atlas-canyons",
+      "path": "/audio/music/music_aurora_atlas_canyons.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 60,
+      "tags": [
+        "music",
+        "aurora",
+        "atlas",
+        "canyons"
+      ]
+    },
+    {
+      "id": "music-aurora-storm-plateau",
+      "path": "/audio/music/music_aurora_storm_plateau.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 60,
+      "tags": [
+        "music",
+        "aurora",
+        "storm",
+        "plateau"
+      ]
+    },
+    {
+      "id": "music-aurora-pre-reveal",
+      "path": "/audio/music/music_aurora_pre_reveal.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 45,
+      "tags": [
+        "music",
+        "aurora",
+        "pre",
+        "reveal"
+      ]
+    },
+    {
+      "id": "music-aurora-reveal",
+      "path": "/audio/music/music_aurora_reveal.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 60,
+      "tags": [
+        "music",
+        "aurora",
+        "reveal"
+      ]
+    },
+    {
+      "id": "music-aurora-completion",
+      "path": "/audio/music/music_aurora_completion.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 45,
+      "tags": [
+        "music",
+        "aurora",
+        "completion"
+      ]
+    },
+    {
+      "id": "sfx-ship-idle",
+      "path": "/audio/generated/sfx_ship_idle.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 8,
+      "tags": [
+        "sfx",
+        "ship",
+        "idle"
+      ]
+    },
+    {
+      "id": "sfx-ship-accelerate",
+      "path": "/audio/generated/sfx_ship_accelerate.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 6,
+      "tags": [
+        "sfx",
+        "ship",
+        "accelerate"
+      ]
+    },
+    {
+      "id": "sfx-hover-wash",
+      "path": "/audio/generated/sfx_hover_wash.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 8,
+      "tags": [
+        "sfx",
+        "hover",
+        "wash"
+      ]
+    },
+    {
+      "id": "sfx-vertical-thrust",
+      "path": "/audio/generated/sfx_vertical_thrust.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 8,
+      "tags": [
+        "sfx",
+        "vertical",
+        "thrust"
+      ]
+    },
+    {
+      "id": "sfx-boost-intensity",
+      "path": "/audio/generated/sfx_boost_intensity.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 8,
+      "tags": [
+        "sfx",
+        "boost",
+        "intensity"
+      ]
+    },
+    {
+      "id": "sfx-brake-release",
+      "path": "/audio/generated/sfx_brake_release.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 3,
+      "tags": [
+        "sfx",
+        "brake",
+        "release"
+      ]
+    },
+    {
+      "id": "sfx-space-cruise",
+      "path": "/audio/generated/sfx_space_cruise.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 8,
+      "tags": [
+        "sfx",
+        "space",
+        "cruise"
+      ]
+    },
+    {
+      "id": "sfx-atmospheric-flight",
+      "path": "/audio/generated/sfx_atmospheric_flight.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 8,
+      "tags": [
+        "sfx",
+        "atmospheric",
+        "flight"
+      ]
+    },
+    {
+      "id": "sfx-lift-motor",
+      "path": "/audio/generated/sfx_lift_motor.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 5,
+      "tags": [
+        "sfx",
+        "lift",
+        "motor"
+      ]
+    },
+    {
+      "id": "sfx-hatch-open",
+      "path": "/audio/generated/sfx_hatch_open.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2.5,
+      "tags": [
+        "sfx",
+        "hatch",
+        "open"
+      ]
+    },
+    {
+      "id": "sfx-hatch-close",
+      "path": "/audio/generated/sfx_hatch_close.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2.5,
+      "tags": [
+        "sfx",
+        "hatch",
+        "close"
+      ]
+    },
+    {
+      "id": "sfx-platform-lock",
+      "path": "/audio/generated/sfx_platform_lock.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.5,
+      "tags": [
+        "sfx",
+        "platform",
+        "lock"
+      ]
+    },
+    {
+      "id": "sfx-scanner-pulse",
+      "path": "/audio/generated/sfx_scanner_pulse.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2,
+      "tags": [
+        "sfx",
+        "scanner",
+        "pulse"
+      ]
+    },
+    {
+      "id": "sfx-atlas-signal",
+      "path": "/audio/generated/sfx_atlas_signal.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 4,
+      "tags": [
+        "sfx",
+        "atlas",
+        "signal"
+      ]
+    },
+    {
+      "id": "sfx-relay-pulse",
+      "path": "/audio/generated/sfx_relay_pulse.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 3,
+      "tags": [
+        "sfx",
+        "relay",
+        "pulse"
+      ]
+    },
+    {
+      "id": "sfx-defense-sync",
+      "path": "/audio/generated/sfx_defense_sync.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 4,
+      "tags": [
+        "sfx",
+        "defense",
+        "sync"
+      ]
+    },
+    {
+      "id": "sfx-pleyadan-transmission",
+      "path": "/audio/generated/sfx_pleyadan_transmission.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 5,
+      "tags": [
+        "sfx",
+        "pleyadan",
+        "transmission"
+      ]
+    },
+    {
+      "id": "sfx-interference-glitch",
+      "path": "/audio/generated/sfx_interference_glitch.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 8,
+      "tags": [
+        "sfx",
+        "interference",
+        "glitch"
+      ]
+    },
+    {
+      "id": "sfx-probe-detected",
+      "path": "/audio/generated/sfx_probe_detected.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 3,
+      "tags": [
+        "sfx",
+        "probe",
+        "detected"
+      ]
+    },
+    {
+      "id": "sfx-echo-resolved",
+      "path": "/audio/generated/sfx_echo_resolved.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2.5,
+      "tags": [
+        "sfx",
+        "echo",
+        "resolved"
+      ]
+    },
+    {
+      "id": "sfx-counter-signal",
+      "path": "/audio/generated/sfx_counter_signal.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 4,
+      "tags": [
+        "sfx",
+        "counter",
+        "signal"
+      ]
+    },
+    {
+      "id": "sfx-probe-retreat",
+      "path": "/audio/generated/sfx_probe_retreat.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 4,
+      "tags": [
+        "sfx",
+        "probe",
+        "retreat"
+      ]
+    },
+    {
+      "id": "sfx-mission-complete",
+      "path": "/audio/generated/sfx_mission_complete.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 3,
+      "tags": [
+        "sfx",
+        "mission",
+        "complete"
+      ]
+    },
+    {
+      "id": "sfx-anomaly-detected",
+      "path": "/audio/generated/sfx_anomaly_detected.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 3,
+      "tags": [
+        "sfx",
+        "anomaly",
+        "detected"
+      ]
+    },
+    {
+      "id": "sfx-comm-start",
+      "path": "/audio/generated/sfx_comm_start.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.2,
+      "tags": [
+        "sfx",
+        "comm",
+        "start"
+      ]
+    },
+    {
+      "id": "sfx-comm-end",
+      "path": "/audio/generated/sfx_comm_end.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.2,
+      "tags": [
+        "sfx",
+        "comm",
+        "end"
+      ]
+    },
+    {
+      "id": "sfx-footstep-walk-01",
+      "path": "/audio/generated/sfx_footstep_walk_01.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.2,
+      "tags": [
+        "sfx",
+        "footstep",
+        "walk",
+        "01"
+      ]
+    },
+    {
+      "id": "sfx-footstep-walk-02",
+      "path": "/audio/generated/sfx_footstep_walk_02.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.2,
+      "tags": [
+        "sfx",
+        "footstep",
+        "walk",
+        "02"
+      ]
+    },
+    {
+      "id": "sfx-footstep-walk-03",
+      "path": "/audio/generated/sfx_footstep_walk_03.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.2,
+      "tags": [
+        "sfx",
+        "footstep",
+        "walk",
+        "03"
+      ]
+    },
+    {
+      "id": "sfx-footstep-run-01",
+      "path": "/audio/generated/sfx_footstep_run_01.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.1,
+      "tags": [
+        "sfx",
+        "footstep",
+        "run",
+        "01"
+      ]
+    },
+    {
+      "id": "sfx-footstep-run-02",
+      "path": "/audio/generated/sfx_footstep_run_02.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.1,
+      "tags": [
+        "sfx",
+        "footstep",
+        "run",
+        "02"
+      ]
+    },
+    {
+      "id": "sfx-footstep-run-03",
+      "path": "/audio/generated/sfx_footstep_run_03.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.1,
+      "tags": [
+        "sfx",
+        "footstep",
+        "run",
+        "03"
+      ]
+    },
+    {
+      "id": "sfx-aurora-wind-gust",
+      "path": "/audio/generated/sfx_aurora_wind_gust.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 4,
+      "tags": [
+        "sfx",
+        "aurora",
+        "wind",
+        "gust"
+      ]
+    },
+    {
+      "id": "sfx-aurora-dust-sweep",
+      "path": "/audio/generated/sfx_aurora_dust_sweep.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 4,
+      "tags": [
+        "sfx",
+        "aurora",
+        "dust",
+        "sweep"
+      ]
+    },
+    {
+      "id": "sfx-ship-turbulence-light",
+      "path": "/audio/generated/sfx_ship_turbulence_light.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 3,
+      "tags": [
+        "sfx",
+        "ship",
+        "turbulence",
+        "light"
+      ]
+    },
+    {
+      "id": "sfx-atlas-route-lock",
+      "path": "/audio/generated/sfx_atlas_route_lock.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2,
+      "tags": [
+        "sfx",
+        "atlas",
+        "route",
+        "lock"
+      ]
+    },
+    {
+      "id": "sfx-base-signal-drop",
+      "path": "/audio/generated/sfx_base_signal_drop.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2,
+      "tags": [
+        "sfx",
+        "base",
+        "signal",
+        "drop"
+      ]
+    },
+    {
+      "id": "sfx-far-thunder",
+      "path": "/audio/generated/sfx_far_thunder.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 5,
+      "tags": [
+        "sfx",
+        "far",
+        "thunder"
+      ]
+    },
+    {
+      "id": "sfx-aurora-fog-open",
+      "path": "/audio/generated/sfx_aurora_fog_open.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 4,
+      "tags": [
+        "sfx",
+        "aurora",
+        "fog",
+        "open"
+      ]
+    },
+    {
+      "id": "sfx-aurora-reveal-swell",
+      "path": "/audio/generated/sfx_aurora_reveal_swell.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 5,
+      "tags": [
+        "sfx",
+        "aurora",
+        "reveal",
+        "swell"
+      ]
+    },
+    {
+      "id": "sfx-route-beacon-scan",
+      "path": "/audio/generated/sfx_route_beacon_scan.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2,
+      "tags": [
+        "sfx",
+        "route",
+        "beacon",
+        "scan"
+      ]
+    },
+    {
+      "id": "sfx-route-beacon-confirm",
+      "path": "/audio/generated/sfx_route_beacon_confirm.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2,
+      "tags": [
+        "sfx",
+        "route",
+        "beacon",
+        "confirm"
+      ]
+    },
+    {
+      "id": "music-war-ambient",
+      "path": "/audio/music/music_war_ambient.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 150,
+      "tags": [
+        "music",
+        "war",
+        "ambient"
+      ]
+    },
+    {
+      "id": "music-war-alert",
+      "path": "/audio/music/music_war_alert.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 150,
+      "tags": [
+        "music",
+        "war",
+        "alert"
+      ]
+    },
+    {
+      "id": "music-first-fire",
+      "path": "/audio/music/music_first_fire.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 180,
+      "tags": [
+        "music",
+        "first",
+        "fire"
+      ]
+    },
+    {
+      "id": "music-space-interception",
+      "path": "/audio/music/music_space_interception.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 160,
+      "tags": [
+        "music",
+        "space",
+        "interception"
+      ]
+    },
+    {
+      "id": "music-nereida-under-attack",
+      "path": "/audio/music/music_nereida_under_attack.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 200,
+      "tags": [
+        "music",
+        "nereida",
+        "under",
+        "attack"
+      ]
+    },
+    {
+      "id": "music-atlas-breach",
+      "path": "/audio/music/music_atlas_breach.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 130,
+      "tags": [
+        "music",
+        "atlas",
+        "breach"
+      ]
+    },
+    {
+      "id": "music-ark-battle",
+      "path": "/audio/music/music_ark_battle.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 280,
+      "tags": [
+        "music",
+        "ark",
+        "battle"
+      ]
+    },
+    {
+      "id": "music-silence-rupture",
+      "path": "/audio/music/music_silence_rupture.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 210,
+      "tags": [
+        "music",
+        "silence",
+        "rupture"
+      ]
+    },
+    {
+      "id": "music-broken-fronts",
+      "path": "/audio/music/music_broken_fronts.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 210,
+      "tags": [
+        "music",
+        "broken",
+        "fronts"
+      ]
+    },
+    {
+      "id": "music-counteroffensive",
+      "path": "/audio/music/music_counteroffensive.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 210,
+      "tags": [
+        "music",
+        "counteroffensive"
+      ]
+    },
+    {
+      "id": "music-return-to-origin",
+      "path": "/audio/music/music_return_to_origin.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 270,
+      "tags": [
+        "music",
+        "return",
+        "to",
+        "origin"
+      ]
+    },
+    {
+      "id": "music-final-orbit-intro",
+      "path": "/audio/music/music_final_orbit_intro.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 110,
+      "tags": [
+        "music",
+        "final",
+        "orbit",
+        "intro"
+      ]
+    },
+    {
+      "id": "music-final-orbit-assault",
+      "path": "/audio/music/music_final_orbit_assault.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 165,
+      "tags": [
+        "music",
+        "final",
+        "orbit",
+        "assault"
+      ]
+    },
+    {
+      "id": "music-final-orbit-shield-break",
+      "path": "/audio/music/music_final_orbit_shield_break.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 105,
+      "tags": [
+        "music",
+        "final",
+        "orbit",
+        "shield",
+        "break"
+      ]
+    },
+    {
+      "id": "music-final-orbit-allies",
+      "path": "/audio/music/music_final_orbit_allies.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 140,
+      "tags": [
+        "music",
+        "final",
+        "orbit",
+        "allies"
+      ]
+    },
+    {
+      "id": "music-final-orbit-last-stand",
+      "path": "/audio/music/music_final_orbit_last_stand.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 170,
+      "tags": [
+        "music",
+        "final",
+        "orbit",
+        "last",
+        "stand"
+      ]
+    },
+    {
+      "id": "music-final-orbit-resolution",
+      "path": "/audio/music/music_final_orbit_resolution.mp3",
+      "category": "music",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 130,
+      "tags": [
+        "music",
+        "final",
+        "orbit",
+        "resolution"
+      ]
+    },
+    {
+      "id": "music-ark-no-longer-alone",
+      "path": "/audio/music/music_ark_no_longer_alone.mp3",
+      "category": "music",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 200,
+      "tags": [
+        "music",
+        "ark",
+        "no",
+        "longer",
+        "alone"
+      ]
+    }
+  ]
+}

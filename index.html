@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arca Epsilon</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas" aria-label="Arca Epsilon"></canvas>
+
+      <section class="boot-screen" id="boot-screen">
+        <div class="boot-copy">
+          <p class="eyebrow">Proyecto Exodo / Nave colonial Epsilon</p>
+          <h1>Arca Epsilon</h1>
+          <p>
+            Año 2189. La Tierra dejo de ser hogar. La Arca Epsilon desperto
+            fuera de toda ruta conocida. Tu primera mision es encontrar un
+            planeta habitable para los ultimos humanos.
+          </p>
+          <p class="loading-status" id="loading-status">Cargando modelos oficiales...</p>
+          <button id="launch-button" type="button" disabled>Iniciar exploracion</button>
+        </div>
+      </section>
+
+      <main class="hud" id="hud">
+        <header class="topbar">
+          <div class="topbar-location">
+            <span class="phase-chip" id="phase-chip" data-phase="espacio">Espacio</span>
+            <div>
+              <span class="label">Sector</span>
+              <strong id="sector-name">Umbral Ciego</strong>
+            </div>
+          </div>
+          <div class="ship-state">
+            <span id="velocity-readout">0 m/s</span>
+            <span id="distance-readout">0 km</span>
+            <span id="safezone-readout">Zona segura</span>
+            <span id="threat-readout">Riesgo bajo</span>
+          </div>
+        </header>
+
+        <aside class="objective-panel">
+          <span class="label">Mision activa</span>
+          <h2 id="mission-name">Mision 01</h2>
+          <p id="objective-text">Encuentra un planeta habitable.</p>
+          <div class="next-action-callout">
+            <kbd id="next-key">E</kbd>
+            <span id="next-action">Presiona E para escanear</span>
+          </div>
+          <dl class="objective-grid">
+            <div>
+              <dt>Objetivo</dt>
+              <dd id="objective-distance">0 m</dd>
+            </div>
+            <div>
+              <dt>Scanner</dt>
+              <dd id="scanner-status">En espera</dd>
+            </div>
+            <div>
+              <dt>Señal</dt>
+              <dd id="signal-strength">0%</dd>
+            </div>
+          </dl>
+          <div class="scan-progress">
+            <span id="mission-progress-label">Progreso</span>
+            <progress id="habitability-progress" max="100" value="0"></progress>
+          </div>
+          <p class="mission-hint" id="mission-hint"></p>
+        </aside>
+
+        <aside class="systems-panel">
+          <h2>Arca Epsilon</h2>
+          <div class="meter">
+            <span>Casco</span>
+            <progress id="hull-meter" max="100" value="87"></progress>
+          </div>
+          <div class="meter">
+            <span>Escudo</span>
+            <progress id="shield-meter" max="100" value="76"></progress>
+          </div>
+          <div class="meter">
+            <span>Energia</span>
+            <progress id="energy-meter" max="100" value="76"></progress>
+          </div>
+          <div class="meter">
+            <span>Oxigeno</span>
+            <progress id="oxygen-meter" max="100" value="64"></progress>
+          </div>
+          <div class="meter">
+            <span>Memoria Tierra</span>
+            <progress id="memory-meter" max="100" value="41"></progress>
+          </div>
+          <div class="weapon-readout">
+            <span id="laser-status">Laser listo</span>
+            <span id="missile-status">Misiles 4/4</span>
+            <span id="lock-status">Sin blanco</span>
+          </div>
+          <p class="diagnostics-readout" id="diagnostics-readout">GLB: cargando</p>
+        </aside>
+
+        <aside class="mission-panel">
+          <h2>Registro de mision</h2>
+          <p id="mission-text">
+            Comando Arca: localiza un planeta habitable, confirma su viabilidad
+            y transmite los datos para preparar colonizacion.
+          </p>
+          <ul class="discovery-list" id="discovery-list">
+            <li>0/8 señales integradas</li>
+          </ul>
+          <button id="scan-button" type="button">Escanear</button>
+        </aside>
+
+        <aside class="habitability-panel" id="habitability-panel">
+          <span class="label">Reporte E-01</span>
+          <h2 id="habitability-title">Habitabilidad</h2>
+          <div id="habitability-report"></div>
+        </aside>
+
+        <aside class="descent-panel" id="descent-panel" aria-hidden="true">
+          <span class="label">Descenso</span>
+          <h2 id="descent-title">Corredor Atlas</h2>
+          <div class="descent-readout">
+            <div>
+              <span>Calor</span>
+              <progress id="heat-meter" max="100" value="0"></progress>
+            </div>
+            <div>
+              <span>Estabilidad</span>
+              <progress id="stability-meter" max="100" value="100"></progress>
+            </div>
+            <div>
+              <span>Altitud</span>
+              <strong id="altitude-readout">--</strong>
+            </div>
+            <div>
+              <span>Aterrizaje</span>
+              <strong id="landing-readout">En espera</strong>
+            </div>
+          </div>
+        </aside>
+
+        <div class="mission-complete-overlay" id="mission-complete-overlay" aria-hidden="true">
+          <div>
+            <span class="label">Mision completa</span>
+            <h2 id="mission-complete-title">Planeta habitable localizado</h2>
+            <p id="mission-complete-text">Protocolo de colonizacion preparado. Siguiente: desplegar el primer modulo colonial.</p>
+            <button id="start-phase2-btn" type="button" class="cta-button">Iniciar Fase 2: Colonización Superficial</button>
+          </div>
+        </div>
+
+        <div class="objective-marker" id="objective-marker" aria-hidden="true">
+          <i class="objective-marker__arrow" id="objective-marker-arrow"></i>
+          <span id="objective-marker-label">BIOSFERA</span>
+          <strong id="objective-marker-distance">0 m</strong>
+        </div>
+
+        <div class="home-marker" id="home-marker" aria-hidden="true">
+          <span>ARCA</span>
+          <strong id="home-distance">0 m</strong>
+        </div>
+
+        <div class="warning-overlay" id="warning-overlay" aria-hidden="true"></div>
+        <div class="heat-overlay" id="heat-overlay" aria-hidden="true"></div>
+        <div class="interact-prompt" id="interact-prompt" aria-hidden="true">
+          <kbd>E</kbd>
+          <span id="interact-label">Escanear</span>
+        </div>
+        <div class="phase-banner" id="phase-banner" aria-hidden="true">
+          <strong id="phase-banner-title">Fase actualizada</strong>
+          <span id="phase-banner-subtitle">Objetivo sincronizado</span>
+        </div>
+        <div class="reticle" aria-hidden="true"></div>
+
+        <footer class="controls-strip" id="controls-strip">
+          <span><kbd>WASD</kbd> pilotar</span>
+          <span><kbd>Mouse</kbd> mirar</span>
+          <span><kbd>Shift</kbd> impulso</span>
+          <span><kbd>E</kbd> escanear</span>
+          <span><kbd>Space</kbd> láser</span>
+          <span><kbd>R</kbd> misil</span>
+          <span><kbd>V</kbd> cambiar cámara</span>
+          <span class="map-hint" onclick="window.dispatchEvent(new KeyboardEvent('keydown', {code: 'KeyM'}))"><kbd>M</kbd> mapa estelar</span>
+        </footer>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

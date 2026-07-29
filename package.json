@@ -1,0 +1,39 @@
+{
+  "name": "arca-epsilon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:visual": "playwright test",
+    "audio:generate": "node scripts/generate-elevenlabs-audio.mjs",
+    "audio:generate:propulsion": "node scripts/generate-elevenlabs-audio.mjs --only=sfx-ship-idle,sfx-ship-accelerate,sfx-hover-wash,sfx-vertical-thrust,sfx-boost-intensity,sfx-brake-release,sfx-space-cruise,sfx-atmospheric-flight --force",
+    "audio:generate:music": "node scripts/generate-elevenlabs-audio.mjs --category=music",
+    "audio:music:list": "node scripts/generate-elevenlabs-audio.mjs --category=music --list",
+    "audio:music:dry-run": "node scripts/generate-elevenlabs-audio.mjs --category=music --dry-run",
+    "audio:generate:music:failed": "node scripts/generate-elevenlabs-audio.mjs --category=music --failed-only",
+    "audio:manifest": "node scripts/generate-elevenlabs-audio.mjs --manifest-only",
+    "audio:generate:sfx": "node scripts/generate-elevenlabs-audio.mjs --category=sfx",
+    "audio:generate:voices": "node scripts/generate-elevenlabs-voices.mjs",
+    "audio:generate:m13": "node scripts/generate-m13-audio.mjs",
+    "audio:generate:m13:music": "node scripts/generate-m13-audio.mjs --category=music",
+    "audio:generate:m13:ambience": "node scripts/generate-m13-audio.mjs --category=ambience",
+    "audio:generate:m13:sfx": "node scripts/generate-m13-audio.mjs --category=sfx",
+    "audio:check:m13": "node scripts/generate-m13-audio.mjs --list",
+    "audio:generate:all": "node scripts/generate-elevenlabs-audio.mjs && node scripts/generate-elevenlabs-voices.mjs",
+    "optimize:pilot-animation": "node scripts/extract-glb-animation.mjs public/models/characters/arca-pilot-run.glb public/models/characters/arca-pilot-run-animation.glb",
+    "optimize:models": "node scripts/optimize-glb-lod.mjs"
+  },
+  "dependencies": {
+    "lil-gui": "^0.20.0",
+    "three": "^0.166.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.3",
+    "@types/three": "^0.185.0",
+    "typescript": "^5.5.4",
+    "vite": "^5.3.5"
+  }
+}

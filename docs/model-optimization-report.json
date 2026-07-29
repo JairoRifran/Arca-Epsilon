@@ -1,0 +1,68 @@
+[
+  {
+    "inputPath": "public/models/wayfinder-monument.glb",
+    "outputPath": "public/models/optimized/atlas-marker.medium.glb",
+    "originalBytes": 22564208,
+    "outputBytes": 4186732,
+    "originalTriangles": 1636831,
+    "outputTriangles": 200000,
+    "originalVertices": 871213,
+    "outputVertices": 122451,
+    "simplificationError": 0.0017940533580258489
+  },
+  {
+    "inputPath": "public/models/wayfinder-monument.glb",
+    "outputPath": "public/models/optimized/atlas-marker.low.glb",
+    "originalBytes": 22564208,
+    "outputBytes": 2094880,
+    "originalTriangles": 1636831,
+    "outputTriangles": 60000,
+    "originalVertices": 871213,
+    "outputVertices": 41597,
+    "simplificationError": 0.003962192218750715
+  },
+  {
+    "inputPath": "public/models/player-scout.glb",
+    "outputPath": "public/models/optimized/scout-ship.medium.glb",
+    "originalBytes": 7611040,
+    "outputBytes": 3150096,
+    "originalTriangles": 463774,
+    "outputTriangles": 129986,
+    "originalVertices": 262935,
+    "outputVertices": 84224,
+    "simplificationError": 0.0008970206254161894
+  },
+  {
+    "inputPath": "public/models/player-scout.glb",
+    "outputPath": "public/models/optimized/scout-ship.low.glb",
+    "originalBytes": 7611040,
+    "outputBytes": 1862032,
+    "originalTriangles": 463774,
+    "outputTriangles": 44984,
+    "originalVertices": 262935,
+    "outputVertices": 34130,
+    "simplificationError": 0.0021835851948708296
+  },
+  {
+    "inputPath": "public/models/arca-epsilon.glb",
+    "outputPath": "public/models/optimized/arca-epsilon.medium.glb",
+    "originalBytes": 9740680,
+    "outputBytes": 4572540,
+    "originalTriangles": 611066,
+    "outputTriangles": 219982,
+    "originalVertices": 343931,
+    "outputVertices": 137223,
+    "simplificationError": 0.0007117704371921718
+  },
+  {
+    "inputPath": "public/models/arca-epsilon.glb",
+    "outputPath": "public/models/optimized/arca-epsilon.low.glb",
+    "originalBytes": 9740680,
+    "outputBytes": 2500676,
+    "originalTriangles": 611066,
+    "outputTriangles": 79978,
+    "originalVertices": 343931,
+    "outputVertices": 56510,
+    "simplificationError": 0.0015440072165802121
+  }
+]
