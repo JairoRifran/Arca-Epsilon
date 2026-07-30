@@ -462,6 +462,7 @@ export class Mission19NereidaUnderAttack {
     this.state.arkTargetConfirmed = true;
     this.state.mission19Completed = true;
     this.state.mission20Unlocked = true;
+    this.activeIntruders = 0;
     this.goToStep('completed');
   }
 

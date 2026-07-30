@@ -1360,7 +1360,7 @@ function getPerformanceDiagnosticsPatch(force = false): Partial<ArcaDiagnostics>
   const assetPreloadQueue = runtimeAssetAudit
     .filter((asset) => asset.loadedAtStartup && asset.status !== 'loaded')
     .map((asset) => asset.id);
-  cachedPlayerShipInstances = scene.children.filter((child) => child.name === playerShip.group.name).length;
+  cachedPlayerShipInstances = countSceneObjectsByName(playerShip.group.name);
   cachedPerformanceDiagnosticsPatch = {
     activeGLBCount: runtimeAssetAudit.filter((asset) => asset.active).length,
     activeSkinnedMeshCount: surfaceCharacter.activeSkinnedMeshCount,
@@ -10937,6 +10937,7 @@ function applySaveGame(save: SaveGameData): void {
     settleParkedShipOnTerrain(false);
   } else {
     parkedShipResolved = false;
+    playerShip.setParkedVisualState(false);
   }
   shipAltitudeHoldY = inSurfacePhase ? ship.position.y : undefined;
   shipPreviousY = ship.position.y;
@@ -11386,6 +11387,7 @@ function refreshParkedShipMetrics(groundHeight: number): void {
 }
 
 function settleParkedShipOnTerrain(force: boolean): boolean {
+  playerShip.setParkedVisualState(true);
   const groundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
   refreshParkedShipMetrics(groundHeight);
   if (
@@ -11438,6 +11440,7 @@ function requestExitShip(): boolean {
   lastCameraModeTransition = `${cameraModeSystem.mode}->EXITING_SHIP`;
   exitShipStartY = ship.position.y;
   transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+  playerShip.setParkedVisualState(true);
   exitShipTargetY = calculateParkedShipTargetY(transitionGroundHeight);
   parkedShipResolved = false;
   velocity.set(0, 0, 0);
@@ -11610,6 +11613,7 @@ function updateSurfacePlayer(delta: number): void {
       shipPreviousY = ship.position.y;
       previousVerticalInput = 0;
       parkedShipResolved = false;
+      playerShip.setParkedVisualState(false);
       playerModeSystem.syncShipContext(true, previousShipCameraPreference === 'cockpit');
       requestCameraFollowSync(`ENTERING_SHIP->${previousShipCameraPreference}`);
       hud.classList.toggle('cockpit-active', previousShipCameraPreference === 'cockpit');
@@ -17897,6 +17901,7 @@ if (diagnosticsMode) {
         setControlHints('foot');
       } else {
         parkedShipResolved = false;
+        playerShip.setParkedVisualState(false);
         playerModeSystem.forceShip(true, cameraModeSystem.mode === 'cockpit');
         surfaceCharacter.setVisible(false);
         shipAccessLift.state = 'retracted';
@@ -20602,7 +20607,7 @@ if (diagnosticsMode) {
           verticalDifference: proximity.vertical,
           boardingAvailable: proximity.available,
           parked: playerModeSystem.onFootActive && parkedShipResolved,
-          playerShipInstances: cachedPlayerShipInstances
+          playerShipInstances: countSceneObjectsByName(playerShip.group.name)
         };
       },
       reconcileParkedShip: () => settleParkedShipOnTerrain(false),

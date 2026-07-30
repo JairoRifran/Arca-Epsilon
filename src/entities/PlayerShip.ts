@@ -418,6 +418,8 @@ export class PlayerShip {
 
   private readonly body = new THREE.Group();
 
+  private parkedVisualState = false;
+
   private sensorDish?: THREE.Group;
 
   private sensorDishPitch?: THREE.Group;
@@ -637,8 +639,8 @@ export class PlayerShip {
     }
 
     const idle = THREE.MathUtils.clamp(1 - speed * 0.08, 0, 1);
-    this.body.position.y = Math.sin(elapsed * 1.1) * 0.12 * idle;
-    this.body.rotation.z = Math.sin(elapsed * 0.8) * 0.01 * idle;
+    this.body.position.y = this.parkedVisualState ? 0 : Math.sin(elapsed * 1.1) * 0.12 * idle;
+    this.body.rotation.z = this.parkedVisualState ? 0 : Math.sin(elapsed * 0.8) * 0.01 * idle;
 
     if (this.sensorDish) {
       this.sensorDish.rotation.y += delta * (0.32 + accel * 0.18);
@@ -798,6 +800,14 @@ export class PlayerShip {
     this.group.updateWorldMatrix(true, true);
     const visibleHull = this.nearRoot?.visible ? this.nearRoot : this.lowRoot?.visible ? this.lowRoot : this.modelRoot;
     return target.setFromObject(visibleHull, true);
+  }
+
+  setParkedVisualState(parked: boolean): void {
+    this.parkedVisualState = parked;
+    if (!parked) return;
+    this.body.position.y = 0;
+    this.body.rotation.z = 0;
+    this.group.updateWorldMatrix(true, true);
   }
 
   /** Releases runtime-created geometry, materials and textures owned here. */
