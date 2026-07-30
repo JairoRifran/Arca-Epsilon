@@ -24,6 +24,38 @@ const REQUIREMENT_LABELS: Record<DescentRequirementId, string> = {
   atlasCorridorDecoded: 'corredor Atlas decodificado'
 };
 
+/**
+ * What the pilot is told, and what to do about it.
+ *
+ * The labels above name a system state; these name a cause and an action. The
+ * refusal used to print the whole missing list — "faltan análisis orbital
+ * completo, escaneo del Marcador Atlas, corredor Atlas decodificado" — which is
+ * accurate, unreadable, and gives no first move. Only the first pending
+ * requirement is ever shown, because only one of them can be worked on next.
+ */
+const REQUIREMENT_BRIEFING: Record<DescentRequirementId, { reason: string; objective: string }> = {
+  e01Detected: {
+    reason: 'Sin candidato confirmado',
+    objective: 'Activá el escáner de largo alcance.'
+  },
+  orbitalScanComplete: {
+    reason: 'Datos atmosféricos incompletos',
+    objective: 'Recuperá los datos de la baliza de reconocimiento.'
+  },
+  habitabilityMinimum: {
+    reason: 'Viabilidad por debajo del mínimo',
+    objective: 'Completá el barrido de habitabilidad de E-01.'
+  },
+  atlasMarkerScanned: {
+    reason: 'Sin corredor de entrada calculado',
+    objective: 'Escaneá el Marcador Atlas.'
+  },
+  atlasCorridorDecoded: {
+    reason: 'Corredor de entrada sin decodificar',
+    objective: 'Mantenete en rango del Marcador Atlas hasta decodificar el corredor.'
+  }
+};
+
 /** Explicit safety interlock between orbital survey and atmospheric entry. */
 export class DescentSafetyGate {
   readonly minimumHabitabilityScore = 70;
@@ -67,12 +99,13 @@ export class DescentSafetyGate {
   }
 
   requestDescent(): boolean {
-    const missing = this.missingRequirementLabels;
-    if (missing.length === 0) {
+    const blocker = this.primaryBlocker;
+    if (!blocker) {
       this.blockedReason = '';
       return true;
     }
-    this.blockedReason = `Descenso denegado: faltan ${missing.join(', ')}.`;
+    // One cause, not the whole list. See REQUIREMENT_BRIEFING.
+    this.blockedReason = blocker.reason;
     return false;
   }
 
@@ -92,6 +125,20 @@ export class DescentSafetyGate {
 
   get missingRequirementLabels(): string[] {
     return this.missingRequirementIds.map((id) => REQUIREMENT_LABELS[id]);
+  }
+
+  /**
+   * The one thing standing between the pilot and the atmosphere.
+   *
+   * Returns the first unmet requirement with a cause and a next action, or
+   * undefined when the descent is authorized. The banner and the objective both
+   * read from here, so they can never disagree about why the descent was
+   * refused.
+   */
+  get primaryBlocker(): { id: DescentRequirementId; reason: string; objective: string } | undefined {
+    const id = this.missingRequirementIds[0];
+    if (!id) return undefined;
+    return { id, ...REQUIREMENT_BRIEFING[id] };
   }
 
   get state(): DescentSafetySnapshot {

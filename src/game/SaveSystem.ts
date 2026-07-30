@@ -475,6 +475,24 @@ export type SaveGameData = {
   undockingStarted?: boolean;
   arkCleared?: boolean;
   arkDepartureCompleted?: boolean;
+
+  // --- Mission 01 onboarding: flight tutorial, assist and recon beacon -----
+  // Also all optional, and for the same reason. A save without these is a
+  // pilot from before the onboarding existed: they already flew, so the
+  // tutorial restores as finished and the assist as `off` rather than being
+  // replayed at them. See `Mission01FlightAssist.restore`, where `off` is
+  // forced for any save past the tutorial regardless of what the file says —
+  // that is what stops assist leaking into later missions.
+  mission01TutorialStarted?: boolean;
+  mission01TutorialStep?: string;
+  mission01TutorialCompletedSteps?: string[];
+  mission01AssistLevel?: string;
+  mission01AssistEngaged?: boolean;
+  mission01BeaconPhase?: string;
+  mission01BeaconLocated?: boolean;
+  mission01BeaconScanned?: boolean;
+  /** Persisted at 25% checkpoints, never mid-stream. */
+  mission01TransferProgress?: number;
 };
 
 type LegacySaveGameData = Omit<SaveGameData, 'version' | 'tutorialCompleted'> & {

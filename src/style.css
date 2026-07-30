@@ -2345,6 +2345,129 @@ progress.is-critical::-webkit-progress-value {
   }
 }
 /* Mission 24 ascent telemetry: compact, temporary and instrument-like. */
+/* --- Mission 01 onboarding readout ---------------------------------------
+   Deliberately a strip, not a panel: it sits low and centred, never covers the
+   ship, and shows one instruction with a short row of live values under it.
+   Slots the current phase does not ask for are hidden by Mission01Hud, so a
+   stale value can never linger next to a new objective. */
+.mission01-hud {
+  position: fixed;
+  bottom: 96px;
+  left: 50%;
+  z-index: 34;
+  display: none;
+  width: min(520px, calc(100vw - 32px));
+  padding: 10px 14px 11px;
+  border: 1px solid rgba(126, 190, 190, 0.34);
+  border-radius: 3px;
+  background: rgba(4, 12, 17, 0.74);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.3);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.mission01-hud.is-active {
+  display: block;
+}
+
+.mission01-hud__objective {
+  margin: 0;
+  color: #e4f4f1;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.32;
+}
+
+.mission01-hud__keys {
+  margin-top: 4px;
+  color: rgba(150, 224, 214, 0.9);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.mission01-hud__keys[hidden] {
+  display: none;
+}
+
+.mission01-hud__progress {
+  margin-top: 8px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(126, 190, 190, 0.16);
+  overflow: hidden;
+}
+
+.mission01-hud__progress[hidden] {
+  display: none;
+}
+
+.mission01-hud__progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(113, 243, 194, 0.85), rgba(143, 216, 255, 0.95));
+  transition: width 0.12s linear;
+}
+
+.mission01-hud__readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 18px;
+  margin-top: 8px;
+}
+
+.mission01-hud__slot {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+}
+
+.mission01-hud__slot[hidden] {
+  display: none;
+}
+
+.mission01-hud__slot span {
+  color: rgba(183, 208, 211, 0.6);
+  font-size: 9px;
+  letter-spacing: 0.09em;
+}
+
+.mission01-hud__slot strong {
+  color: #d7ece9;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mission01-hud__warning {
+  margin: 7px 0 0;
+  color: #ffcf8a;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.mission01-hud__warning[hidden] {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .mission01-hud {
+    bottom: 84px;
+    width: calc(100vw - 20px);
+    padding: 8px 11px 9px;
+  }
+
+  .mission01-hud__objective {
+    font-size: 12px;
+  }
+
+  .mission01-hud__readout {
+    gap: 2px 12px;
+  }
+}
+
 .mission24-ascent-hud {
   position: fixed;
   right: 18px;

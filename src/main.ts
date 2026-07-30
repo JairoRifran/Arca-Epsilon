@@ -27,6 +27,7 @@ import { AlienRuin } from './entities/AlienRuin';
 import { DerelictWreck } from './entities/DerelictWreck';
 import { LandingZone } from './entities/LandingZone';
 import { OrbitalMarker } from './entities/OrbitalMarker';
+import { HoloMarker } from './effects/HoloMarker';
 import { PleyadanRelayBeacon } from './entities/PleyadanRelayBeacon';
 import { PleyadanHologram } from './entities/PleyadanHologram';
 import { DefensiveBeacon } from './entities/DefensiveBeacon';
@@ -57,7 +58,23 @@ import { DescentSystem } from './game/DescentSystem';
 import { DescentSafetyGate, type DescentSafetySnapshot } from './game/DescentSafetyGate';
 import { HabitabilitySystem } from './game/HabitabilitySystem';
 import { MissionManager } from './game/MissionManager';
+import type { MissionStepId } from './assets/missionDefinitions';
 import { ArkDepartureSequence, type ArkDepartureSnapshot } from './game/ArkDepartureSequence';
+import { Mission01FlightTutorial, type Mission01TutorialSnapshot } from './game/Mission01FlightTutorial';
+import { Mission01FlightAssist, type Mission01AssistSnapshot } from './game/Mission01FlightAssist';
+import { Mission01BeaconSurvey, type Mission01BeaconSnapshot } from './game/Mission01BeaconSurvey';
+import { Mission01CameraProfile } from './game/Mission01CameraProfile';
+import { Mission01Hud, type Mission01HudSlotId } from './ui/Mission01Hud';
+import {
+  MISSION01_ANALYSIS_LINE_SECONDS,
+  MISSION01_ANALYSIS_SEQUENCE,
+  MISSION01_DENIAL,
+  MISSION01_ONBOARDING_DIALOGUE,
+  mission01BeaconTuning,
+  mission01CameraTuning,
+  mission01TutorialSteps,
+  mission01TutorialTuning
+} from './assets/mission01OnboardingDefinitions';
 import { createEntryProfile, updateEntryProfile } from './game/entryProfile';
 import { ArkDockingAssembly } from './entities/ArkDockingAssembly';
 import {
@@ -378,6 +395,49 @@ export type ArkDepartureDebugState = ArkDepartureSnapshot & {
   mothershipScale: [number, number, number];
   dockingAssemblyBuilt: boolean;
   currentDialogue: string;
+};
+
+/** Everything `mission01Onboarding.spec.ts` asserts on. Computed on demand. */
+export type Mission01OnboardingDebugState = {
+  missionStep: string;
+  objective: string;
+  assistLevel: string;
+  assistActive: boolean;
+  /** Live camera-to-hull distance, in metres. */
+  cameraDistance: number;
+  /** Distance the framing profile is asking for, before damping. */
+  cameraFraming: number;
+  /** Estimated fraction of frame height the hull spans. */
+  shipScreenFraction: number;
+  cameraFov: number;
+  speed: number;
+  acceleration: number;
+  pitch: number;
+  yaw: number;
+  roll: number;
+  stability: number;
+  tutorialStarted: boolean;
+  tutorialStep: string;
+  tutorialStepsCompleted: string[];
+  tutorialHoldProgress: number;
+  activeBeacon: string | null;
+  beaconPhase: string;
+  /** -1 when there is no active marker. */
+  beaconDistance: number;
+  alignmentDegrees: number;
+  scannerActive: boolean;
+  scanProgress: number;
+  transferProgress: number;
+  descentDenied: boolean;
+  blockReason: string;
+  dataComplete: boolean;
+  descentAuthorized: boolean;
+  corridorActive: boolean;
+  entryStarted: boolean;
+  analysisLine: number;
+  shipCount: number;
+  mothershipCount: number;
+  activeTimers: string[];
 };
 export type Mission15DebugState = Mission15Snapshot;
 export type Mission16DebugState = Mission16Snapshot;
@@ -904,6 +964,28 @@ const arkDepartureAnchorWorld = new THREE.Vector3();
 /** Latches so each commander beat is spoken exactly once per session. */
 const arkDepartureAnnouncedBeats = new Set<string>();
 let arkDepartureTitleTimer = 0;
+
+// --- Mission 01 onboarding: the first minutes of flight --------------------
+// The prologue puts the pilot on the pad; this puts a ship in their hands. All
+// four systems own state only — no scene, no Three.js — so the whole opening is
+// drivable from the debug surface without running physics.
+const mission01Tutorial = new Mission01FlightTutorial();
+const mission01Assist = new Mission01FlightAssist();
+const mission01Beacon = new Mission01BeaconSurvey();
+const mission01Camera = new Mission01CameraProfile();
+/** Reused every frame by the tutorial sample: never allocate in the loop. */
+const mission01Scratch = new THREE.Vector3();
+const mission01BeaconWorld = new THREE.Vector3();
+const mission01Forward = new THREE.Vector3();
+/** Latches so each onboarding beat fires exactly once per session. */
+const mission01AnnouncedBeats = new Set<string>();
+/** Seconds since the clamps released, for the camera handover blend. */
+let mission01TimeSinceUndock = Number.POSITIVE_INFINITY;
+/** Built lazily the first time the beacon is revealed, disposed on completion. */
+let mission01BeaconMarker: HoloMarker | undefined;
+let mission01LastDenialAt = Number.NEGATIVE_INFINITY;
+let mission01AnalysisIndex = -1;
+let mission01AnalysisTimer = 0;
 const mission24 = new Mission24ReturnToOrigin();
 const atmosphericAscent = new AtmosphericAscentController();
 const atmosphericAscentEffect = new AtmosphericAscentEffect();
@@ -1245,6 +1327,7 @@ const colonyPanel = new ColonyPanel();
 const surfaceObjectivePanel = new SurfaceObjectivePanel();
 const surfaceMapPanel = new SurfaceMapPanel();
 const mission24AscentHud = new Mission24AscentHud(hud);
+const mission01Hud = new Mission01Hud(hud);
 const cameraModeSystem = new CameraModeSystem();
 const cockpitInterior = new CockpitInterior(assetLoader);
 const playerModeSystem = new PlayerModeSystem();
@@ -9990,7 +10073,18 @@ function updateArkDeparture(delta: number, elapsed: number): void {
       speakArkDepartureBeat(ARK_DEPARTURE_DIALOGUE.farewell, 'prologue-farewell');
       arkDockingAssembly.dispose();
       mothership.setPlatformPower(0);
+      // …and the onboarding begins. This is the handover point the brief asked
+      // for: the tutorial starts once the Ark is safely behind, never on the pad.
+      beginMission01Onboarding();
     }
+  }
+
+  // Time since release drives the camera's damped handover out of the docking
+  // pose. Started here rather than in the camera so a reload cannot restart it.
+  if (arkDeparture.state.undockingStarted && !Number.isFinite(mission01TimeSinceUndock)) {
+    mission01TimeSinceUndock = 0;
+  } else if (Number.isFinite(mission01TimeSinceUndock)) {
+    mission01TimeSinceUndock += delta;
   }
 
   // Docked: hold the hull still. The clamps are shut, so no input translates.
@@ -10008,6 +10102,426 @@ function updateArkDeparture(delta: number, elapsed: number): void {
   mothership.setClampOpen(arkDeparture.clampProgress);
   mothership.setPlatformPower(arkDeparture.platformPower);
   arkDockingAssembly.update(arkDeparture.clampProgress, !arkDeparture.completed, elapsed);
+}
+
+// --- Mission 01 onboarding ---------------------------------------------------
+
+/** Speaks an onboarding beat exactly once. Mirrors `speakArkDepartureBeat`. */
+function speakMission01Beat(dialogueId: string, triggerId: string, delaySeconds?: number): void {
+  if (mission01AnnouncedBeats.has(triggerId)) return;
+  mission01AnnouncedBeats.add(triggerId);
+  triggerDialogue(dialogueId, triggerId, delaySeconds);
+}
+
+/**
+ * Opens the flight tutorial once the exit corridor is behind us.
+ *
+ * Called from the prologue's own handover, so there is exactly one place where
+ * the pilot stops being cargo and starts being a pilot.
+ */
+function beginMission01Onboarding(): void {
+  if (inSurfacePhase || mission01Tutorial.started) return;
+  if (!mission01Tutorial.start(traveled)) return;
+  missionManager.start();
+  mission01Assist.engage(mission01Tutorial.assistLevel);
+  mission01Hud.setVisible(true);
+  speakMission01Beat(MISSION01_ONBOARDING_DIALOGUE.tutorialStart, 'm01-tutorial-start');
+  showPhaseBanner('CONTROL DE VUELO', 'Cuatro maniobras antes del barrido de largo alcance');
+}
+
+/**
+ * Where the current onboarding marker sits.
+ *
+ * One beacon, repositioned between steps, rather than four spawned markers. The
+ * tutorial legs are placed relative to the ship's heading at the moment the step
+ * opens, so the manoeuvre asked for is always the one the brief describes —
+ * notably the navigation leg, which is deliberately set off-heading so the pilot
+ * has to turn rather than coast into it.
+ */
+const mission01MarkerAnchor = new THREE.Vector3();
+let mission01MarkerValid = false;
+
+function placeMission01Marker(step: string): void {
+  mission01Forward.set(0, 0, -1).applyQuaternion(ship.quaternion);
+  const tuning = mission01TutorialTuning;
+  switch (step) {
+    case 'flightOrientation':
+      // Off to one side: pointing at it is the whole exercise.
+      mission01MarkerAnchor
+        .copy(ship.position)
+        .addScaledVector(mission01Forward, 420)
+        .add(new THREE.Vector3(180, 60, 0));
+      break;
+    case 'propulsionTrial':
+      mission01MarkerAnchor.copy(ship.position).addScaledVector(mission01Forward, tuning.propulsionDistance + 140);
+      break;
+    case 'navigationTrial': {
+      // Rotated off the current heading by the tuned angle so the leg cannot be
+      // completed by flying straight.
+      const angle = THREE.MathUtils.degToRad(tuning.navigationOffsetDegrees);
+      const offset = mission01Forward.clone().applyAxisAngle(WORLD_UP, angle);
+      mission01MarkerAnchor.copy(ship.position).addScaledVector(offset, 520);
+      mission01MarkerAnchor.y += 40;
+      break;
+    }
+    case 'stabilizationTrial':
+      mission01MarkerAnchor.copy(ship.position).addScaledVector(mission01Forward, 260);
+      break;
+    default:
+      mission01MarkerValid = false;
+      return;
+  }
+  mission01MarkerValid = true;
+}
+
+/** Lazily builds the single reusable beacon marker. */
+function ensureMission01BeaconMarker(): HoloMarker {
+  if (!mission01BeaconMarker) {
+    mission01BeaconMarker = new HoloMarker(14, 0x8fd8ff);
+    mission01BeaconMarker.group.name = 'Baliza de Reconocimiento';
+    scene.add(mission01BeaconMarker.group);
+  }
+  return mission01BeaconMarker;
+}
+
+/** Releases the beacon marker and everything it owns. */
+function disposeMission01BeaconMarker(): void {
+  if (!mission01BeaconMarker) return;
+  mission01BeaconMarker.group.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      object.geometry.dispose();
+      const material = object.material;
+      if (Array.isArray(material)) for (const entry of material) entry.dispose();
+      else material.dispose();
+    } else if (object instanceof THREE.Sprite) {
+      object.material.map?.dispose();
+      object.material.dispose();
+    }
+  });
+  scene.remove(mission01BeaconMarker.group);
+  mission01BeaconMarker = undefined;
+}
+
+/** World position of the recon beacon: low orbit, on the far side of approach. */
+function mission01BeaconPosition(target: THREE.Vector3): THREE.Vector3 {
+  const planet = candidatePlanet.group.position;
+  return target
+    .copy(planet)
+    .add(new THREE.Vector3(0, candidatePlanet.definition.radius * 0.42, 0))
+    .addScaledVector(
+      mission01Scratch.copy(ship.position).sub(planet).setY(0).normalize(),
+      candidatePlanet.definition.radius + mission01BeaconTuning.spawnDistance
+    );
+}
+
+/**
+ * Reveals the beacon and points the mission at it.
+ *
+ * Called both on reaching E-01 and the instant a descent is refused. That second
+ * path is the important one: the original mission only announced its remaining
+ * prerequisites after the habitability scan, so a pilot who dove early was told
+ * what was missing without ever being shown where to get it.
+ */
+function revealMission01Beacon(): void {
+  if (!mission01Beacon.locate()) return;
+  missionManager.locateBeacon();
+  ensureMission01BeaconMarker();
+  speakMission01Beat(MISSION01_ONBOARDING_DIALOGUE.beaconLocated, 'm01-beacon-located');
+  saveProgress();
+}
+
+/**
+ * Longest hull dimension, measured once from the real model.
+ *
+ * Used to estimate how much of the frame the ship occupies. Measured rather
+ * than hard-coded so the estimate stays honest if the model is ever rescaled —
+ * a hard-coded length would let the framing regress silently.
+ */
+const mission01HullBounds = new THREE.Box3();
+let mission01HullLength = 0;
+
+function getPlayerShipHullLength(): number {
+  if (mission01HullLength > 0) return mission01HullLength;
+  playerShip.getHullWorldBounds(mission01HullBounds);
+  if (mission01HullBounds.isEmpty()) return 0;
+  const size = mission01HullBounds.getSize(mission01Scratch);
+  mission01HullLength = Math.max(size.x, size.y, size.z);
+  return mission01HullLength;
+}
+
+/** Degrees between the ship's nose and a world point. */
+function mission01AlignmentTo(target: THREE.Vector3): number {
+  mission01Forward.set(0, 0, -1).applyQuaternion(ship.quaternion);
+  const toTarget = mission01Scratch.copy(target).sub(ship.position);
+  const length = toTarget.length();
+  if (length < 0.001) return 0;
+  toTarget.multiplyScalar(1 / length);
+  return THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(mission01Forward.dot(toTarget), -1, 1)));
+}
+
+/**
+ * Drives the whole onboarding for one frame.
+ *
+ * Ordering matters: the tutorial runs before the beacon so a manoeuvre and a
+ * scan can never both claim the objective line on the same frame.
+ */
+function updateMission01Onboarding(delta: number, elapsed: number): void {
+  if (inSurfacePhase || !mission01Tutorial.started) return;
+
+  mission01Assist.update(delta);
+  const speed = velocity.length();
+
+  // --- Manoeuvre tutorial --------------------------------------------------
+  if (!mission01Tutorial.completed) {
+    const step = mission01Tutorial.step;
+    if (!mission01MarkerValid) placeMission01Marker(step);
+    const marker = ensureMission01BeaconMarker();
+    marker.group.position.copy(mission01MarkerAnchor);
+    marker.opacity = 0.85;
+    marker.update(delta, elapsed);
+
+    const completedStep = mission01Tutorial.update(delta, {
+      alignmentDegrees: mission01AlignmentTo(mission01MarkerAnchor),
+      beaconDistance: ship.position.distanceTo(mission01MarkerAnchor),
+      travelled: traveled,
+      speed,
+      thrusting: input.has('w')
+    });
+
+    if (completedStep) {
+      // One transition, one place: reposition the marker, drop the assist a
+      // notch, mirror onto the mission step and confirm it to the pilot.
+      mission01MarkerValid = false;
+      mission01Assist.setLevel(mission01Tutorial.assistLevel);
+      playTone(720, 0.16);
+      if (mission01Tutorial.completed) {
+        missionManager.completeFlightTutorial();
+        mission01Assist.disengage();
+        disposeMission01BeaconMarker();
+        speakMission01Beat(MISSION01_ONBOARDING_DIALOGUE.tutorialComplete, 'm01-tutorial-complete');
+        showPhaseBanner('CONTROL DE VUELO CONFIRMADO', 'Escáner de largo alcance disponible');
+      } else {
+        missionManager.advanceFlightTutorial(mission01Tutorial.step as MissionStepId);
+        if (completedStep === 'flightOrientation') {
+          speakMission01Beat(MISSION01_ONBOARDING_DIALOGUE.tutorialPropulsion, 'm01-tutorial-propulsion');
+        }
+      }
+      saveProgress();
+    }
+    return;
+  }
+
+  // --- Recon beacon --------------------------------------------------------
+  if (!mission01Beacon.located || mission01Beacon.complete) return;
+
+  const beaconPosition = mission01BeaconPosition(mission01BeaconWorld);
+  const marker = ensureMission01BeaconMarker();
+  marker.group.position.copy(beaconPosition);
+  marker.opacity = 0.9;
+  marker.update(delta, elapsed);
+
+  const distance = ship.position.distanceTo(beaconPosition);
+  const inRange = distance <= mission01BeaconTuning.scanRadius;
+
+  if (mission01Beacon.phase === 'located' && inRange && missionManager.step === 'beaconApproach') {
+    missionManager.setHint('Presioná E para enlazar el escáner con la baliza.');
+  }
+
+  const reached = mission01Beacon.update(delta, inRange, speed);
+  if (reached === 'transferring') {
+    missionManager.beginDataTransfer();
+    scannerPulse.trigger(ship.position.clone(), true);
+    playTone(760, 0.18);
+    saveProgress();
+  } else if (reached === 'complete') {
+    // The data lands: this is what authorises the descent, and it arrived
+    // because the pilot flew there — not because a timer expired.
+    missionManager.completeDataTransfer();
+    descentSafetyGate.completeOrbitalScan(Math.max(descentSafetyGate.state.habitabilityScore, 74));
+    habitabilitySystem.forceComplete();
+    mission01AnalysisIndex = 0;
+    mission01AnalysisTimer = 0;
+    discoveryEffect.trigger(beaconPosition.clone());
+    disposeMission01BeaconMarker();
+    speakMission01Beat(MISSION01_ONBOARDING_DIALOGUE.transferComplete, 'm01-transfer-complete');
+    musicManager.playSting('discovery', elapsed);
+    saveProgress();
+  }
+}
+
+/**
+ * Walks the compact analysis readout after the data lands.
+ *
+ * Four short lines rather than a spinner: the pilot sees the data arrive, sees
+ * the Ark work on it, and understands why a corridor now exists.
+ */
+function updateMission01Analysis(delta: number, elapsed: number): void {
+  if (mission01AnalysisIndex < 0) return;
+  mission01AnalysisTimer += delta;
+  if (mission01AnalysisTimer < MISSION01_ANALYSIS_LINE_SECONDS) return;
+  mission01AnalysisTimer = 0;
+  const line = MISSION01_ANALYSIS_SEQUENCE[mission01AnalysisIndex];
+  if (!line) {
+    mission01AnalysisIndex = -1;
+    speakMission01Beat(MISSION01_ONBOARDING_DIALOGUE.corridorSent, 'm01-corridor-sent');
+    return;
+  }
+  const report = habitabilitySystem.report;
+  const detail = report
+    ? `Viabilidad ${report.viability}% · atmósfera compatible · margen estrecho`
+    : 'Perfil atmosférico recibido';
+  showPhaseBanner(line, mission01AnalysisIndex === 0 ? detail : 'Análisis de Arca Epsilon en curso');
+  playTone(620 + mission01AnalysisIndex * 90, 0.14);
+  mission01AnalysisIndex += 1;
+  void elapsed;
+}
+
+/**
+ * Fast-forwards the onboarding to a named phase, for probes.
+ *
+ * Always drives the real transitions in order rather than assigning state, so a
+ * phase that could not be reached by playing cannot be reached here either —
+ * which is what keeps the probe testing the mission instead of the debug hook.
+ */
+function advanceMission01ToDebugStep(step: string): boolean {
+  if (!mission01Tutorial.started) beginMission01Onboarding();
+
+  const tutorialOrder = ['flightOrientation', 'propulsionTrial', 'navigationTrial', 'stabilizationTrial'];
+  const targetTutorialIndex = tutorialOrder.indexOf(step);
+  if (targetTutorialIndex >= 0) {
+    let guard = 0;
+    while (mission01Tutorial.step !== step && !mission01Tutorial.completed && guard < 8) {
+      window.__arcaDebug?.driveMission01TutorialStep();
+      guard += 1;
+    }
+    return mission01Tutorial.step === step;
+  }
+
+  window.__arcaDebug?.completeMission01Tutorial();
+  if (step === 'scannerTutorial') return missionManager.step === 'scannerTutorial';
+
+  missionManager.activateScanner();
+  descentSafetyGate.markE01Detected();
+  if (step === 'followSignal') return true;
+
+  revealMission01Beacon();
+  if (step === 'beaconApproach') return true;
+
+  window.__arcaDebug?.approachMission01Beacon();
+  if (step === 'beaconSurvey') return true;
+
+  // Run the survey forward through its own update rather than assigning it.
+  let guard = 0;
+  while (!mission01Beacon.complete && guard < 4000) {
+    const reached = mission01Beacon.update(0.05, true, 0);
+    if (reached === 'transferring') missionManager.beginDataTransfer();
+    if (step === 'dataTransfer' && mission01Beacon.transferPercent > 40) return true;
+    guard += 1;
+  }
+  missionManager.completeDataTransfer();
+  descentSafetyGate.completeOrbitalScan(Math.max(descentSafetyGate.state.habitabilityScore, 74));
+  habitabilitySystem.forceComplete();
+  if (step === 'dataTransfer') return true;
+
+  // Remaining requirements come from the existing Atlas chain, untouched.
+  descentSafetyGate.markCorridorDecoded();
+  orbitalMarkerSystem.forceDecoded();
+  missionManager.completeHabitability(habitabilitySystem.forceComplete());
+  missionManager.startMarkerDecode();
+  missionManager.completeMarkerDecode();
+  descentSystem.lockCorridor();
+  return step === 'descentAuthorized' || step === 'approachPlanet';
+}
+
+/**
+ * Claims the interaction key for the recon beacon, when it applies.
+ *
+ * Returns true only when it actually started the scan, so on every other frame
+ * the key falls straight through to the normal long-range sweep. That is what
+ * keeps one binding doing one thing at a time.
+ */
+function handleMission01BeaconInteraction(): boolean {
+  if (inSurfacePhase || !mission01Beacon.located || mission01Beacon.phase !== 'located') return false;
+  const distance = ship.position.distanceTo(mission01BeaconPosition(mission01BeaconWorld));
+  if (distance > mission01BeaconTuning.scanRadius) return false;
+  if (!mission01Beacon.beginScan()) return false;
+  missionManager.beginBeaconScan();
+  missionManager.clearHint();
+  scannerPulse.trigger(ship.position.clone(), true);
+  tutorialManager.complete('scanner');
+  playTone(680, 0.16);
+  return true;
+}
+
+/**
+ * Feeds the compact M01 readout.
+ *
+ * Each phase declares the slots it wants; everything else is hidden rather than
+ * left showing a stale value. That is what makes "one instruction at a time"
+ * structural instead of a convention someone has to remember.
+ */
+function updateMission01Hud(): void {
+  const active = mission01Tutorial.started && !inSurfacePhase && missionManager.step !== 'missionComplete';
+  mission01Hud.setVisible(active);
+  if (!active) return;
+
+  const step = missionManager.step;
+  const speed = velocity.length();
+  const slots: Mission01HudSlotId[] = [];
+  const values: Partial<Record<Mission01HudSlotId, string>> = {};
+  let progress: number | undefined;
+  let warning = '';
+  let keys: readonly string[] = [];
+
+  const tutorialStep = mission01Tutorial.currentDefinition;
+  if (tutorialStep) {
+    keys = tutorialStep.keys;
+    const distance = mission01MarkerValid ? ship.position.distanceTo(mission01MarkerAnchor) : 0;
+    const alignment = mission01MarkerValid ? mission01AlignmentTo(mission01MarkerAnchor) : 0;
+    slots.push('bearing', 'alignment', 'speed', 'distance');
+    values.bearing = 'BALIZA DE PRUEBA';
+    values.alignment = `${alignment.toFixed(0)}°`;
+    values.speed = `${speed.toFixed(0)} m/s`;
+    values.distance = `${Math.round(distance)} m`;
+    progress = mission01Tutorial.holdProgress;
+  } else if (mission01Beacon.located && !mission01Beacon.complete) {
+    const distance = ship.position.distanceTo(mission01BeaconPosition(mission01BeaconWorld));
+    const inRange = distance <= mission01BeaconTuning.scanRadius;
+    slots.push('bearing', 'distance', 'speed', 'scanner');
+    values.bearing = 'BALIZA DE RECONOCIMIENTO';
+    values.distance = `${Math.round(distance)} m`;
+    values.speed = `${speed.toFixed(0)} m/s`;
+    values.scanner = inRange ? 'EN RANGO' : 'FUERA DE RANGO';
+    keys = mission01Beacon.phase === 'located' ? ['E'] : [];
+    if (mission01Beacon.phase === 'scanning') {
+      progress = mission01Beacon.scanPercent / 100;
+    } else if (mission01Beacon.phase === 'transferring') {
+      slots.push('transfer');
+      values.transfer = `${Math.round(mission01Beacon.transferPercent)} %`;
+      progress = mission01Beacon.transferPercent / 100;
+      warning = mission01Beacon.transferStalledReason(inRange, speed);
+    }
+  } else {
+    slots.push('speed', 'authorization');
+    values.speed = `${speed.toFixed(0)} m/s`;
+    values.authorization = descentSafetyGate.descentAuthorized ? 'AUTORIZADO' : 'NO AUTORIZADO';
+    if (descentSystem.state.phase === 'corridorLocked' || step === 'approachPlanet') {
+      slots.push('corridor');
+      values.corridor = 'ACTIVO';
+    }
+    if (step === 'scannerTutorial') keys = ['E'];
+  }
+
+  if (missionManager.descentDenied && !warning) warning = missionManager.blockReason;
+
+  mission01Hud.update({
+    objective: missionManager.currentObjective,
+    keys,
+    slots,
+    values,
+    progress,
+    warning
+  });
 }
 
 /**
@@ -10093,6 +10607,87 @@ function restoreArkDeparture(save: SaveGameData): void {
   }
   mothership.setClampOpen(arkDeparture.clampProgress);
   mothership.setPlatformPower(arkDeparture.platformPower);
+}
+
+/**
+ * Restores the onboarding.
+ *
+ * Three compatibility rules, in order of how much damage getting them wrong
+ * would do:
+ *
+ *  1. **Assist never leaks.** It is forced off unless the tutorial is genuinely
+ *     still in progress, whatever the file claims. A stale or hand-edited save
+ *     cannot carry flight assist into Mission 05.
+ *  2. **Nothing already earned is revoked.** A save past the tutorial restores
+ *     it as complete; a completed transfer stays complete.
+ *  3. **A pre-onboarding save just continues.** No `mission01TutorialStarted`
+ *     field means the pilot flew before this existed, so the tutorial is marked
+ *     done rather than replayed at someone mid-campaign.
+ */
+function restoreMission01Onboarding(save: SaveGameData): void {
+  mission01AnnouncedBeats.clear();
+  mission01MarkerValid = false;
+  mission01AnalysisIndex = -1;
+  mission01AnalysisTimer = 0;
+  mission01LastDenialAt = Number.NEGATIVE_INFINITY;
+  mission01TimeSinceUndock = Number.POSITIVE_INFINITY;
+  disposeMission01BeaconMarker();
+
+  const step = save.currentMissionStep;
+  const tutorialSteps: MissionStepId[] = [
+    'flightOrientation',
+    'propulsionTrial',
+    'navigationTrial',
+    'stabilizationTrial'
+  ];
+  const midTutorial = tutorialSteps.includes(step as MissionStepId);
+
+  if (save.mission01TutorialStarted === undefined) {
+    // Pre-onboarding save. If they were still docked the prologue owns them and
+    // the tutorial opens normally when the corridor clears; otherwise they are
+    // already flying, so it is simply done.
+    if (save.arkDepartureCompleted ?? true) {
+      mission01Tutorial.forceComplete();
+    } else {
+      mission01Tutorial.reset();
+    }
+    mission01Assist.forceOff();
+    mission01Beacon.reset();
+    return;
+  }
+
+  mission01Tutorial.restore(
+    {
+      mission01TutorialStarted: save.mission01TutorialStarted,
+      mission01TutorialStep: save.mission01TutorialStep as never,
+      mission01TutorialCompletedSteps: (save.mission01TutorialCompletedSteps ?? []) as never
+    },
+    traveled
+  );
+  if (!midTutorial && mission01Tutorial.started) mission01Tutorial.forceComplete();
+
+  mission01Assist.restore(
+    {
+      mission01AssistLevel: save.mission01AssistLevel as never,
+      mission01AssistEngaged: save.mission01AssistEngaged ?? false
+    },
+    midTutorial && !mission01Tutorial.completed
+  );
+
+  mission01Beacon.restore({
+    mission01BeaconPhase: save.mission01BeaconPhase as never,
+    mission01BeaconLocated: save.mission01BeaconLocated ?? false,
+    mission01BeaconScanned: save.mission01BeaconScanned ?? false,
+    mission01TransferProgress: save.mission01TransferProgress ?? 0
+  });
+
+  // Beats already heard stay heard.
+  if (mission01Tutorial.started) mission01AnnouncedBeats.add('m01-tutorial-start');
+  if (mission01Tutorial.completed) mission01AnnouncedBeats.add('m01-tutorial-complete');
+  if (mission01Beacon.located) mission01AnnouncedBeats.add('m01-beacon-located');
+  if (mission01Beacon.complete) mission01AnnouncedBeats.add('m01-transfer-complete');
+
+  if (mission01Beacon.located && !mission01Beacon.complete) ensureMission01BeaconMarker();
 }
 
 function getCurrentAudioMissionId(): string {
@@ -10248,6 +10843,11 @@ function buildSaveGameData(): Omit<SaveGameData, 'version' | 'savedAt'> {
     ...mission23.snapshot(),
     ...mission24.snapshot(),
     ...getArkDepartureSaveState(),
+    ...mission01Tutorial.snapshot(),
+    ...mission01Assist.snapshot(),
+    // Transfer progress is snapshotted at its 25% checkpoints, never
+    // mid-stream, so a reload resumes on a boundary the pilot recognises.
+    ...mission01Beacon.snapshot(),
     translationState: signalTranslation.state,
     translationProgress: signalTranslation.progress,
     translatedFragments: signalTranslation.translatedFragments
@@ -10691,6 +11291,7 @@ function applySaveGame(save: SaveGameData): void {
   mission24AnnouncedBeats.clear();
   mission24RehearsalEngaged = false;
   restoreArkDeparture(save);
+  restoreMission01Onboarding(save);
   mission24OrbitalEnvironmentActive = false;
   mission23AnnouncedBeats.clear();
   mission23SupportCooldown = 0;
@@ -12583,18 +13184,33 @@ function applyInput(delta: number): void {
   const up = spaceUp.set(0, 1, 0);
   const boosting = input.has('shift');
 
-  const forwardInput = (input.has('w') ? 1 : 0) - (input.has('s') ? 0.64 : 0);
+  // M01's flight assist. Outside the onboarding every factor is 1, so this
+  // whole block reduces exactly to the original model.
+  const assist = mission01Assist.current;
+  const assistActive = mission01Assist.active;
+
+  const forwardInput =
+    (input.has('w') ? 1 : 0) - (input.has('s') ? 0.64 * (assistActive ? assist.brakeGain : 1) : 0);
   const strafeInput = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
   const verticalInput =
     (input.has(' ') ? 1 : 0) - (input.has('q') || input.has('c') || input.has('control') ? 1 : 0);
 
   // Engines take time to build and longer to bleed off: mass, felt.
-  const spoolRate = forwardInput > spaceThrustLevel ? 2.6 : 1.5;
+  //
+  // That asymmetry — 2.6 up against 1.5 down — is exactly what reads to a new
+  // pilot as "the ship keeps moving in ways I didn't ask for": releasing W
+  // leaves it still accelerating. Under assist the bleed is faster than the
+  // build, so letting go reads as letting go.
+  const spoolUp = forwardInput > spaceThrustLevel;
+  const spoolRate = spoolUp ? 2.6 : 1.5 * (assistActive ? assist.spoolDownGain : 1);
   spaceThrustLevel += (forwardInput - spaceThrustLevel) * (1 - Math.exp(-delta * spoolRate));
   // Boost is a separate, slower ramp so it lands as a shove, not a toggle.
   spaceBoostLevel += ((boosting ? 1 : 0) - spaceBoostLevel) * (1 - Math.exp(-delta * 1.9));
   const boost = 1 + (settings.boost - 1) * spaceBoostLevel;
-  const acceleration = settings.thrust * boost * delta;
+  // The ramp also sets terminal velocity, since this model has no speed cap:
+  // the ship is slower while the pilot is learning and gets faster as the
+  // assist decays.
+  const acceleration = settings.thrust * boost * delta * (assistActive ? assist.accelerationRamp : 1);
 
   velocity.addScaledVector(forward, acceleration * spaceThrustLevel);
   velocity.addScaledVector(right, acceleration * 0.72 * strafeInput);
@@ -12628,7 +13244,11 @@ function applyInput(delta: number): void {
   const axialSpeed = velocity.dot(forward);
   spaceAxial.copy(forward).multiplyScalar(axialSpeed);
   spaceLateral.copy(velocity).sub(spaceAxial);
-  const axialDamping = Math.exp(-(1 - settings.drag) * 22 * delta);
+  // Stock axial damping gives a 1.3 s coast — correct for vacuum, bewildering
+  // for a first flight. The assist shortens it only while there is no thrust
+  // input, so momentum still reads as momentum when the pilot is flying.
+  const coasting = assistActive && Math.abs(forwardInput) < 0.001;
+  const axialDamping = Math.exp(-(1 - settings.drag) * 22 * (coasting ? assist.releaseDamping : 1) * delta);
   const lateralDamping = Math.exp(-(1 - settings.drag) * 74 * delta);
   spaceAxial.multiplyScalar(axialDamping);
   spaceLateral.multiplyScalar(lateralDamping);
@@ -13049,6 +13669,9 @@ function updateMissionSystems(delta: number, elapsed: number): void {
     }
   }
   updateMission24Systems(delta, elapsed);
+  updateMission01Onboarding(delta, elapsed);
+  updateMission01Analysis(delta, elapsed);
+  updateMission01Hud();
   if (
     threatDirector.complicationActive &&
     (missionManager.step === 'analyzeHabitability' || missionManager.step === 'surviveComplication')
@@ -13067,7 +13690,7 @@ function updateMissionSystems(delta: number, elapsed: number): void {
     missionManager.completeHabitability(habitabilitySystem.report);
     renderHabitabilityReport();
     triggerDialogue('m01_habitability_promising', 'habitability-sufficient');
-    triggerDialogue('m01_atlas_detected', 'atlas-detected', 2.2);
+    triggerDialogue(MISSION01_ONBOARDING_DIALOGUE.atlasDetected, 'atlas-detected', 2.2);
     saveProgress();
     missionText.textContent = `${habitabilitySystem.report.status}. ${orbitalMarkerLore.scannerLead}`;
     playTone(780, 0.22);
@@ -13104,26 +13727,54 @@ function updateMissionSystems(delta: number, elapsed: number): void {
     missionManager.step !== 'touchdown'
   ) {
     if (!descentSafetyGate.requestDescent()) {
-      const outward = ship.position.clone().sub(candidatePlanet.group.position).normalize();
-      ship.position.copy(candidatePlanet.group.position).addScaledVector(outward, entryBoundary + 10);
+      // The refusal, rewritten.
+      //
+      // This used to teleport the hull back outside the boundary, print a bare
+      // "DESCENSO DENEGADO" every frame, and only reveal the cause inside a
+      // 2.8 s throttle — while the HUD objective still read "set course for
+      // E-01". The pilot was pushed away from the one thing they had been told
+      // to do, with nothing actionable on screen.
+      //
+      // Now: no teleport, one named cause, and an objective that changes in this
+      // same frame.
+      const blocker = descentSafetyGate.primaryBlocker;
+      const outward = mission01Scratch.copy(ship.position).sub(candidatePlanet.group.position).normalize();
+      // Cancel inward momentum instead of repositioning the hull. The ship is
+      // held off the atmosphere by its own thrusters, which is something the
+      // pilot can see happening rather than a snap they cannot explain.
       const inwardSpeed = velocity.dot(outward);
-      if (inwardSpeed < 0) velocity.addScaledVector(outward, -inwardSpeed + 0.35);
-      transientWarning = 'DESCENSO DENEGADO // DATOS ORBITALES INSUFICIENTES';
-      if (elapsed - lastDescentBlockWarningAt > 2.8) {
-        lastDescentBlockWarningAt = elapsed;
+      if (inwardSpeed < 0) velocity.addScaledVector(outward, -inwardSpeed * 1.6);
+      transientWarning = `${MISSION01_DENIAL.bannerTitle} // ${blocker?.reason ?? MISSION01_DENIAL.bannerReason}`;
+
+      if (!missionManager.descentDenied) {
+        // First refusal: everything the pilot needs, immediately. No throttle —
+        // the delay was the defect.
+        const objective = blocker?.objective ?? MISSION01_DENIAL.objective;
+        missionManager.denyDescent(objective, blocker?.reason ?? MISSION01_DENIAL.bannerReason);
+        missionText.textContent = `${blocker?.reason ?? MISSION01_DENIAL.bannerReason}. ${objective}`;
+        showPhaseBanner(MISSION01_DENIAL.bannerTitle, blocker?.reason ?? MISSION01_DENIAL.bannerReason);
+        // The beacon is revealed here, not after the habitability scan: being
+        // told what is missing is useless without being shown where to get it.
+        if (blocker?.id === 'orbitalScanComplete') revealMission01Beacon();
         triggerDialogue('m01_descent_blocked', 'descent-blocked');
-        const missing = descentSafetyGate.state.missingDescentRequirements.join(', ');
-        missionText.textContent = `Descenso denegado. No es seguro ingresar a la atmósfera. Faltan: ${missing}. Completa el análisis orbital antes de aproximarte.`;
-        showPhaseBanner('DESCENSO DENEGADO', `Faltan datos críticos: ${missing}`);
+        speakMission01Beat(MISSION01_ONBOARDING_DIALOGUE.descentDeniedReason, 'm01-denial-reason', 1.4);
         playTone(170, 0.24);
+        lastDescentBlockWarningAt = elapsed;
+        saveProgress();
+      } else if (elapsed - lastDescentBlockWarningAt > 6) {
+        // Repeats stay quiet: the objective is already on screen and correct.
+        lastDescentBlockWarningAt = elapsed;
+        playTone(170, 0.18);
       }
     } else if (missionManager.step === 'approachPlanet' && descentSystem.state.phase === 'corridorLocked') {
       descentSystem.beginEntry();
       missionManager.beginAtmosphericEntry();
-      triggerDialogue('m01_atmospheric_entry', 'atmospheric-entry');
+      // Voseo replacement for `m01_atmospheric_entry`, whose generated audio is
+      // in `usted`. The old MP3 stays on disk, unused; nothing is regenerated.
+      triggerDialogue(MISSION01_ONBOARDING_DIALOGUE.atmosphericEntry, 'atmospheric-entry');
       saveProgress();
       missionText.textContent = descentLore.entryStart;
-      showPhaseBanner('ENTRADA ATMOSFÉRICA', 'Mantén el vector de descenso y controla el calor');
+      showPhaseBanner('ENTRADA ATMOSFÉRICA', 'Mantené el vector de descenso y controlá el calor');
       cameraShake = Math.max(cameraShake, 0.22);
       playTone(190, 0.28);
     }
@@ -14154,7 +14805,7 @@ const SPACE_DIALOGUE_BY_STEP: Readonly<Record<string, string>> = {
   scannerTutorial: 'm01_start_commander',
   followSignal: 'm01_e01_detected',
   analyzeHabitability: 'm01_orbital_scan',
-  scanOrbitalMarker: 'm01_atlas_detected',
+  scanOrbitalMarker: MISSION01_ONBOARDING_DIALOGUE.atlasDetected,
   approachPlanet: 'm01_descent_authorized',
   atmosphericEntry: 'm01_atmospheric_entry',
   firstFoothold: 'm01_landing_complete'
@@ -14545,6 +15196,10 @@ function dispatchInputAction(action: GameInputAction, key: string): boolean {
         // and the clamp release instead of the long-range sweep, which only
         // makes sense once the ship is outside the perimeter anyway.
         if (handleArkDepartureInteraction()) return true;
+        // The recon beacon reuses the real scanner control rather than
+        // inventing a second binding. Only one of these can claim the key on a
+        // given frame, so E is never processed twice.
+        if (handleMission01BeaconInteraction()) return true;
         scan();
         return true;
       },
@@ -16114,6 +16769,18 @@ function updateCamera(delta: number): void {
   let offsetY = 8.8 + Math.min(speed * 0.04, 2.8);
   let offsetZ = 25 + Math.min(speed * 0.18, 13);
   let offsetX = 0;
+  // Mission 01's flight phases get their own framing. The stock offsets put the
+  // scout 25-38 m back at FOV 64, dead centre, which made the hull small and
+  // hid the lane it was flying down. `mission01Framing` stays undefined outside
+  // the onboarding, so every other phase keeps the framing it always had.
+  const mission01Framing = mission01FlightFramingActive()
+    ? mission01Camera.update({
+        speed,
+        boosting,
+        markerDistance: mission01ActiveMarkerDistance(),
+        timeSinceUndock: mission01TimeSinceUndock
+      })
+    : undefined;
   if (inSurfacePhase) {
     const boostCamera = THREE.MathUtils.clamp(surfaceBoostIntensity / SURFACE_SHIP_TUNING.BOOST_FX_INTENSITY, 0, 1);
     offsetY = THREE.MathUtils.lerp(6.4, 7.6, boostCamera);
@@ -16127,6 +16794,10 @@ function updateCamera(delta: number): void {
     offsetX = 3.2;
     offsetY = 7.2;
     offsetZ = 22.5;
+  } else if (mission01Framing) {
+    offsetX = mission01Framing.offsetX;
+    offsetY = mission01Framing.offsetY;
+    offsetZ = mission01Framing.offsetZ;
   } else if (step === 'approachPlanet') {
     offsetY += 2.8;
     offsetZ += 2;
@@ -16145,9 +16816,21 @@ function updateCamera(delta: number): void {
     offsetZ = 19.5;
   }
 
+  // Basis choice is what makes attitude readable.
+  //
+  // `ship.quaternion` already carries `bankRoll` (and `spaceThrustPitch`), so
+  // using it as the camera basis rolls the horizon with the hull — and then
+  // `camera.rotateZ(bankRoll * …)` below rolls it a second time. That double
+  // coupling, not the distance, is why the ship's orientation was hard to parse.
+  //
+  // During M01 the camera hangs off a yaw+pitch basis with no roll — exactly
+  // what the surface camera already does with `smoothYaw` — so the ship banks
+  // and the world stays put.
   const cameraBasis = inBasin || inSurfacePhase
     ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), smoothYaw)
-    : ship.quaternion;
+    : mission01Framing
+      ? new THREE.Quaternion().setFromEuler(new THREE.Euler(smoothPitch, smoothYaw, 0, 'YXZ'))
+      : ship.quaternion;
   const offset = new THREE.Vector3(offsetX, offsetY, offsetZ).applyQuaternion(cameraBasis);
   const externalDesired = target.clone().add(offset);
   if (inSurfacePhase && cockpitBlend < 0.98) {
@@ -16162,6 +16845,13 @@ function updateCamera(delta: number): void {
     cameraFollowInitialized = true;
     cameraFollowSnapPending = false;
     cameraFollowInitializedThisFrame = true;
+  } else if (mission01Framing && mission01Framing.handover < 1) {
+    // Leaving the cradle is a damped move into the chase pose, not the instant
+    // cut the stock snap would produce. The blend eases so the Ark slides out of
+    // frame behind the pilot instead of jumping there.
+    const eased = mission01Framing.handover * mission01Framing.handover * (3 - 2 * mission01Framing.handover);
+    const response = 1 - Math.exp(-delta * THREE.MathUtils.lerp(2.4, mission01CameraTuning.followResponse, eased));
+    camera.position.lerp(desired, response);
   } else {
     camera.position.lerp(desired, 1 - Math.pow(0.0009, delta));
   }
@@ -16189,8 +16879,10 @@ function updateCamera(delta: number): void {
 
   camera.lookAt(lookTarget);
   // The camera leans a fraction of the ship's bank: horizon tilts with the
-  // turn instead of staying artificially level.
-  camera.rotateZ(bankRoll * 0.3);
+  // turn instead of staying artificially level. During M01 the lean is much
+  // smaller, because the basis above no longer carries the roll either — the
+  // two together are what made the hull's attitude unreadable.
+  camera.rotateZ(bankRoll * (mission01Framing ? mission01Framing.rollLean : 0.3));
   if (cockpitBlend > 0) {
     const externalQuaternion = camera.quaternion.clone();
     const cockpitQuaternion = ship.quaternion.clone();
@@ -16204,7 +16896,19 @@ function updateCamera(delta: number): void {
     72,
     THREE.MathUtils.clamp(surfaceBoostIntensity / SURFACE_SHIP_TUNING.BOOST_FX_INTENSITY, 0, 1)
   );
-  const externalFov = step === 'atmosphericEntry' ? 72 : inBasin && !inSurfacePhase ? 68 : boosting ? 70 : inSurfacePhase ? surfaceFov : step === 'approachPlanet' ? 66 : 64;
+  const externalFov = step === 'atmosphericEntry'
+    ? 72
+    : inBasin && !inSurfacePhase
+      ? 68
+      : inSurfacePhase
+        ? surfaceFov
+        // A tighter lens during M01: at 64 the close framing would distort, and
+        // the narrower field is part of what makes the hull read as a vehicle.
+        : mission01Framing
+          ? mission01Framing.fov
+          : boosting
+            ? 70
+            : step === 'approachPlanet' ? 66 : 64;
   const cockpitFov = step === 'atmosphericEntry' ? 68 : inSurfacePhase ? 64 : 66;
   // The Aurora expedition opens the lens a couple of degrees on the exposed
   // legs and on the reveal; it is an offset on the existing target, so every
@@ -16213,6 +16917,38 @@ function updateCamera(delta: number): void {
   camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 1 - Math.pow(0.02, delta));
   camera.near = THREE.MathUtils.lerp(camera.near, THREE.MathUtils.lerp(0.1, 0.07, cockpitBlend), 1 - Math.pow(0.02, delta));
   camera.updateProjectionMatrix();
+}
+
+/**
+ * True while M01's own framing should drive the chase camera.
+ *
+ * Scoped deliberately tightly: the onboarding through to the corridor, in
+ * space, in the external view. Atmospheric entry is excluded — its cinematic
+ * direction is already tuned and is not ours to touch.
+ */
+function mission01FlightFramingActive(): boolean {
+  if (inSurfacePhase || inBasin) return false;
+  if (!mission01Tutorial.started) return false;
+  const step = missionManager.step;
+  return (
+    step !== 'atmosphericEntry' &&
+    step !== 'landingApproach' &&
+    step !== 'touchdown' &&
+    step !== 'firstFoothold' &&
+    step !== 'transmitData' &&
+    step !== 'missionComplete'
+  );
+}
+
+/** Distance to whatever marker M01 currently wants the pilot looking at. */
+function mission01ActiveMarkerDistance(): number {
+  if (!mission01Tutorial.completed && mission01MarkerValid) {
+    return ship.position.distanceTo(mission01MarkerAnchor);
+  }
+  if (mission01Beacon.located && !mission01Beacon.complete) {
+    return ship.position.distanceTo(mission01BeaconPosition(mission01BeaconWorld));
+  }
+  return Number.POSITIVE_INFINITY;
 }
 
 function snapBasinCameraFraming(): void {
@@ -16355,7 +17091,12 @@ function animate(): void {
     }
 
     if (playerModeSystem.insideShip) {
-      const headingResponse = 1 - Math.pow(0.002, delta);
+      // M01's assist scales the existing response rather than replacing it, so
+      // there is never a second flight model to drift out of sync. Outside the
+      // onboarding every factor is exactly 1 and this reduces to the original.
+      const assist = mission01Assist.current;
+      const assistActive = mission01Assist.active && !inSurfacePhase;
+      const headingResponse = 1 - Math.pow(0.002 / (assistActive ? assist.rotationDamping : 1), delta);
       const yawError = yaw - smoothYaw;
       smoothYaw += yawError * headingResponse;
       smoothPitch += (pitch - smoothPitch) * headingResponse;
@@ -16364,13 +17105,20 @@ function animate(): void {
       const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ship.quaternion);
       const lateralSlip = right.dot(velocity);
       const strafe = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
-      const maxBank = inSurfacePhase ? SURFACE_SHIP_TUNING.MAX_BANK : 0.55;
+      const maxBank = inSurfacePhase
+        ? SURFACE_SHIP_TUNING.MAX_BANK
+        : assistActive ? assist.rollClamp : 0.55;
       const targetRoll = THREE.MathUtils.clamp(
         yawError * (inSurfacePhase ? 3.4 : 4.2) - strafe * 0.16 - lateralSlip * 0.006,
         -maxBank,
         maxBank
       );
-      bankRoll += (targetRoll - bankRoll) * (1 - Math.pow(0.01, delta));
+      // Residual bank returns to neutral faster when the pilot is not steering.
+      // Deliberately bank only: pitch is the aim direction here, so levelling it
+      // would fight the pilot every time they aimed above or below the ecliptic.
+      const steering = Math.abs(yawError) > 0.002 || strafe !== 0;
+      const levelBoost = assistActive && !steering ? 1 + assist.levelAssist : 1;
+      bankRoll += (targetRoll - bankRoll) * (1 - Math.pow(0.01, delta * levelBoost));
       // In orbit the hull also carries the eased thrust attitude, so a burn
       // reads on the silhouette itself and not only in the HUD.
       ship.rotation.set(smoothPitch + (inSurfacePhase ? 0 : spaceThrustPitch), smoothYaw, bankRoll);
@@ -20361,6 +21109,107 @@ if (diagnosticsMode) {
         return commitMission24DebugMutation();
       },
       getMission24State: () => mission24.snapshot(),
+      /**
+       * Everything the onboarding probe asserts on.
+       *
+       * Computed on demand, never per frame: the scene-graph counts walk the
+       * whole graph, and the camera figures are derived rather than sampled.
+       */
+      getMission01OnboardingState: () => {
+        const beaconLive = mission01Beacon.located && !mission01Beacon.complete;
+        const markerDistance = mission01ActiveMarkerDistance();
+        const beaconPosition = beaconLive ? mission01BeaconPosition(mission01BeaconWorld) : undefined;
+        const alignmentTarget = !mission01Tutorial.completed && mission01MarkerValid
+          ? mission01MarkerAnchor
+          : beaconPosition;
+        return {
+          missionStep: missionManager.step,
+          objective: missionManager.currentObjective,
+          assistLevel: mission01Assist.level,
+          assistActive: mission01Assist.active,
+          cameraDistance: Number(camera.position.distanceTo(ship.position).toFixed(2)),
+          cameraFraming: Number(mission01Camera.distance.toFixed(2)),
+          shipScreenFraction: Number(mission01Camera.screenFraction(getPlayerShipHullLength()).toFixed(4)),
+          cameraFov: Number(camera.fov.toFixed(2)),
+          speed: Number(velocity.length().toFixed(2)),
+          acceleration: Number(spaceThrustLevel.toFixed(3)),
+          pitch: Number(smoothPitch.toFixed(4)),
+          yaw: Number(smoothYaw.toFixed(4)),
+          roll: Number(bankRoll.toFixed(4)),
+          stability: Number((100 - Math.min(100, Math.abs(bankRoll) * 120)).toFixed(1)),
+          tutorialStarted: mission01Tutorial.started,
+          tutorialStep: mission01Tutorial.step,
+          tutorialStepsCompleted: [...mission01Tutorial.completedSteps],
+          tutorialHoldProgress: Number(mission01Tutorial.holdProgress.toFixed(3)),
+          activeBeacon: beaconLive ? 'baliza-reconocimiento' : mission01MarkerValid ? 'baliza-prueba' : null,
+          beaconPhase: mission01Beacon.phase,
+          beaconDistance: Number.isFinite(markerDistance) ? Number(markerDistance.toFixed(1)) : -1,
+          alignmentDegrees: alignmentTarget ? Number(mission01AlignmentTo(alignmentTarget).toFixed(1)) : -1,
+          scannerActive: mission01Beacon.phase === 'scanning' || mission01Beacon.phase === 'transferring',
+          scanProgress: Number(mission01Beacon.scanPercent.toFixed(1)),
+          transferProgress: Number(mission01Beacon.transferPercent.toFixed(1)),
+          descentDenied: missionManager.descentDenied,
+          blockReason: missionManager.blockReason,
+          dataComplete: mission01Beacon.complete,
+          descentAuthorized: descentSafetyGate.descentAuthorized,
+          corridorActive: descentSystem.state.phase !== 'idle',
+          entryStarted: descentSystem.state.phase === 'entry' || missionManager.step === 'atmosphericEntry',
+          analysisLine: mission01AnalysisIndex,
+          shipCount: countSceneObjectsByName(playerShip.group.name),
+          mothershipCount: countSceneObjectsByName(mothership.group.name),
+          // Named rather than counted: an empty array is the assertion that no
+          // timer is left running, and a non-empty one says which.
+          activeTimers: [
+            mission01AnalysisIndex >= 0 ? 'analysis' : '',
+            arkDepartureTitleTimer > 0 ? 'departureTitle' : ''
+          ].filter(Boolean)
+        };
+      },
+      advanceMission01To: (step: string) => advanceMission01ToDebugStep(step),
+      completeMission01Tutorial: () => {
+        if (!mission01Tutorial.started) beginMission01Onboarding();
+        mission01Tutorial.forceComplete();
+        missionManager.completeFlightTutorial();
+        mission01Assist.disengage();
+        disposeMission01BeaconMarker();
+        mission01MarkerValid = false;
+        return true;
+      },
+      driveMission01TutorialStep: () => {
+        const completed = mission01Tutorial.forceCompleteCurrentStep(traveled);
+        if (!completed) return false;
+        mission01MarkerValid = false;
+        mission01Assist.setLevel(mission01Tutorial.assistLevel);
+        if (mission01Tutorial.completed) {
+          missionManager.completeFlightTutorial();
+          mission01Assist.disengage();
+          disposeMission01BeaconMarker();
+        } else {
+          missionManager.advanceFlightTutorial(mission01Tutorial.step as MissionStepId);
+        }
+        return true;
+      },
+      attemptMission01Descent: () => {
+        const blocker = descentSafetyGate.primaryBlocker;
+        if (!blocker) return false;
+        missionManager.denyDescent(blocker.objective, blocker.reason);
+        if (blocker.id === 'orbitalScanComplete') revealMission01Beacon();
+        return true;
+      },
+      approachMission01Beacon: () => {
+        if (!mission01Beacon.located) revealMission01Beacon();
+        // Places the ship in scanner range by flying it there in one step: the
+        // probe is testing the survey, not the transit.
+        const target = mission01BeaconPosition(mission01BeaconWorld);
+        ship.position.copy(target).add(new THREE.Vector3(0, 0, mission01BeaconTuning.scanRadius * 0.5));
+        velocity.set(0, 0, 0);
+        requestCameraFollowSync('mission01-beacon-approach');
+        return handleMission01BeaconInteraction();
+      },
+      getShipTransform: () => ({
+        position: ship.position.toArray() as [number, number, number],
+        quaternion: ship.quaternion.toArray() as [number, number, number, number]
+      }),
       getArkDepartureState: () => ({
         ...arkDeparture.snapshot(),
         docked: arkDeparture.docked,
@@ -21085,6 +21934,16 @@ declare global {
       completeMission24: () => Mission24DebugState;
       getMission24State: () => Mission24DebugState;
       getArkDepartureState: () => ArkDepartureDebugState;
+      getMission01OnboardingState: () => Mission01OnboardingDebugState;
+      advanceMission01To: (step: string) => boolean;
+      completeMission01Tutorial: () => boolean;
+      driveMission01TutorialStep: (step?: string) => boolean;
+      attemptMission01Descent: () => boolean;
+      approachMission01Beacon: () => boolean;
+      getShipTransform: () => {
+        position: [number, number, number];
+        quaternion: [number, number, number, number];
+      };
       advanceArkDeparture: () => boolean;
       forceArkPreflight: () => ArkDepartureStepId;
       getMission24AscentState: () => import('./game/AtmosphericAscentController').AtmosphericAscentMetrics;

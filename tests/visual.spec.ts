@@ -2537,6 +2537,16 @@ declare global {
       completeMission24: () => import('../src/main').Mission24DebugState;
       getMission24State: () => import('../src/main').Mission24DebugState;
       getArkDepartureState: () => import('../src/main').ArkDepartureDebugState;
+      getMission01OnboardingState: () => import('../src/main').Mission01OnboardingDebugState;
+      advanceMission01To: (step: string) => boolean;
+      completeMission01Tutorial: () => boolean;
+      driveMission01TutorialStep: (step?: string) => boolean;
+      attemptMission01Descent: () => boolean;
+      approachMission01Beacon: () => boolean;
+      getShipTransform: () => {
+        position: [number, number, number];
+        quaternion: [number, number, number, number];
+      };
       advanceArkDeparture: () => boolean;
       forceArkPreflight: () => import('../src/assets/arkDepartureDefinitions').ArkDepartureStepId;
       getMission24AscentState: () => import('../src/game/AtmosphericAscentController').AtmosphericAscentMetrics;

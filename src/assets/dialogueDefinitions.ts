@@ -21,6 +21,61 @@ export type DialogueDefinition = {
 const commander = 'commander-soren' as const;
 
 export const dialogueDefinitions: readonly DialogueDefinition[] = [
+  // --- Mission 01 onboarding ------------------------------------------------
+  // These lines have no generated voice file, so `VoiceManager` finds nothing
+  // and they play as text — the documented degradation path, not a missing
+  // asset. They are written in voseo to match the prologue.
+  //
+  // Two of them (`_vos`) replace existing lines whose audio is in `usted`:
+  // rewriting those would desync their MP3s, and regenerating audio is out of
+  // scope. The old files stay on disk, unused.
+  {
+    id: 'm01_tutorial_start', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'm01-tutorial-start', priority: 'important', autoDismissSeconds: 6.4,
+    text: 'Estás libre del Arca. Antes de fijar rumbo quiero verte maniobrar: seguí las balizas de prueba.'
+  },
+  {
+    id: 'm01_tutorial_propulsion', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'm01-tutorial-propulsion', priority: 'normal', autoDismissSeconds: 5.6,
+    text: 'Bien. Ahora abrí motores: quiero ver cómo responde el casco con empuje sostenido.'
+  },
+  {
+    id: 'm01_tutorial_complete', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'm01-tutorial-complete', priority: 'important', autoDismissSeconds: 6.2,
+    text: 'Esa nave ya es tuya, piloto. Activá el escáner de largo alcance y buscá la biosfera.'
+  },
+  {
+    id: 'm01_descent_denied_reason', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'm01-denial-reason', priority: 'important', autoDismissSeconds: 7.4,
+    text: 'Una de nuestras balizas sigue transmitiendo desde la órbita baja. Recuperá esos datos y te calculo un corredor seguro.'
+  },
+  {
+    id: 'm01_beacon_located', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'm01-beacon-located', priority: 'important', autoDismissSeconds: 6.2,
+    text: 'Ahí está. La lanzamos meses antes que vos y quedó a medio transmitir. Acercate y completá la lectura.'
+  },
+  {
+    id: 'm01_transfer_complete', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'm01-transfer-complete', priority: 'important', autoDismissSeconds: 6.6,
+    text: 'Datos confirmados. La atmósfera es compatible, pero el margen es estrecho.'
+  },
+  {
+    id: 'm01_corridor_sent', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'm01-corridor-sent', priority: 'important', autoDismissSeconds: 6.4,
+    text: 'Te envío el corredor de entrada. Mantené la trayectoria y no fuerces el ángulo.'
+  },
+  {
+    // Replaces `m01_atlas_detected` ("Prioridad máxima: escanéela.").
+    id: 'm01_atlas_detected_vos', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'atlas-detected', priority: 'important', autoDismissSeconds: 6.5, delaySeconds: 1.2,
+    text: 'Piloto, esa estructura no es natural. Prioridad máxima: escaneala.'
+  },
+  {
+    // Replaces `m01_atmospheric_entry` ("Mantenga estabilidad.").
+    id: 'm01_atmospheric_entry_vos', speakerId: commander, missionId: 'mission-01-search-home',
+    triggerId: 'atmospheric-entry', priority: 'important', autoDismissSeconds: 6.5,
+    text: 'Entrada autorizada. Mantené la estabilidad. Arca Epsilon sigue tu telemetría.'
+  },
   {
     id: 'm01_start_commander', speakerId: commander, missionId: 'mission-01-search-home', triggerId: 'mission-start',
     priority: 'normal', autoDismissSeconds: 5.8,
