@@ -142,13 +142,13 @@ test('mission 01 prologue: docked start, preflight, clamp release and clean sepa
     samples.push((await departure(page))?.anchorDistance ?? 0);
   }
   await page.keyboard.up('w');
-  // Separation must be real, continuous and never a jump. The lower bound is
-  // deliberately loose (the departure is meant to be slow); the per-sample
-  // ceiling is what would catch a teleport or a physics blow-up.
+  // Separation must be real, continuous and never a teleport. The last
+  // samples can already be in free flight after the safe-distance handoff, so
+  // the ceiling includes one 1.2 s sample at normal M01 speed.
   expect(samples[samples.length - 1], 'the ship actually moves away').toBeGreaterThan(samples[0] + 15);
   for (let i = 1; i < samples.length; i += 1) {
     expect(samples[i] - samples[i - 1], `sample ${i} must not go backwards`).toBeGreaterThanOrEqual(0);
-    expect(samples[i] - samples[i - 1], `sample ${i} must not jump`).toBeLessThan(60);
+    expect(samples[i] - samples[i - 1], `sample ${i} must not jump`).toBeLessThan(90);
   }
 
   // --- 18/19. Safe distance hands control back and M01 continues -----------
@@ -168,14 +168,14 @@ test('mission 01 prologue: docked start, preflight, clamp release and clean sepa
   expect(state?.statusLabel).toBe('DISTANCIA SEGURA');
   expect(state?.dockingAssemblyBuilt, 'the docking dressing is disposed once clear').toBe(false);
 
-  // M01 itself is untouched and still sits on its real first step: the
-  // prologue added a runway in front of it, it did not consume any of it.
+  // The prologue hands off to the first real onboarding manoeuvre. It does not
+  // skip the tutorial or jump straight to the scanner beat.
   const savedStep = await page.evaluate(() => {
     window.__arcaDebug?.saveGame();
     const raw = window.localStorage.getItem('arca-epsilon-save-v2');
     return raw ? (JSON.parse(raw) as { currentMissionStep?: string }).currentMissionStep : undefined;
   });
-  expect(savedStep, 'M01 resumes at its own first step').toBe('scannerTutorial');
+  expect(savedStep, 'M01 resumes at its own first step').toBe('flightOrientation');
 
   // --- 5. The Ark was reused, never rebuilt or moved -----------------------
   expect(state?.mothershipUuid, 'same Ark instance throughout').toBe(arkUuid);

@@ -487,6 +487,18 @@ export class Mission17DefensePreparations {
     this.state.energyCircuitsBalanced = Math.max(0, Math.min(CIRCUIT_COUNT, Math.floor(this.state.energyCircuitsBalanced || 0)));
     this.state.alertChannelsVerified = Math.max(0, Math.min(ALERT_CHANNEL_COUNT, Math.floor(this.state.alertChannelsVerified || 0)));
     this.state.evacMarkersSet = Math.max(0, Math.min(EVAC_MARKER_COUNT, Math.floor(this.state.evacMarkersSet || 0)));
+
+    // A restored sensor step must carry the reserve that unlocked it. If an
+    // older save already has all three sensors, resume at calibration instead
+    // of leaving activeSensorIndex at -1 forever.
+    if (this.state.mission17Step === 'deploySensors') {
+      this.state.councilReviewed = true;
+      this.state.energyCircuitsBalanced = CIRCUIT_COUNT;
+      this.state.energyReserveOnline = true;
+      if (this.sensorsDeployedCount === SENSOR_COUNT) {
+        this.state.mission17Step = 'calibrateDetection';
+      }
+    }
     this.state.mission18Unlocked = this.state.mission18Unlocked || this.state.mission17Completed;
 
     // Reloading always lands on the last stable step with its interaction freshly

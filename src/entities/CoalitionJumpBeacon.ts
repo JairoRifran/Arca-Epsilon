@@ -6,6 +6,7 @@ import type { WeaponTarget } from '../systems/WeaponSystem';
 export class CoalitionJumpBeacon {
   readonly group = new THREE.Group();
   readonly position = new THREE.Vector3();
+  readonly collisionAnchor = new THREE.Object3D();
   readonly anchorTargets: WeaponTarget[] = [];
 
   private built = false;
@@ -28,7 +29,10 @@ export class CoalitionJumpBeacon {
     return count;
   }
 
-  setPosition(x: number, y: number, z: number): void { this.position.set(x, y, z); }
+  setPosition(x: number, y: number, z: number): void {
+    this.position.set(x, y, z);
+    this.collisionAnchor.position.copy(this.position);
+  }
 
   setState(visible: boolean, disabled: readonly boolean[], collapsed: boolean, collapseProgress: number): void {
     if (!visible && !collapsed) { this.group.visible = false; return; }
@@ -114,6 +118,9 @@ export class CoalitionJumpBeacon {
     for (let index = 0; index < 3; index += 1) {
       const angle = index / 3 * Math.PI * 2;
       const anchor = new THREE.Group();
+      anchor.userData.combatSurface = 'structure';
+      anchor.userData.combatMass = 'heavy';
+      anchor.userData.combatEngineAnchors = [[0, 28, 0]];
       anchor.name = `Anclaje energético ${index + 1} M23`;
       anchor.position.set(this.position.x + Math.cos(angle) * 118, this.position.y - 12, this.position.z + Math.sin(angle) * 118);
       const body = new THREE.Mesh(anchorGeometry, this.hullMaterial);
@@ -121,7 +128,13 @@ export class CoalitionJumpBeacon {
       ring.rotation.x = Math.PI / 2;
       anchor.add(body, ring);
       this.group.add(anchor);
-      this.anchorTargets.push({ object: anchor, radius: 26, health: mission23Tuning.beaconAnchorHealth, hostile: true });
+      this.anchorTargets.push({
+        id: `coalition-jump-anchor-${index + 1}`,
+        object: anchor,
+        radius: 26,
+        health: mission23Tuning.beaconAnchorHealth,
+        hostile: true
+      });
     }
 
     this.distortion = new THREE.Mesh(new THREE.TorusGeometry(88, 7, 10, 48), this.distortionMaterial);

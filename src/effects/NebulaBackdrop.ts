@@ -130,6 +130,8 @@ export class NebulaBackdrop {
 
   private readonly clouds: CloudSprite[] = [];
 
+  private readonly brightClouds: CloudSprite[] = [];
+
   private lightningTimer = 6;
 
   private lightningTarget?: CloudSprite;
@@ -159,11 +161,11 @@ export class NebulaBackdrop {
     // Cold teal bank sweeping behind the deep sectors, running mostly across
     // the view and bowing upward.
     this.addBank(textures, new THREE.Vector3(420, 60, -2400), {
-      count: 10,
+      count: 6,
       spread: 2600,
       scale: [900, 1750],
       colors: [0x1d4a66, 0x2a6a86, 0x173a55],
-      opacity: [0.16, 0.3],
+      opacity: [0.055, 0.14],
       additive: true,
       axis: new THREE.Vector3(1, 0.18, 0.35),
       arc: 320,
@@ -172,11 +174,11 @@ export class NebulaBackdrop {
 
     // Warm amber wound near the dead star: shorter, steeper, cutting down.
     this.addBank(textures, new THREE.Vector3(1400, -260, -1500), {
-      count: 7,
+      count: 4,
       spread: 1500,
       scale: [700, 1250],
       colors: [0x6b2b1c, 0x8a3a22, 0x4a1c18],
-      opacity: [0.12, 0.24],
+      opacity: [0.045, 0.11],
       additive: true,
       axis: new THREE.Vector3(0.35, -0.55, 0.75),
       arc: -240,
@@ -185,11 +187,11 @@ export class NebulaBackdrop {
 
     // Violet remnant high above the plane, drifting the other way.
     this.addBank(textures, new THREE.Vector3(-1500, 700, -1900), {
-      count: 6,
+      count: 3,
       spread: 1400,
       scale: [650, 1150],
       colors: [0x3d2557, 0x53307a, 0x2a1a40],
-      opacity: [0.11, 0.2],
+      opacity: [0.035, 0.085],
       additive: true,
       axis: new THREE.Vector3(-0.8, 0.25, 0.55),
       arc: 200,
@@ -199,11 +201,11 @@ export class NebulaBackdrop {
     // Dark smoke that occludes stars: this is what sells depth. Laid across
     // the bright banks rather than parallel to them.
     this.addBank(textures, new THREE.Vector3(300, -80, -2100), {
-      count: 8,
+      count: 5,
       spread: 2900,
       scale: [850, 1600],
       colors: [0x05070c, 0x070a12, 0x04060a],
-      opacity: [0.5, 0.78],
+      opacity: [0.18, 0.38],
       additive: false,
       axis: new THREE.Vector3(0.9, -0.12, -0.4),
       arc: -300,
@@ -222,16 +224,15 @@ export class NebulaBackdrop {
     // Occasional silent lightning deep inside a bright cloud.
     this.lightningTimer -= delta;
     if (this.lightningTimer <= 0) {
-      const bright = this.clouds.filter((cloud) => cloud.material.blending === THREE.AdditiveBlending);
-      this.lightningTarget = bright[Math.floor(Math.random() * bright.length)];
+      this.lightningTarget = this.brightClouds[Math.floor(Math.random() * this.brightClouds.length)];
       this.lightningLife = 0.55;
-      this.lightningTimer = 7 + Math.random() * 14;
+      this.lightningTimer = 14 + Math.random() * 18;
     }
 
     if (this.lightningTarget && this.lightningLife > 0) {
       this.lightningLife -= delta;
-      const flash = Math.max(0, Math.sin((this.lightningLife / 0.55) * Math.PI)) * 0.5;
-      this.lightningTarget.material.opacity = this.lightningTarget.baseOpacity * (1 + flash * 2.4);
+      const flash = Math.max(0, Math.sin((this.lightningLife / 0.55) * Math.PI)) * 0.34;
+      this.lightningTarget.material.opacity = this.lightningTarget.baseOpacity * (1 + flash * 1.4);
       if (this.lightningLife <= 0) {
         this.lightningTarget.material.opacity = this.lightningTarget.baseOpacity;
         this.lightningTarget = undefined;
@@ -327,14 +328,16 @@ export class NebulaBackdrop {
       sprite.renderOrder = options.additive ? -14 : -16;
 
       this.group.add(sprite);
-      this.clouds.push({
+      const cloud = {
         sprite,
         material,
         basePosition: sprite.position.clone(),
         baseOpacity,
         rotationSpeed: (hash2(i * 11.3, s, 167) - 0.5) * 0.008,
         driftPhase: hash2(i * 15.1, s, 181) * Math.PI * 2
-      });
+      };
+      this.clouds.push(cloud);
+      if (options.additive) this.brightClouds.push(cloud);
     }
   }
 }

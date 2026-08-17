@@ -11,6 +11,7 @@ export type SurfaceMapEntity = {
   hint?: 'thermal';
   signalRange?: number;
   isCurrentTarget?: boolean;
+  showLabel?: boolean;
   uncertain?: boolean;
 };
 

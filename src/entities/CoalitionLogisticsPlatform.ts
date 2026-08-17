@@ -14,9 +14,9 @@ export type LogisticsPlatformState = {
 export class CoalitionLogisticsPlatform {
   readonly group = new THREE.Group();
   readonly position = new THREE.Vector3();
-  readonly defenseTarget: WeaponTarget = { object: new THREE.Group(), radius: 34, health: 0, hostile: false };
-  readonly energyTarget: WeaponTarget = { object: new THREE.Group(), radius: 30, health: 0, hostile: false };
-  readonly coreTarget: WeaponTarget = { object: new THREE.Group(), radius: 38, health: 0, hostile: false };
+  readonly defenseTarget: WeaponTarget = { id: 'coalition-platform-defense', object: new THREE.Group(), radius: 34, health: 0, hostile: false };
+  readonly energyTarget: WeaponTarget = { id: 'coalition-platform-energy', object: new THREE.Group(), radius: 30, health: 0, hostile: false };
+  readonly coreTarget: WeaponTarget = { id: 'coalition-platform-core', object: new THREE.Group(), radius: 38, health: 0, hostile: false };
 
   private built = false;
   private hullMaterial?: THREE.MeshStandardMaterial;
@@ -26,10 +26,20 @@ export class CoalitionLogisticsPlatform {
   private energyRing?: THREE.Mesh;
   private coreRing?: THREE.Mesh;
   private updateAccumulator = 0;
+  private destructionVisualRemaining = 0;
+  private wasDestroyed = false;
 
   constructor() {
     this.group.name = 'Plataforma Logística de la Coalición M23';
     this.group.visible = false;
+    this.defenseTarget.object.userData.combatSurface = 'shield';
+    this.defenseTarget.object.userData.combatMass = 'heavy';
+    this.energyTarget.object.userData.combatSurface = 'structure';
+    this.energyTarget.object.userData.combatMass = 'heavy';
+    this.energyTarget.object.userData.combatEngineAnchors = [[0, 0, 18]];
+    this.coreTarget.object.userData.combatSurface = 'structure';
+    this.coreTarget.object.userData.combatMass = 'heavy';
+    this.coreTarget.object.userData.combatEngineAnchors = [[0, 0, 22]];
     this.defenseTarget.object.name = 'Defensa exterior plataforma M23';
     this.energyTarget.object.name = 'Depósitos energéticos plataforma M23';
     this.coreTarget.object.name = 'Núcleo logístico plataforma M23';
@@ -51,7 +61,9 @@ export class CoalitionLogisticsPlatform {
   setState(state: LogisticsPlatformState): void {
     if (!state.visible && !state.destroyed) { this.group.visible = false; return; }
     this.ensureBuilt();
-    this.group.visible = state.visible && !state.destroyed;
+    if (state.destroyed && !this.wasDestroyed && this.group.visible) this.destructionVisualRemaining = 1.6;
+    this.wasDestroyed = state.destroyed;
+    this.group.visible = (state.visible && !state.destroyed) || this.destructionVisualRemaining > 0;
     const defenseWasHostile = this.defenseTarget.hostile;
     const energyWasHostile = this.energyTarget.hostile;
     const coreWasHostile = this.coreTarget.hostile;
@@ -95,6 +107,14 @@ export class CoalitionLogisticsPlatform {
 
   update(delta: number, elapsed: number): void {
     if (!this.group.visible || !this.built) return;
+    if (this.destructionVisualRemaining > 0) {
+      this.destructionVisualRemaining = Math.max(0, this.destructionVisualRemaining - delta);
+      this.group.rotation.z += delta * 0.08;
+      if (this.activeMaterial) this.activeMaterial.emissiveIntensity = 0.12 + Math.abs(Math.sin(elapsed * 15)) * 0.5;
+      if (this.coreMaterial) this.coreMaterial.emissiveIntensity = 0.18 + Math.abs(Math.sin(elapsed * 19)) * 0.75;
+      if (this.destructionVisualRemaining === 0) this.group.visible = false;
+      return;
+    }
     this.updateAccumulator += delta;
     if (this.updateAccumulator < 0.08) return;
     const step = this.updateAccumulator;
@@ -102,8 +122,24 @@ export class CoalitionLogisticsPlatform {
     if (this.defenseRing?.visible) this.defenseRing.rotation.z += step * 0.22;
     if (this.energyRing?.visible) this.energyRing.rotation.z -= step * 0.34;
     if (this.coreRing?.visible) this.coreRing.rotation.z += step * 0.18;
-    if (this.activeMaterial) this.activeMaterial.emissiveIntensity = 0.34 + Math.sin(elapsed * 2.4) * 0.08;
-    if (this.coreMaterial) this.coreMaterial.emissiveIntensity = 0.46 + Math.sin(elapsed * 3.1) * 0.1;
+    if (this.activeMaterial) {
+      const defenseRatio = this.defenseTarget.hostile
+        ? Math.max(0, this.defenseTarget.health / Math.max(1, mission23Tuning.platformDefenseHealth))
+        : 1;
+      const energyRatio = this.energyTarget.hostile
+        ? Math.max(0, this.energyTarget.health / Math.max(1, mission23Tuning.platformEnergyHealth))
+        : 1;
+      const weakest = Math.min(defenseRatio, energyRatio);
+      const unstable = weakest < 0.42 ? 0.55 + Math.sin(elapsed * 13) * 0.35 : 1;
+      this.activeMaterial.emissiveIntensity = (0.22 + weakest * 0.2 + Math.sin(elapsed * 2.4) * 0.05) * unstable;
+    }
+    if (this.coreMaterial) {
+      const ratio = this.coreTarget.hostile
+        ? Math.max(0, this.coreTarget.health / Math.max(1, mission23Tuning.platformCoreHealth))
+        : 1;
+      const unstable = ratio < 0.35 ? 0.45 + Math.sin(elapsed * 16) * 0.38 : 1;
+      this.coreMaterial.emissiveIntensity = (0.3 + ratio * 0.2 + Math.sin(elapsed * 3.1) * 0.06) * unstable;
+    }
   }
 
   dispose(): void {

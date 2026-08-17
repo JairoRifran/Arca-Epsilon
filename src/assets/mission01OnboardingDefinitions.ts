@@ -165,29 +165,29 @@ export const mission01BeaconTuning = {
  * readability, and it lives in `Mission01CameraProfile`.
  */
 export const mission01CameraTuning = {
-  /** Metres behind the hull at rest. Was 25. */
-  baseDistance: 14,
-  /** Metres above. Was 8.8. */
-  baseHeight: 5.6,
+  /** Metres behind the current GLB hull at rest. */
+  baseDistance: 33,
+  /** Metres above. Keeps the nose and the lane ahead readable. */
+  baseHeight: 10.8,
   /** Lateral offset, so the hull sits off dead centre and the lane ahead opens up. */
-  shoulderOffset: 2.2,
+  shoulderOffset: 4.4,
 
   /** Metres of pull-back per m/s of speed, and its ceiling. */
-  speedDistanceGain: 0.42,
-  speedDistanceMax: 12,
+  speedDistanceGain: 0.34,
+  speedDistanceMax: 16,
   /** Extra pull-back while boosting, for the wider field the pilot needs. */
-  boostDistance: 6,
+  boostDistance: 8,
   /** Closer framing when a marker is near: the target owns the frame. */
-  markerProximityDistance: -3.2,
+  markerProximityDistance: -3.5,
   /** Metres under which a marker counts as "being approached". */
   markerProximityRange: 140,
 
   /** Hard limits. Never inside the hull, never far enough to lose it. */
-  minDistance: 10,
-  maxDistance: 34,
+  minDistance: 28.5,
+  maxDistance: 58,
 
-  fov: 58,
-  boostFov: 66,
+  fov: 61.5,
+  boostFov: 67,
 
   /**
    * How much of the ship's bank the camera leans. The global value is 0.3;
@@ -195,8 +195,19 @@ export const mission01CameraTuning = {
    */
   rollLean: 0.12,
 
-  /** Seconds of damped blend out of the docking pose. Was a hard snap. */
-  handoverSeconds: 1.35,
+  /**
+   * Seconds of damped blend out of the docking pose. Was a hard snap.
+   *
+   * Measured, not guessed: at 1.35 s with a 2.4 starting response the camera
+   * was still 30 m out two seconds after release and did not settle for three —
+   * which is the "ship looks tiny" complaint reappearing at the single worst
+   * moment, the pilot's first seconds of flight. Shortened and given a firmer
+   * start so the chase pose is essentially there by ~1.5 s, while still being a
+   * damped move rather than a cut.
+   */
+  handoverSeconds: 0.9,
+  /** Response at the very start of the handover. */
+  handoverStartResponse: 4.2,
   /** Follow response. Higher is tighter; this matches the global feel. */
   followResponse: 7.2
 } as const;

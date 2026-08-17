@@ -204,6 +204,23 @@ export class Mission20ArkBattle {
     return WAVE_SIZE[this.step] ?? 0;
   }
 
+  /**
+   * Kills the current step still needs before its wave counts as cleared.
+   *
+   * A combat step only advances on `waveKills` reaching the wave size, so if
+   * the launched drones ever leave the field without being reported destroyed
+   * the step is left with no reachable exit. Publishing the shortfall lets the
+   * launcher notice an empty sky and send the remainder instead of latching.
+   */
+  get waveKillsRemaining(): number {
+    return Math.max(0, this.activeWaveCount - this.waveKills);
+  }
+
+  /** The jammer only joins the weapon target list after all four escorts die. */
+  get jammerExposed(): boolean {
+    return this.step === 'disableJammer' && this.activeWaveCount > 0 && this.waveKillsRemaining === 0;
+  }
+
   get milestoneCount(): number {
     return (
       [
@@ -352,6 +369,9 @@ export class Mission20ArkBattle {
     if (!count) return false;
     this.waveKills += 1;
     if (this.waveKills < count) return false;
+    // Reaching the escort quota exposes the heavy unit. Its own death is the
+    // next callback and remains the authority for leaving this step.
+    if (this.step === 'disableJammer' && this.waveKills === count) return false;
     return this.completeWave();
   }
 
@@ -362,7 +382,7 @@ export class Mission20ArkBattle {
         this.jammerDistance = Number.POSITIVE_INFINITY;
         return this.goToStep('locateJammer');
       case 'disableJammer':
-        // Escorts are down; the jammer itself dies with them.
+        // The callback beyond the escort quota belongs to the exposed jammer.
         this.state.jammerDisabled = true;
         this.waveKills = 0;
         return this.goToStep('defendEngines');
@@ -452,6 +472,7 @@ export class Mission20ArkBattle {
   /** Cut the enemy coupling from outside the hull. */
   advanceBreachCut(deltaSeconds: number, inRange: boolean): boolean {
     if (this.step !== 'stopDataBreach') return false;
+    if (this.waveKillsRemaining > 0) return false;
     if (!this.hold(deltaSeconds, inRange, mission20Tuning.breachCutSeconds)) return false;
     this.state.dataBreachStopped = true;
     this.stationProgress = 0;

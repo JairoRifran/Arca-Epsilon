@@ -137,9 +137,6 @@ export const mission20Tuning = {
   jammerSearchRange: 1400,
   /** Range at which the jammer can be engaged. */
   jammerLockRange: 320,
-  /** Seconds between AI re-evaluations. */
-  aiIntervalSeconds: 0.25,
-
   // --- Meters --------------------------------------------------------------
   /** Ark hull integrity, 0..100, with a floor: the Ark is never destroyed. */
   arkIntegrityFloor: 22,

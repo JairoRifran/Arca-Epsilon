@@ -1770,6 +1770,53 @@ export const dialogueDefinitions: readonly DialogueDefinition[] = [
     text: 'Volvimos al lugar donde empez\u00f3 todo. Esta vez, el Arca no est\u00e1 sola.'
   },
 
+  // --- Mission 25: La ultima orbita. Text-only final chapter dialogue. ---
+  {
+    id: 'm25_start', speakerId: commander, missionId: 'mission-25-last-orbit', triggerId: 'mission-start',
+    priority: 'critical', requiresConfirmation: true,
+    text: 'Piloto, te tenemos en visual. Bienvenido de vuelta al Arca. Confirma el perimetro cuando estes listo.'
+  },
+  {
+    id: 'm25_threat_detected', speakerId: commander, missionId: 'mission-25-last-orbit', triggerId: 'threat-detected',
+    priority: 'critical', requiresConfirmation: false,
+    text: 'La red detecta una formacion entrando al sector. No vienen a negociar. Defende el perimetro del Arca.'
+  },
+  {
+    id: 'm25_systems_under_attack', speakerId: 'arca-ai', missionId: 'mission-25-last-orbit', triggerId: 'systems-under-attack',
+    priority: 'critical', requiresConfirmation: false,
+    text: 'Ataques coordinados sobre motores, comunicaciones y nucleo de energia. Prioriza los contactos cercanos.'
+  },
+  {
+    id: 'm25_joint_support', speakerId: 'pleyadan', missionId: 'mission-25-last-orbit', triggerId: 'joint-support',
+    priority: 'important', requiresConfirmation: false, subtitleMode: true,
+    text: 'La red conjunta permanece estable. Sostendremos los reles mientras tu nave despeja el corredor.'
+  },
+  {
+    id: 'm25_counterattack', speakerId: commander, missionId: 'mission-25-last-orbit', triggerId: 'counterattack',
+    priority: 'critical', requiresConfirmation: true,
+    text: 'Centro de mando localizado. Rompe sus nodos de proteccion y espera mi senal para la pasada final.'
+  },
+  {
+    id: 'm25_core_exposed', speakerId: 'arca-ai', missionId: 'mission-25-last-orbit', triggerId: 'core-exposed',
+    priority: 'critical', requiresConfirmation: false,
+    text: 'Proteccion colapsada. Nucleo de coordinacion expuesto; ventana de ataque estable.'
+  },
+  {
+    id: 'm25_threat_collapse', speakerId: commander, missionId: 'mission-25-last-orbit', triggerId: 'threat-collapse',
+    priority: 'critical', requiresConfirmation: false,
+    text: 'Centro de mando neutralizado. Sus fuerzas perdieron coordinacion y se retiran del sector.'
+  },
+  {
+    id: 'm25_residual_signal', speakerId: 'arca-ai', missionId: 'mission-25-last-orbit', triggerId: 'residual-signal',
+    priority: 'important', requiresConfirmation: false,
+    text: 'Pulso residual alejandose del sector. La victoria es local; su origen permanece sin identificar.'
+  },
+  {
+    id: 'm25_final', speakerId: commander, missionId: 'mission-25-last-orbit', triggerId: 'chapter-resolution',
+    priority: 'critical', requiresConfirmation: true,
+    text: 'Perimetro asegurado. El Arca sigue en pie y E-01 esta a salvo. Hoy volvemos a ser una civilizacion.'
+  },
+
   // --- Mission 01 prologue: departure from Arca Epsilon --------------------
   // Spoken from the launch platform, before the pilot has flown a metre. Six
   // beats: who is speaking, why we are here, what the Ark cannot do, the

@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { fbm2 } from '../entities/Planets';
-import { createRockGeometry } from '../entities/AsteroidField';
+import {
+  createGeologicalDetailTexture,
+  createGeologicalRockMaterial,
+  createOutcropGeometry,
+  createSurfaceRockGeometry,
+  type SurfaceRockType
+} from '../entities/AsteroidField';
 import { createSoftParticleTexture } from '../assets/materials';
 import { ColonyModule } from '../entities/ColonyModule';
 import { SurfaceHazard } from '../entities/SurfaceHazard';
@@ -13,6 +19,57 @@ import {
 } from '../assets/surfaceResourceDefinitions';
 
 const SHAPED_RESOURCE_SITES = surfaceResources.filter((site) => site.terrainProfile);
+const NEREIDA_SEED = 2189.071;
+const TAU = Math.PI * 2;
+
+type NereidaDetailProfile = 'performance' | 'high' | 'ultra';
+
+type NereidaExclusionZone =
+  | { id: string; kind: 'circle'; x: number; z: number; radius: number }
+  | { id: string; kind: 'corridor'; ax: number; az: number; bx: number; bz: number; radius: number };
+
+type RockClusterDefinition = {
+  id: string;
+  x: number;
+  z: number;
+  radiusX: number;
+  radiusZ: number;
+  rotation: number;
+  count: number;
+  family: SurfaceRockType;
+  minScale: number;
+  maxScale: number;
+  maxSlope: number;
+  seed: number;
+  viewDistance: number;
+};
+
+type RockLodEntry = {
+  mesh: THREE.InstancedMesh;
+  center: THREE.Vector3;
+  maximumCount: number;
+  highCount: number;
+  performanceCount: number;
+  viewDistance: number;
+};
+
+/** Gameplay-critical clearings, kept in one reusable spatial mask. */
+const NEREIDA_EXCLUSION_ZONES: readonly NereidaExclusionZone[] = [
+  { id: 'landing-gear-footprint', kind: 'circle', x: 0, z: 0, radius: 34 },
+  { id: 'base-nereida-operations', kind: 'circle', x: 0, z: -72, radius: 31 },
+  { id: 'boarding-and-base-access', kind: 'corridor', ax: 0, az: 9, bx: 0, bz: -82, radius: 13 },
+  { id: 'surface-hazard-mission-space', kind: 'circle', x: 140, z: -120, radius: 52 }
+];
+
+/** Art-directed talus and outcrop fields. Their order also defines LOD priority. */
+const NEREIDA_ROCK_CLUSTERS: readonly RockClusterDefinition[] = [
+  { id: 'northwest-talus', x: -162, z: -126, radiusX: 64, radiusZ: 31, rotation: 0.42, count: 28, family: 'angular', minScale: 0.45, maxScale: 2.7, maxSlope: 24, seed: 11.3, viewDistance: 380 },
+  { id: 'eastern-strata', x: 210, z: 48, radiusX: 58, radiusZ: 25, rotation: -0.58, count: 18, family: 'slab', minScale: 0.8, maxScale: 4.2, maxSlope: 18, seed: 27.7, viewDistance: 460 },
+  { id: 'southern-weathering', x: -40, z: 220, radiusX: 72, radiusZ: 38, rotation: 0.2, count: 18, family: 'round', minScale: 0.8, maxScale: 4.8, maxSlope: 16, seed: 43.1, viewDistance: 500 },
+  { id: 'western-fracture', x: -292, z: 128, radiusX: 76, radiusZ: 24, rotation: -0.92, count: 22, family: 'angular', minScale: 0.35, maxScale: 1.8, maxSlope: 27, seed: 59.9, viewDistance: 330 },
+  { id: 'southeast-plates', x: 298, z: -214, radiusX: 68, radiusZ: 27, rotation: 0.74, count: 14, family: 'slab', minScale: 0.7, maxScale: 3.6, maxSlope: 20, seed: 78.2, viewDistance: 440 },
+  { id: 'basin-eroded-blocks', x: -118, z: 72, radiusX: 54, radiusZ: 30, rotation: -0.18, count: 18, family: 'angular', minScale: 0.5, maxScale: 2.5, maxSlope: 17, seed: 96.4, viewDistance: 360 }
+];
 
 /**
  * Half-width of the sun's orthographic shadow box, in metres. Small on purpose:
@@ -37,6 +94,12 @@ export type ResourceSiteTerrainMetric = {
   visibilityScore: number;
   blendActive: boolean;
 };
+
+/** Base sky colours, kept so the atmospheric fade always lerps from source. */
+const SKY_HORIZON_BASE = new THREE.Color(0x86a795);
+const SKY_ZENITH_BASE = new THREE.Color(0x122c28);
+const SKY_SUN_BASE = new THREE.Color(0xffe3b8);
+const SKY_SPACE = new THREE.Color(0x02040a);
 
 const SKY_VERTEX = /* glsl */ `
 varying vec3 vLocal;
@@ -71,49 +134,45 @@ function seededValue(seed: number): number {
   return Math.abs(Math.sin(seed * 91.731 + 17.137) * 43758.5453) % 1;
 }
 
-function createRidgeBandGeometry(radius: number, width: number, seed: number, segments = 96): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const indices: number[] = [];
+function distanceToSegment2d(x: number, z: number, ax: number, az: number, bx: number, bz: number): number {
+  const abx = bx - ax;
+  const abz = bz - az;
+  const lengthSq = abx * abx + abz * abz;
+  const t = lengthSq > 0 ? THREE.MathUtils.clamp(((x - ax) * abx + (z - az) * abz) / lengthSq, 0, 1) : 0;
+  return Math.hypot(x - (ax + abx * t), z - (az + abz * t));
+}
 
-  for (let i = 0; i <= segments; i += 1) {
-    const angle = (i / segments) * Math.PI * 2;
-    const sampleX = Math.cos(angle);
-    const sampleZ = Math.sin(angle);
-    const broad = fbm2(sampleX * 2.2 + seed, sampleZ * 2.2 + seed, seed * 13.7, 4);
-    const detail = fbm2(sampleX * 7.8 + seed, sampleZ * 7.8 - seed, seed * 31.1, 3);
-    const shelf = Math.pow(Math.max(0, broad - 0.38) / 0.62, 1.25);
-    const innerRadius = radius + (detail - 0.5) * 24;
-    const outerRadius = innerRadius + width * (0.72 + broad * 0.4);
-    const innerHeight = 24 + shelf * 94 + detail * 25;
-    const outerHeight = innerHeight * (0.62 + detail * 0.18) + 7;
-    const baseHeight = -18;
+function rotatedEllipseDistance(
+  x: number,
+  z: number,
+  centerX: number,
+  centerZ: number,
+  radiusX: number,
+  radiusZ: number,
+  rotation: number
+): number {
+  const dx = x - centerX;
+  const dz = z - centerZ;
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  const localX = dx * cos + dz * sin;
+  const localZ = -dx * sin + dz * cos;
+  return Math.hypot(localX / radiusX, localZ / radiusZ);
+}
 
-    positions.push(
-      sampleX * innerRadius, baseHeight, sampleZ * innerRadius,
-      sampleX * innerRadius, innerHeight, sampleZ * innerRadius,
-      sampleX * outerRadius, outerHeight, sampleZ * outerRadius,
-      sampleX * outerRadius, baseHeight, sampleZ * outerRadius
-    );
-  }
-
-  for (let i = 0; i < segments; i += 1) {
-    const a = i * 4;
-    const b = (i + 1) * 4;
-    // Inner cliff, outer slope and broken crest. The whole horizon stays at
-    // two draw calls instead of one mesh per mountain.
-    indices.push(
-      a, b, b + 1, a, b + 1, a + 1,
-      a + 3, a + 2, b + 2, a + 3, b + 2, b + 3,
-      a + 1, b + 1, b + 2, a + 1, b + 2, a + 2
-    );
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  geometry.computeBoundingSphere();
-  return geometry;
+function geologicalMass(
+  x: number,
+  z: number,
+  centerX: number,
+  centerZ: number,
+  radiusX: number,
+  radiusZ: number,
+  rotation: number,
+  height: number
+): number {
+  const distance = rotatedEllipseDistance(x, z, centerX, centerZ, radiusX, radiusZ, rotation);
+  const profile = 1 - THREE.MathUtils.smoothstep(distance, 0.16, 1.12);
+  return profile * profile * height;
 }
 
 function createLandingImpactTexture(size = 128): THREE.CanvasTexture {
@@ -147,6 +206,81 @@ function createLandingImpactTexture(size = 128): THREE.CanvasTexture {
   }
   context.putImageData(image, 0, 0);
   return new THREE.CanvasTexture(canvas);
+}
+
+function createLandingOperationsTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Could not create Nereida landing operations texture.');
+  const center = canvas.width / 2;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+
+  const deck = context.createRadialGradient(center, center, 40, center, center, 500);
+  deck.addColorStop(0, 'rgba(30, 35, 34, 0.64)');
+  deck.addColorStop(0.58, 'rgba(34, 39, 37, 0.58)');
+  deck.addColorStop(0.86, 'rgba(26, 30, 29, 0.46)');
+  deck.addColorStop(1, 'rgba(19, 23, 22, 0)');
+  context.fillStyle = deck;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  context.save();
+  context.translate(center, center);
+  context.strokeStyle = 'rgba(178, 192, 184, 0.72)';
+  context.lineWidth = 13;
+  context.setLineDash([122, 45]);
+  context.beginPath();
+  context.arc(0, 0, 388, 0, TAU);
+  context.stroke();
+
+  context.setLineDash([]);
+  context.strokeStyle = 'rgba(98, 158, 145, 0.82)';
+  context.lineWidth = 7;
+  for (const angle of [-2.55, -0.6, 0.6, 2.55]) {
+    context.beginPath();
+    context.arc(0, 0, 326, angle - 0.35, angle + 0.35);
+    context.stroke();
+  }
+
+  context.fillStyle = 'rgba(190, 150, 83, 0.72)';
+  for (const side of [-1, 1]) {
+    context.save();
+    context.scale(side, 1);
+    context.beginPath();
+    context.moveTo(82, -33);
+    context.lineTo(198, 0);
+    context.lineTo(82, 33);
+    context.lineTo(105, 0);
+    context.closePath();
+    context.fill();
+    context.restore();
+  }
+
+  context.strokeStyle = 'rgba(164, 176, 169, 0.42)';
+  context.lineWidth = 5;
+  context.beginPath();
+  context.moveTo(-52, -258);
+  context.lineTo(-52, -386);
+  context.moveTo(52, -258);
+  context.lineTo(52, -386);
+  context.stroke();
+
+  context.fillStyle = 'rgba(205, 216, 209, 0.72)';
+  context.font = '700 52px Arial, sans-serif';
+  context.textAlign = 'center';
+  context.fillText('E-01', 0, 286);
+  context.fillStyle = 'rgba(103, 172, 155, 0.8)';
+  context.font = '600 27px Arial, sans-serif';
+  context.fillText('NEREIDA', 0, 326);
+  context.restore();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 /**
@@ -193,6 +327,10 @@ export class PlanetaryWorld {
   private revealProgress = 0;
   private ridgeTriangles = 0;
   private siteTerrainMetricsCache?: Record<string, ResourceSiteTerrainMetric>;
+  private readonly rockLodEntries: RockLodEntry[] = [];
+  private rockContactMesh?: THREE.Mesh;
+  private detailProfile: NereidaDetailProfile = 'high';
+  private dustActiveCount = 480;
 
   constructor() {
     this.group.name = 'PlanetaryWorld (Cuenca Nereida)';
@@ -210,20 +348,50 @@ export class PlanetaryWorld {
   /** Unmodified basin elevation before authored resource-site blending. */
   private getBaseHeightAt(x: number, z: number): number {
     const distance = Math.sqrt(x * x + z * z);
-    let y = 0;
-    if (distance > 42) {
-      // Ridge wall rising toward the basin rim, broken by fbm so the
-      // skyline is jagged instead of a perfect bowl.
-      const rim = Math.pow(Math.min((distance - 42) / 360, 1), 1.75);
-      const ridgeNoise = fbm2(x * 0.011 + 7, z * 0.011 + 3, 51.3, 4);
-      y = rim * (44 + ridgeNoise * 34);
-    }
-    // Rolling soil undulation and fine roughness across the whole basin.
-    y += fbm2(x * 0.02 + 40, z * 0.02 + 40, 17.7, 3) * 4.6 - 2.3;
-    y += fbm2(x * 0.09, z * 0.09, 93.1, 2) * 1.1 - 0.55;
-    // Keep the landing pad itself flat and trustworthy.
-    const padBlend = THREE.MathUtils.smoothstep(distance, 6, 26);
-    return y * padBlend;
+    const basinDistance = rotatedEllipseDistance(x, z, 18, 26, 470, 390, -0.08);
+
+    // N1 macro layer: a broad asymmetric basin plus a few directional masses.
+    // Noise only erodes these authored regions; it no longer defines the world.
+    const outerRise = THREE.MathUtils.smoothstep(basinDistance, 0.54, 1.58) * 58;
+    const northwestEscarpment = geologicalMass(x, z, -260, -350, 440, 150, -0.18, 43);
+    const westernShoulder = geologicalMass(x, z, -500, 50, 170, 390, 0.08, 29);
+    const southeastShelf = geologicalMass(x, z, 350, 335, 430, 190, 0.28, 34);
+    const easternButtress = geologicalMass(x, z, 500, -115, 190, 330, -0.3, 24);
+    const basinMesa = geologicalMass(x, z, 225, 80, 300, 190, -0.2, 7.5);
+    const northernBreach = geologicalMass(x, z, 92, -390, 145, 430, 0.04, 18);
+    const westernDepression = geologicalMass(x, z, -118, 78, 180, 115, -0.12, 3.8);
+
+    const macroErosion = (fbm2(x * 0.006 + 17, z * 0.006 - 9, NEREIDA_SEED, 3) - 0.5) * 5.2;
+    const mesoUndulation = (fbm2(x * 0.021 - 31, z * 0.021 + 14, NEREIDA_SEED + 41, 3) - 0.5) * 2.7;
+    const microRoughness = (fbm2(x * 0.105 + 5, z * 0.105 - 3, NEREIDA_SEED + 89, 2) - 0.5) * 0.48;
+    const terrainDetailMask = THREE.MathUtils.smoothstep(distance, 30, 105);
+
+    let y =
+      outerRise +
+      northwestEscarpment +
+      westernShoulder +
+      southeastShelf +
+      easternButtress +
+      basinMesa -
+      northernBreach -
+      westernDepression +
+      macroErosion * THREE.MathUtils.smoothstep(distance, 55, 260) +
+      (mesoUndulation + microRoughness) * terrainDetailMask;
+
+    // Prepared ground is part of the same heightfield, so raycasts, landing
+    // gear and boarding all sample exactly the surface the player sees.
+    const landingMask = 1 - THREE.MathUtils.smoothstep(distance, 15, 36);
+    y = THREE.MathUtils.lerp(y, 0, landingMask);
+
+    const baseDistance = Math.hypot(x, z + 72);
+    const baseMask = 1 - THREE.MathUtils.smoothstep(baseDistance, 17, 34);
+    y = THREE.MathUtils.lerp(y, -0.28, baseMask);
+
+    const accessDistance = distanceToSegment2d(x, z, 0, 8, 0, -82);
+    const accessMask = (1 - THREE.MathUtils.smoothstep(accessDistance, 5.5, 13)) * 0.78;
+    const accessProgress = THREE.MathUtils.clamp((-z + 8) / 90, 0, 1);
+    y = THREE.MathUtils.lerp(y, THREE.MathUtils.lerp(0, -0.28, accessProgress), accessMask);
+    return y;
   }
 
   /** Terrain elevation with lightweight authored shaping around Mission 02 sites. */
@@ -356,10 +524,11 @@ export class PlanetaryWorld {
 
     const colors = new Float32Array(positions.count * 3);
     const normals = geom.attributes.normal;
-    const soil = new THREE.Color(0x4a4034);
-    const basalt = new THREE.Color(0x2c2a27);
-    const ridgeTint = new THREE.Color(0x555e4d);
-    const lichen = new THREE.Color(0x3d5847);
+    const soil = new THREE.Color(0x4b4439);
+    const sediment = new THREE.Color(0x625a49);
+    const basalt = new THREE.Color(0x292c2b);
+    const ridgeTint = new THREE.Color(0x4b5045);
+    const mineralPatina = new THREE.Color(0x3f4b43);
     const damp = new THREE.Color(0x27333a);
     const ironShelf = new THREE.Color(0x574234);
     const scorched = new THREE.Color(0x261b17);
@@ -370,18 +539,24 @@ export class PlanetaryWorld {
       const y = positions.getY(i);
       const z = positions.getZ(i);
       const slope = 1 - normals.getY(i);
-      const detail = fbm2(x * 0.05 + 9, z * 0.05 + 9, 71.9, 3);
+      const macroVariation = fbm2(x * 0.006 + 4, z * 0.006 - 7, NEREIDA_SEED + 13, 3);
+      const detail = fbm2(x * 0.045 + 9, z * 0.045 + 9, NEREIDA_SEED + 71, 3);
+      const exposure = THREE.MathUtils.clamp(
+        slope * 4.2 + THREE.MathUtils.smoothstep(y, 18, 52) * 0.32,
+        0,
+        1
+      );
+      const sedimentMask =
+        (1 - exposure) * THREE.MathUtils.clamp((0.61 - macroVariation) * 2.1, 0, 0.72);
 
-      // Base dusty soil, cooling toward grey-green on the high rim.
-      mixed.copy(soil).lerp(ridgeTint, THREE.MathUtils.clamp(y / 60, 0, 1));
-      // Steep faces expose dark basalt.
-      mixed.lerp(basalt, THREE.MathUtils.clamp(slope * 3.2, 0, 0.85));
-      // Sparse lichen film in the sheltered flats: biological traces.
-      if (y < 8 && detail > 0.62) {
-        mixed.lerp(lichen, (detail - 0.62) * 1.6);
+      mixed.copy(soil).lerp(sediment, sedimentMask);
+      mixed.lerp(ridgeTint, THREE.MathUtils.clamp(y / 62, 0, 0.72));
+      mixed.lerp(basalt, exposure * 0.82);
+      // Sheltered mineral staining adds variation without inventing surface life.
+      if (y < 10 && slope < 0.08 && detail > 0.6) {
+        mixed.lerp(mineralPatina, (detail - 0.6) * 0.72);
       }
-      // Soil brightness grain so no two patches read identical.
-      mixed.offsetHSL(0, 0, (detail - 0.5) * 0.05);
+      mixed.offsetHSL(0, 0, (detail - 0.5) * 0.035 + (macroVariation - 0.5) * 0.025);
 
       const lagoonBlend = this.getTerrainProfileInfluence('water', x, z);
       const mineralBlend = this.getTerrainProfileInfluence('minerals', x, z);
@@ -396,20 +571,30 @@ export class PlanetaryWorld {
     }
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-    this.terrainMesh = new THREE.Mesh(
-      geom,
-      new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        roughness: 0.96,
-        metalness: 0.02
-      })
-    );
+    const groundDetail = createGeologicalDetailTexture(512, NEREIDA_SEED + 311).clone();
+    groundDetail.name = 'Nereida Ground Roughness';
+    groundDetail.wrapS = THREE.RepeatWrapping;
+    groundDetail.wrapT = THREE.RepeatWrapping;
+    groundDetail.repeat.set(5.25, 5.25);
+    groundDetail.rotation = 0.31;
+    groundDetail.center.set(0.5, 0.5);
+    groundDetail.needsUpdate = true;
+    this.terrainMesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughnessMap: groundDetail,
+      bumpMap: groundDetail,
+      bumpScale: 0.16,
+      roughness: 0.98,
+      metalness: 0.012
+    }));
+    this.terrainMesh.name = 'Nereida Authored Geological Terrain';
     // This is the walkable ground around Base Nereida, so it has to accept the
     // pilot's cast shadow. Without this the character throws a shadow that
     // simply never lands anywhere outside the Aurora valley floor.
     this.terrainMesh.receiveShadow = true;
     this.group.add(this.terrainMesh);
 
+    this.addBaseGroundIntegration();
     this.addRocks();
     this.addSky();
     this.addClouds();
@@ -429,7 +614,7 @@ export class PlanetaryWorld {
    */
   private addLowCloudDeck(): void {
     for (let i = 0; i < 8; i += 1) {
-      const baseOpacity = 0.12 + Math.random() * 0.06;
+      const baseOpacity = 0.12 + seededValue(NEREIDA_SEED + i * 3.1) * 0.06;
       const sprite = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: createSoftParticleTexture(96),
@@ -437,18 +622,32 @@ export class PlanetaryWorld {
           transparent: true,
           opacity: baseOpacity,
           depthWrite: false,
-          rotation: Math.random() * Math.PI * 2,
+          rotation: seededValue(NEREIDA_SEED + i * 5.7) * TAU,
           fog: false
         })
       );
-      const angle = (i / 8) * Math.PI * 2 + Math.random();
-      const radius = 60 + Math.random() * 260;
-      sprite.position.set(Math.cos(angle) * radius, 108 + Math.random() * 34, Math.sin(angle) * radius);
-      sprite.scale.set(190 + Math.random() * 150, 42 + Math.random() * 22, 1);
+      const angle = (i / 8) * TAU + seededValue(NEREIDA_SEED + i * 7.9);
+      const radius = 60 + seededValue(NEREIDA_SEED + i * 11.3) * 260;
+      sprite.position.set(
+        Math.cos(angle) * radius,
+        108 + seededValue(NEREIDA_SEED + i * 13.7) * 34,
+        Math.sin(angle) * radius
+      );
+      sprite.scale.set(
+        190 + seededValue(NEREIDA_SEED + i * 17.1) * 150,
+        42 + seededValue(NEREIDA_SEED + i * 19.9) * 22,
+        1
+      );
       this.group.add(sprite);
       // Drifts across the basin every frame.
       sprite.userData.dynamic = true;
-      this.cloudSprites.push({ sprite, speed: 1.6 + Math.random() * 1.8, baseX: sprite.position.x, baseOpacity, lowDeck: true });
+      this.cloudSprites.push({
+        sprite,
+        speed: 1.6 + seededValue(NEREIDA_SEED + i * 23.3) * 1.8,
+        baseX: sprite.position.x,
+        baseOpacity,
+        lowDeck: true
+      });
     }
   }
 
@@ -457,28 +656,10 @@ export class PlanetaryWorld {
    * dissolved in haze that give the horizon geological depth.
    */
   private addFarRidges(): void {
-    const ridgeGroup = new THREE.Group();
-    ridgeGroup.name = 'Cuenca Nereida - Irregular Ridge Bands';
-    const definitions = [
-      { radius: 408, width: 78, seed: 2.7, color: 0x313a34 },
-      { radius: 492, width: 92, seed: 8.9, color: 0x26302b }
-    ];
-    for (const definition of definitions) {
-      const geometry = createRidgeBandGeometry(definition.radius, definition.width, definition.seed);
-      this.ridgeTriangles += geometry.index ? geometry.index.count / 3 : 0;
-      const ridge = new THREE.Mesh(
-        geometry,
-        new THREE.MeshStandardMaterial({
-          color: definition.color,
-          roughness: 1,
-          metalness: 0,
-          side: THREE.DoubleSide
-        })
-      );
-      ridge.name = `Ridge Band ${definition.seed}`;
-      ridgeGroup.add(ridge);
-    }
-    this.group.add(ridgeGroup);
+    // The old concentric ridge meshes exposed their radial algorithm from the
+    // air. The silhouette now comes from the same directional heightfield as
+    // the playable terrain, with these few authored outcrops as scale anchors.
+    this.ridgeTriangles = 0;
     this.addLandmarkFormations();
   }
 
@@ -488,47 +669,231 @@ export class PlanetaryWorld {
    * landmarks. Placed deliberately, never scattered.
    */
   private addLandmarkFormations(): void {
-    const formations: { x: number; z: number; scale: number; tilt: number; hue: number }[] = [
-      { x: -168, z: -128, scale: 15, tilt: 0.16, hue: 0.36 },
-      { x: 208, z: 44, scale: 12, tilt: -0.1, hue: 0.3 },
-      { x: -36, z: 224, scale: 18, tilt: 0.08, hue: 0.42 }
+    const formations: { x: number; z: number; scale: number; rotation: number }[] = [
+      { x: -168, z: -128, scale: 15, rotation: 0.42 },
+      { x: 208, z: 44, scale: 12, rotation: -0.58 },
+      { x: -36, z: 224, scale: 18, rotation: 0.2 }
     ];
+    const material = createGeologicalRockMaterial({
+      seed: NEREIDA_SEED + 601,
+      lightColor: 0x9a8c76,
+      darkColor: 0x42433c,
+      roughness: 0.97,
+      metalness: 0.012,
+      bumpScale: 0.12,
+      detailScale: 5.4
+    });
 
     for (const [index, formation] of formations.entries()) {
       const cluster = new THREE.Group();
       cluster.name = `Cuenca Nereida Landmark ${index}`;
-      const baseColor = new THREE.Color().setHSL(0.11, 0.12, 0.22 + formation.hue * 0.14);
-      const material = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.94, metalness: 0.03 });
 
-      // Main monolith plus a leaning companion and a fallen slab: reads as
-      // one eroded formation, not three random rocks.
-      const monolith = new THREE.Mesh(createRockGeometry(900 + index * 31.7, 3), material);
-      monolith.scale.set(formation.scale * 0.55, formation.scale, formation.scale * 0.6);
-      monolith.rotation.z = formation.tilt;
-      cluster.add(monolith);
+      const bedrock = new THREE.Mesh(createOutcropGeometry(900 + index * 31.7, 3), material);
+      bedrock.scale.set(formation.scale, formation.scale * 0.48, formation.scale * 0.72);
+      bedrock.position.y = -formation.scale * 0.14;
+      cluster.add(bedrock);
 
-      const companion = new THREE.Mesh(createRockGeometry(950 + index * 17.3, 2), material);
-      companion.scale.setScalar(formation.scale * 0.5);
-      companion.position.set(formation.scale * 0.72, -formation.scale * 0.28, formation.scale * 0.2);
-      companion.rotation.z = -formation.tilt * 2.4;
-      cluster.add(companion);
+      const upperSlab = new THREE.Mesh(createSurfaceRockGeometry(950 + index * 17.3, 'slab', 3), material);
+      upperSlab.scale.set(formation.scale * 0.72, formation.scale * 0.3, formation.scale * 0.58);
+      upperSlab.position.set(formation.scale * 0.2, formation.scale * 0.2, -formation.scale * 0.08);
+      upperSlab.rotation.set(0.03, 0.2, index === 1 ? -0.12 : 0.08);
+      cluster.add(upperSlab);
 
-      const slab = new THREE.Mesh(createRockGeometry(990 + index * 23.1, 2), material);
-      slab.scale.set(formation.scale * 0.62, formation.scale * 0.2, formation.scale * 0.42);
-      slab.position.set(-formation.scale * 0.5, -formation.scale * 0.42, -formation.scale * 0.3);
-      cluster.add(slab);
+      const fallenPlate = new THREE.Mesh(createSurfaceRockGeometry(990 + index * 23.1, 'slab', 2), material);
+      fallenPlate.scale.set(formation.scale * 0.58, formation.scale * 0.16, formation.scale * 0.46);
+      fallenPlate.position.set(-formation.scale * 0.72, -formation.scale * 0.14, formation.scale * 0.28);
+      fallenPlate.rotation.y = -0.36;
+      cluster.add(fallenPlate);
 
       const ground = this.getHeightAt(formation.x, formation.z);
-      cluster.position.set(formation.x, ground + formation.scale * 0.42, formation.z);
-      cluster.rotation.y = index * 2.1;
+      cluster.position.set(formation.x, ground + formation.scale * 0.1, formation.z);
+      cluster.rotation.y = formation.rotation;
       this.group.add(cluster);
     }
   }
 
-  /**
-   * Authored ground breakup: cracked-soil pans scattered across the basin
-   * floor so the terrain never reads as one continuous material.
-   */
+  /** Compact, terrain-following evidence that the base was built here. */
+  private addBaseGroundIntegration(): void {
+    const positions: number[] = [];
+    const indices: number[] = [];
+
+    const appendPatch = (
+      centerX: number,
+      centerZ: number,
+      radiusX: number,
+      radiusZ: number,
+      rotation: number,
+      sides: number,
+      seed: number
+    ) => {
+      const base = positions.length / 3;
+      positions.push(centerX, this.getHeightAt(centerX, centerZ) + 0.045, centerZ);
+      for (let side = 0; side < sides; side += 1) {
+        const angle = (side / sides) * TAU;
+        const edgeVariation = 0.88 + seededValue(seed + side * 2.73) * 0.2;
+        const localX = Math.cos(angle) * radiusX * edgeVariation;
+        const localZ = Math.sin(angle) * radiusZ * edgeVariation;
+        const cos = Math.cos(rotation);
+        const sin = Math.sin(rotation);
+        const x = centerX + localX * cos - localZ * sin;
+        const z = centerZ + localX * sin + localZ * cos;
+        positions.push(x, this.getHeightAt(x, z) + 0.05, z);
+      }
+      for (let side = 0; side < sides; side += 1) {
+        indices.push(base, base + 1 + side, base + 1 + ((side + 1) % sides));
+      }
+    };
+
+    appendPatch(0, 0, 30, 25, 0.04, 18, 13.2);
+    appendPatch(0, -72, 22, 18, -0.08, 16, 29.8);
+
+    const routeBase = positions.length / 3;
+    const routeSteps = 14;
+    for (let step = 0; step <= routeSteps; step += 1) {
+      const progress = step / routeSteps;
+      const z = THREE.MathUtils.lerp(7, -82, progress);
+      const centerX = Math.sin(progress * Math.PI) * 1.8;
+      const halfWidth = THREE.MathUtils.lerp(6.2, 4.8, Math.sin(progress * Math.PI));
+      for (const side of [-1, 1]) {
+        const x = centerX + side * halfWidth * (0.94 + seededValue(step * 7.7 + side) * 0.1);
+        positions.push(x, this.getHeightAt(x, z) + 0.048, z);
+      }
+      if (step < routeSteps) {
+        const row = routeBase + step * 2;
+        indices.push(row, row + 2, row + 1, row + 1, row + 2, row + 3);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x35372f,
+      roughness: 1,
+      metalness: 0.015,
+      polygonOffset: true,
+      polygonOffsetFactor: -1
+    });
+    const preparedGround = new THREE.Mesh(geometry, material);
+    preparedGround.name = 'Base Nereida Compacted Aprons and Access';
+    preparedGround.receiveShadow = true;
+    this.group.add(preparedGround);
+
+    const trackPositions: number[] = [];
+    const trackIndices: number[] = [];
+    for (const lateral of [-2.45, 2.45]) {
+      const base = trackPositions.length / 3;
+      for (let step = 0; step <= 10; step += 1) {
+        const progress = step / 10;
+        const z = THREE.MathUtils.lerp(-37, -61, progress);
+        const x = lateral + Math.sin(progress * 2.7) * 0.3;
+        for (const edge of [-0.16, 0.16]) {
+          trackPositions.push(x + edge, this.getHeightAt(x + edge, z) + 0.063, z);
+        }
+        if (step < 10) {
+          const row = base + step * 2;
+          trackIndices.push(row, row + 2, row + 1, row + 1, row + 2, row + 3);
+        }
+      }
+    }
+    const trackGeometry = new THREE.BufferGeometry();
+    trackGeometry.setAttribute('position', new THREE.Float32BufferAttribute(trackPositions, 3));
+    trackGeometry.setIndex(trackIndices);
+    trackGeometry.computeVertexNormals();
+    const tracks = new THREE.Mesh(trackGeometry, new THREE.MeshStandardMaterial({
+      color: 0x262824,
+      roughness: 1,
+      metalness: 0,
+      polygonOffset: true,
+      polygonOffsetFactor: -2
+    }));
+    tracks.name = 'Base Nereida Controlled Traffic Wear';
+    tracks.receiveShadow = true;
+    this.group.add(tracks);
+
+    const landingOperations = new THREE.Group();
+    landingOperations.name = 'Base Nereida Landing Operations';
+
+    const padMarkings = new THREE.Mesh(
+      new THREE.PlaneGeometry(42, 42),
+      new THREE.MeshStandardMaterial({
+        map: createLandingOperationsTexture(),
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        roughness: 0.96,
+        metalness: 0.06,
+        polygonOffset: true,
+        polygonOffsetFactor: -3,
+        polygonOffsetUnits: -2
+      })
+    );
+    padMarkings.name = 'Nereida Landing Pad Operational Markings';
+    padMarkings.rotation.x = -Math.PI / 2;
+    padMarkings.position.y = this.getHeightAt(0, 0) + 0.071;
+    padMarkings.receiveShadow = true;
+    landingOperations.add(padMarkings);
+
+    const curbMaterial = new THREE.MeshStandardMaterial({
+      color: 0x424b49,
+      roughness: 0.78,
+      metalness: 0.38
+    });
+    const curbs = new THREE.InstancedMesh(new THREE.BoxGeometry(3.2, 0.2, 0.36), curbMaterial, 12);
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < 12; i += 1) {
+      const angle = (i / 12) * TAU;
+      const x = Math.sin(angle) * 20.3;
+      const z = Math.cos(angle) * 20.3;
+      dummy.position.set(x, this.getHeightAt(x, z) + 0.12, z);
+      dummy.rotation.set(0, angle, 0);
+      dummy.updateMatrix();
+      curbs.setMatrixAt(i, dummy.matrix);
+    }
+    curbs.instanceMatrix.needsUpdate = true;
+    curbs.castShadow = true;
+    curbs.receiveShadow = true;
+    landingOperations.add(curbs);
+
+    const guideMaterial = new THREE.MeshStandardMaterial({
+      color: 0x79bea9,
+      emissive: 0x4ab69a,
+      emissiveIntensity: 0.7,
+      roughness: 0.28,
+      metalness: 0.12
+    });
+    const guideLights = new THREE.InstancedMesh(new THREE.BoxGeometry(0.3, 0.09, 0.52), guideMaterial, 28);
+    let guideIndex = 0;
+    for (let i = 0; i < 16; i += 1) {
+      const angle = (i / 16) * TAU;
+      const x = Math.sin(angle) * 18.3;
+      const z = Math.cos(angle) * 18.3;
+      dummy.position.set(x, this.getHeightAt(x, z) + 0.13, z);
+      dummy.rotation.set(0, angle, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      guideLights.setMatrixAt(guideIndex++, dummy.matrix);
+    }
+    for (const z of [-25, -33, -41, -49, -57, -64]) {
+      for (const x of [-4.7, 4.7]) {
+        dummy.position.set(x, this.getHeightAt(x, z) + 0.12, z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        guideLights.setMatrixAt(guideIndex++, dummy.matrix);
+      }
+    }
+    guideLights.instanceMatrix.needsUpdate = true;
+    guideLights.castShadow = false;
+    guideLights.receiveShadow = true;
+    landingOperations.add(guideLights);
+    this.group.add(landingOperations);
+  }
+
+  /** Authored sediment lenses that follow the basin's prevailing erosion. */
   private addGroundDetail(): void {
     const panMaterial = new THREE.MeshStandardMaterial({
       color: 0x322c25,
@@ -537,19 +902,28 @@ export class PlanetaryWorld {
     });
     const positions: number[] = [];
     const indices: number[] = [];
-    for (let i = 0; i < 10; i += 1) {
-      const angle = seededValue(i + 2.1) * Math.PI * 2;
-      const radius = 42 + seededValue(i + 8.7) * 180;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
+    for (let i = 0; i < 8; i += 1) {
+      let x = 0;
+      let z = 0;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const angle = seededValue(NEREIDA_SEED + i * 13.1 + attempt * 9.7) * TAU;
+        const radius = 54 + seededValue(NEREIDA_SEED + i * 17.3 + attempt * 11.9) * 210;
+        x = Math.cos(angle) * radius;
+        z = Math.sin(angle) * radius;
+        if (!this.isInsideProceduralExclusion(x, z, 8)) break;
+      }
       const base = positions.length / 3;
       const sides = 7 + (i % 3);
       positions.push(x, this.getHeightAt(x, z) + 0.07, z);
+      const orientation = -0.28 + seededValue(NEREIDA_SEED + i * 19.1) * 0.35;
+      const axisRatio = 0.3 + seededValue(NEREIDA_SEED + i * 23.7) * 0.24;
       for (let side = 0; side < sides; side += 1) {
         const theta = (side / sides) * Math.PI * 2;
-        const extent = 3 + seededValue(i * 13 + side * 2.7) * 4;
-        const px = x + Math.cos(theta) * extent;
-        const pz = z + Math.sin(theta) * extent * (0.72 + seededValue(i + side) * 0.3);
+        const extent = 4 + seededValue(i * 13 + side * 2.7) * 6;
+        const localX = Math.cos(theta) * extent;
+        const localZ = Math.sin(theta) * extent * axisRatio;
+        const px = x + localX * Math.cos(orientation) - localZ * Math.sin(orientation);
+        const pz = z + localX * Math.sin(orientation) + localZ * Math.cos(orientation);
         positions.push(px, this.getHeightAt(px, pz) + 0.08, pz);
       }
       for (let side = 0; side < sides; side += 1) {
@@ -561,7 +935,7 @@ export class PlanetaryWorld {
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
     const pans = new THREE.Mesh(geometry, panMaterial);
-    pans.name = 'Irregular Cracked Soil Pans';
+    pans.name = 'Nereida Wind-shaped Sediment Lenses';
     this.group.add(pans);
   }
 
@@ -664,9 +1038,45 @@ export class PlanetaryWorld {
     return this.revealProgress;
   }
 
+  setDetailProfile(profile: NereidaDetailProfile): void {
+    this.detailProfile = profile;
+    this.colonyModule.setDetailProfile(profile);
+    for (const entry of this.rockLodEntries) {
+      entry.mesh.count = profile === 'performance'
+        ? entry.performanceCount
+        : profile === 'high'
+          ? entry.highCount
+          : entry.maximumCount;
+    }
+    this.dustActiveCount = profile === 'performance' ? 260 : profile === 'high' ? 390 : 480;
+    this.dust?.geometry.setDrawRange(0, this.dustActiveCount);
+  }
+
+  getProceduralDiagnostics(): {
+    seed: number;
+    detailProfile: NereidaDetailProfile;
+    exclusionZones: number;
+    rockClusters: number;
+    visibleRockClusters: number;
+    rockInstances: number;
+    maximumRockInstances: number;
+    baseInfrastructure: ReturnType<ColonyModule['getInfrastructureDiagnostics']>;
+  } {
+    return {
+      seed: NEREIDA_SEED,
+      detailProfile: this.detailProfile,
+      exclusionZones: NEREIDA_EXCLUSION_ZONES.length + SHAPED_RESOURCE_SITES.length,
+      rockClusters: this.rockLodEntries.length,
+      visibleRockClusters: this.rockLodEntries.filter((entry) => entry.mesh.visible).length,
+      rockInstances: this.rockLodEntries.reduce((total, entry) => total + (entry.mesh.visible ? entry.mesh.count : 0), 0),
+      maximumRockInstances: this.rockLodEntries.reduce((total, entry) => total + entry.maximumCount, 0),
+      baseInfrastructure: this.colonyModule.getInfrastructureDiagnostics()
+    };
+  }
+
   get activeParticleCount(): number {
     if (!this.active) return 0;
-    return 480 + 26 + (this.impactDustLife > 0 ? 64 : 0) + this.colonyModule.activeParticleCount;
+    return this.dustActiveCount + 26 + (this.impactDustLife > 0 ? 64 : 0) + this.colonyModule.activeParticleCount;
   }
 
   /**
@@ -707,49 +1117,199 @@ export class PlanetaryWorld {
     this.group.add(tip);
   }
 
-  private addRocks(): void {
-    // Weathered displaced rocks, grounded on the heightfield. Two instanced
-    // sets: scattered field stones plus heavier rim boulders.
-    const dummy = new THREE.Object3D();
-    const tint = new THREE.Color();
-
-    const makeSet = (
-      geometry: THREE.BufferGeometry,
-      count: number,
-      minRadius: number,
-      maxRadius: number,
-      minScale: number,
-      maxScale: number
-    ): THREE.InstancedMesh => {
-      const material = new THREE.MeshStandardMaterial({ roughness: 0.92, metalness: 0.04 });
-      const mesh = new THREE.InstancedMesh(geometry, material, count);
-      for (let i = 0; i < count; i += 1) {
-        let x = 0;
-        let z = 0;
-        for (let attempt = 0; attempt < 12; attempt += 1) {
-          const angle = Math.random() * Math.PI * 2;
-          const radius = minRadius + Math.random() * (maxRadius - minRadius);
-          x = Math.cos(angle) * radius;
-          z = Math.sin(angle) * radius;
-          if (!this.isInsideAuthoredResourceSite(x, z, 1.3)) break;
-        }
-        const s = minScale + Math.pow(Math.random(), 1.6) * (maxScale - minScale);
-        dummy.position.set(x, this.getHeightAt(x, z) + s * 0.28, z);
-        dummy.scale.set(s, s * (0.6 + Math.random() * 0.5), s);
-        dummy.rotation.set((Math.random() - 0.5) * 0.4, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.4);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
-        tint.setHSL(0.09 + Math.random() * 0.05, 0.1 + Math.random() * 0.1, 0.24 + Math.random() * 0.14);
-        mesh.setColorAt(i, tint);
+  private isInsideProceduralExclusion(x: number, z: number, margin = 0): boolean {
+    if (this.isInsideAuthoredResourceSite(x, z, 1.22 + margin * 0.02)) return true;
+    for (const zone of NEREIDA_EXCLUSION_ZONES) {
+      if (zone.kind === 'circle') {
+        if (Math.hypot(x - zone.x, z - zone.z) < zone.radius + margin) return true;
+      } else if (distanceToSegment2d(x, z, zone.ax, zone.az, zone.bx, zone.bz) < zone.radius + margin) {
+        return true;
       }
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      this.group.add(mesh);
-      return mesh;
+    }
+    return false;
+  }
+
+  private getTerrainNormalAt(x: number, z: number, target: THREE.Vector3): THREE.Vector3 {
+    const step = 1.75;
+    const dx = this.getHeightAt(x + step, z) - this.getHeightAt(x - step, z);
+    const dz = this.getHeightAt(x, z + step) - this.getHeightAt(x, z - step);
+    return target.set(-dx, step * 2, -dz).normalize();
+  }
+
+  private addRocks(): void {
+    const materials: Record<SurfaceRockType, THREE.MeshStandardMaterial> = {
+      angular: createGeologicalRockMaterial({ seed: NEREIDA_SEED + 710, lightColor: 0x948670, darkColor: 0x41423c, roughness: 0.97, metalness: 0.012, detailScale: 5.5 }),
+      slab: createGeologicalRockMaterial({ seed: NEREIDA_SEED + 730, lightColor: 0x887b69, darkColor: 0x393d3a, roughness: 0.965, metalness: 0.016, detailScale: 6.2 }),
+      round: createGeologicalRockMaterial({ seed: NEREIDA_SEED + 750, lightColor: 0x8d8571, darkColor: 0x444740, roughness: 0.98, metalness: 0.008, detailScale: 4.8 }),
+      columnar: createGeologicalRockMaterial({ seed: NEREIDA_SEED + 770, lightColor: 0x877d6c, darkColor: 0x3b3e3a, roughness: 0.97, metalness: 0.012, detailScale: 5.8 })
+    };
+    const dummy = new THREE.Object3D();
+    const normal = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    const align = new THREE.Quaternion();
+    const yaw = new THREE.Quaternion();
+    const tint = new THREE.Color();
+    const contactPositions: number[] = [];
+    const contactIndices: number[] = [];
+
+    const appendContact = (x: number, z: number, radiusX: number, radiusZ: number, rotation: number) => {
+      const base = contactPositions.length / 3;
+      contactPositions.push(x, this.getHeightAt(x, z) + 0.055, z);
+      const sides = 10;
+      for (let side = 0; side < sides; side += 1) {
+        const angle = (side / sides) * TAU;
+        const localX = Math.cos(angle) * radiusX;
+        const localZ = Math.sin(angle) * radiusZ;
+        const cos = Math.cos(rotation);
+        const sin = Math.sin(rotation);
+        const px = x + localX * cos - localZ * sin;
+        const pz = z + localX * sin + localZ * cos;
+        contactPositions.push(px, this.getHeightAt(px, pz) + 0.058, pz);
+      }
+      for (let side = 0; side < sides; side += 1) {
+        contactIndices.push(base, base + 1 + side, base + 1 + ((side + 1) % sides));
+      }
     };
 
-    makeSet(createRockGeometry(311.7, 1), 130, 28, 330, 0.5, 2.6);
-    makeSet(createRockGeometry(747.1, 2), 28, 150, 400, 3.2, 9.5);
+    for (const [clusterIndex, definition] of NEREIDA_ROCK_CLUSTERS.entries()) {
+      const geometry = createSurfaceRockGeometry(
+        NEREIDA_SEED + definition.seed,
+        definition.family,
+        definition.family === 'angular' ? 2 : 3
+      );
+      geometry.computeBoundingBox();
+      const minimumY = geometry.boundingBox?.min.y ?? -0.7;
+      const mesh = new THREE.InstancedMesh(geometry, materials[definition.family], definition.count);
+      mesh.name = `Nereida ${definition.family} cluster // ${definition.id}`;
+      mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.frustumCulled = true;
+      let placed = 0;
+
+      for (let index = 0; index < definition.count; index += 1) {
+        let x = definition.x;
+        let z = definition.z;
+        let valid = false;
+        for (let attempt = 0; attempt < 18; attempt += 1) {
+          const candidateSeed = definition.seed * 101 + index * 17.3 + attempt * 43.7;
+          const radial = Math.sqrt((index + seededValue(candidateSeed)) / definition.count);
+          const angle = seededValue(candidateSeed + 3.1) * TAU;
+          const localX = Math.cos(angle) * definition.radiusX * radial;
+          const localZ = Math.sin(angle) * definition.radiusZ * radial;
+          const cos = Math.cos(definition.rotation);
+          const sin = Math.sin(definition.rotation);
+          x = definition.x + localX * cos - localZ * sin;
+          z = definition.z + localX * sin + localZ * cos;
+          const slope = this.getSlopeAt(x, z);
+          if (!this.isInsideProceduralExclusion(x, z, definition.maxScale * 0.75) && slope <= definition.maxSlope) {
+            valid = true;
+            break;
+          }
+        }
+        if (!valid) continue;
+
+        // Biased size distribution: a cluster core, many fragments, few anchors.
+        const sizeSeed = seededValue(definition.seed * 19 + index * 7.17);
+        const sizeT = index === 0 ? 0.9 : index === 1 ? 0.72 : Math.pow(sizeSeed, 2.35);
+        const scale = THREE.MathUtils.lerp(definition.minScale, definition.maxScale, sizeT);
+        const widthScale = scale * (0.86 + seededValue(index + definition.seed) * 0.28);
+        const depthScale = scale * (0.82 + seededValue(index * 2.7 + definition.seed) * 0.34);
+        const heightScale = scale * (definition.family === 'slab' ? 0.68 : 0.9 + seededValue(index * 5.1) * 0.18);
+        const ground = this.getHeightAt(x, z);
+        const burial = scale * THREE.MathUtils.lerp(0.24, 0.34, 1 - Math.min(scale / definition.maxScale, 1));
+
+        this.getTerrainNormalAt(x, z, normal);
+        align.setFromUnitVectors(up, normal);
+        const rockYaw = seededValue(index * 11.3 + definition.seed) * TAU;
+        yaw.setFromAxisAngle(normal, rockYaw);
+        dummy.quaternion.copy(yaw).multiply(align);
+        dummy.position.set(x, ground - minimumY * heightScale - burial, z);
+        dummy.scale.set(widthScale, heightScale, depthScale);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(placed, dummy.matrix);
+        appendContact(x, z, widthScale * 0.56, depthScale * 0.48, rockYaw);
+
+        const colorSeed = seededValue(definition.seed + index * 9.3);
+        tint.setHSL(
+          THREE.MathUtils.lerp(0.075, 0.115, colorSeed),
+          THREE.MathUtils.lerp(0.055, 0.13, 1 - colorSeed),
+          THREE.MathUtils.lerp(0.82, 0.96, colorSeed)
+        );
+        mesh.setColorAt(placed, tint);
+        placed += 1;
+      }
+
+      mesh.count = placed;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+      mesh.computeBoundingBox();
+      mesh.computeBoundingSphere();
+      this.group.add(mesh);
+      this.rockLodEntries.push({
+        mesh,
+        center: new THREE.Vector3(definition.x, this.getHeightAt(definition.x, definition.z), definition.z),
+        maximumCount: placed,
+        highCount: Math.max(1, Math.round(placed * 0.82)),
+        performanceCount: Math.max(1, Math.round(placed * 0.52)),
+        viewDistance: definition.viewDistance
+      });
+    }
+    const contactGeometry = new THREE.BufferGeometry();
+    contactGeometry.setAttribute('position', new THREE.Float32BufferAttribute(contactPositions, 3));
+    contactGeometry.setIndex(contactIndices);
+    contactGeometry.computeVertexNormals();
+    contactGeometry.computeBoundingSphere();
+    this.rockContactMesh = new THREE.Mesh(contactGeometry, new THREE.MeshBasicMaterial({
+      color: 0x1d211e,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2
+    }));
+    this.rockContactMesh.name = 'Nereida Batched Rock Contact Occlusion';
+    this.rockContactMesh.frustumCulled = true;
+    this.rockContactMesh.renderOrder = 1;
+    this.group.add(this.rockContactMesh);
+    this.setDetailProfile(this.detailProfile);
+  }
+
+  /**
+   * Fades the surface sky toward vacuum, 0 = normal Nereida, 1 = space.
+   *
+   * The dome is the real sky: a 640-unit shader sphere that follows the camera
+   * at renderOrder -30. Interpolating `scene.background` and `scene.fog` had no
+   * visible effect because this is drawn over both, and the same dome is what
+   * hides the ascent effect's stars and planet limb — so dimming it is what
+   * reveals them. Only the existing uniforms and the sun's opacity change; no
+   * new sky, no new geometry, no shader edits.
+   */
+  setAtmosphericFade(progress: number): void {
+    const t = Math.max(0, Math.min(1, progress));
+    if (this.sky) {
+      const material = this.sky.material as THREE.ShaderMaterial;
+      const horizon = material.uniforms.uHorizon.value as THREE.Color;
+      const zenith = material.uniforms.uZenith.value as THREE.Color;
+      const sunTint = material.uniforms.uSunTint.value as THREE.Color;
+      // The zenith empties first, then the horizon band, so the darkening
+      // reads as altitude rather than as a global dimmer. The ramps are
+      // deliberately steep: a linear-RGB lerp off a pale green covers very
+      // little perceptual distance in its first half, so a gentle curve looks
+      // like nothing is happening at all.
+      const smooth = (edge0: number, edge1: number) => {
+        const x = Math.max(0, Math.min(1, (t - edge0) / (edge1 - edge0)));
+        return x * x * (3 - 2 * x);
+      };
+      // Zenith is gone by ~0.7, the horizon band holds on until ~0.9.
+      zenith.copy(SKY_ZENITH_BASE).lerp(SKY_SPACE, smooth(0, 0.7));
+      horizon.copy(SKY_HORIZON_BASE).lerp(SKY_SPACE, smooth(0.1, 0.9));
+      sunTint.copy(SKY_SUN_BASE).lerp(SKY_SPACE, smooth(0.15, 0.85));
+    }
+    if (this.sunSprite) {
+      const material = this.sunSprite.material as THREE.SpriteMaterial;
+      material.opacity = 0.85 * (1 - Math.min(1, t * 1.25));
+    }
   }
 
   private addSky(): void {
@@ -816,7 +1376,7 @@ export class PlanetaryWorld {
   private addClouds(): void {
     // High stratus decks drifting with the wind; stretched soft sprites.
     for (let i = 0; i < 5; i += 1) {
-      const baseOpacity = 0.08 + Math.random() * 0.07;
+      const baseOpacity = 0.08 + seededValue(NEREIDA_SEED + 101 + i * 3.7) * 0.07;
       const sprite = new THREE.Sprite(
         new THREE.SpriteMaterial({
           map: createSoftParticleTexture(96),
@@ -827,13 +1387,27 @@ export class PlanetaryWorld {
           fog: false
         })
       );
-      const baseX = (Math.random() - 0.5) * 700;
-      sprite.position.set(baseX, 190 + Math.random() * 120, (Math.random() - 0.5) * 700);
-      sprite.scale.set(340 + Math.random() * 260, 46 + Math.random() * 30, 1);
+      const baseX = (seededValue(NEREIDA_SEED + 113 + i * 5.3) - 0.5) * 700;
+      sprite.position.set(
+        baseX,
+        190 + seededValue(NEREIDA_SEED + 127 + i * 7.1) * 120,
+        (seededValue(NEREIDA_SEED + 139 + i * 11.9) - 0.5) * 700
+      );
+      sprite.scale.set(
+        340 + seededValue(NEREIDA_SEED + 151 + i * 13.3) * 260,
+        46 + seededValue(NEREIDA_SEED + 163 + i * 17.7) * 30,
+        1
+      );
       this.group.add(sprite);
       // Drifts across the basin every frame.
       sprite.userData.dynamic = true;
-      this.cloudSprites.push({ sprite, speed: 2.4 + Math.random() * 2.6, baseX, baseOpacity, lowDeck: false });
+      this.cloudSprites.push({
+        sprite,
+        speed: 2.4 + seededValue(NEREIDA_SEED + 179 + i * 19.1) * 2.6,
+        baseX,
+        baseOpacity,
+        lowDeck: false
+      });
     }
   }
 
@@ -843,9 +1417,9 @@ export class PlanetaryWorld {
     const positions = new Float32Array(count * 3);
     this.dustSeeds = new Float32Array(count * 3);
     for (let i = 0; i < count; i += 1) {
-      this.dustSeeds[i * 3] = (Math.random() - 0.5) * 460;
-      this.dustSeeds[i * 3 + 1] = 0.6 + Math.random() * 7;
-      this.dustSeeds[i * 3 + 2] = (Math.random() - 0.5) * 460;
+      this.dustSeeds[i * 3] = (seededValue(NEREIDA_SEED + i * 2.31) - 0.5) * 460;
+      this.dustSeeds[i * 3 + 1] = 0.6 + seededValue(NEREIDA_SEED + i * 3.77) * 7;
+      this.dustSeeds[i * 3 + 2] = (seededValue(NEREIDA_SEED + i * 5.13) - 0.5) * 460;
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -861,6 +1435,7 @@ export class PlanetaryWorld {
         blending: THREE.AdditiveBlending
       })
     );
+    this.dust.geometry.setDrawRange(0, this.dustActiveCount);
     this.dust.frustumCulled = false;
     this.group.add(this.dust);
   }
@@ -940,11 +1515,26 @@ export class PlanetaryWorld {
     this.group.visible = false;
   }
 
-  update(delta: number, elapsed: number): void {
+  update(delta: number, elapsed: number, observerPosition?: THREE.Vector3): void {
     if (!this.active) return;
-    this.colonyModule.update(delta, elapsed);
+    this.colonyModule.update(delta, elapsed, observerPosition);
     this.surfaceProbe.update(delta, elapsed);
     this.hazard.update(elapsed);
+
+    if (observerPosition) {
+      const profileDistance = this.detailProfile === 'performance' ? 0.76 : this.detailProfile === 'ultra' ? 1.2 : 1;
+      for (const entry of this.rockLodEntries) {
+        const dx = observerPosition.x - entry.center.x;
+        const dz = observerPosition.z - entry.center.z;
+        const altitude = Math.max(0, observerPosition.y - entry.center.y - 35);
+        const weightedDistance = Math.hypot(dx, dz, altitude * 1.35);
+        const threshold = entry.viewDistance * profileDistance + (entry.mesh.visible ? 55 : 0);
+        entry.mesh.visible = weightedDistance <= threshold;
+      }
+      if (this.rockContactMesh) {
+        this.rockContactMesh.visible = observerPosition.y < (this.rockContactMesh.visible ? 280 : 245);
+      }
+    }
 
     for (const cloud of this.cloudSprites) {
       // Endless drift: wrap across the dome on a 1400-unit cycle.

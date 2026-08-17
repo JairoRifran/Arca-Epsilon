@@ -124,12 +124,6 @@ export const mission18Tuning = {
   droneRadius: 9,
   /** Cruise altitude above the settlement floor. */
   droneAltitude: 62,
-  /** Radius of the deterministic approach ring. */
-  droneOrbitRadius: 150,
-  /** Radians per second along the approach route. */
-  droneOrbitSpeed: 0.16,
-  /** Seconds between drone AI/target re-evaluations (frequency-limited). */
-  aiIntervalSeconds: 0.2,
 
   // --- Point-defence batteries --------------------------------------------
   /** Effective engagement range of one battery. */

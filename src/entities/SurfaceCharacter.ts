@@ -57,6 +57,17 @@ export type CharacterMovementInput = {
   cameraRight: THREE.Vector3;
 };
 
+export type CharacterMovementCollisionResponse = {
+  readonly position: THREE.Vector3;
+  grounded: boolean;
+};
+
+export type CharacterMovementCollisionResolver = (
+  start: THREE.Vector3,
+  displacement: THREE.Vector3,
+  velocity: THREE.Vector3
+) => CharacterMovementCollisionResponse;
+
 export type SurfaceCharacterDiagnostics = {
   status: CharacterGlbStatus;
   paths: string[];
@@ -87,6 +98,10 @@ export class SurfaceCharacter {
   private readonly scratchRight = new THREE.Vector3();
   private readonly scratchDesired = new THREE.Vector3();
   private readonly scratchOutward = new THREE.Vector3();
+  private readonly scratchNextPosition = new THREE.Vector3();
+  private readonly scratchDisplacement = new THREE.Vector3();
+  private readonly scratchFacing = new THREE.Vector3();
+  private readonly scratchRotation = new THREE.Quaternion();
   private static readonly UP = new THREE.Vector3(0, 1, 0);
 
   readonly diagnostics: SurfaceCharacterDiagnostics = {
@@ -224,7 +239,8 @@ export class SurfaceCharacter {
     boundaryRadius: number,
     /** Anchor the walkable disc; defaults to Base Nereida at the origin. */
     boundaryCenterX = 0,
-    boundaryCenterZ = 0
+    boundaryCenterZ = 0,
+    collisionResolver?: CharacterMovementCollisionResolver
   ): void {
     const cameraForward = this.scratchForward.copy(movement.cameraForward).setY(0);
     if (cameraForward.lengthSq() < 0.0001) cameraForward.set(0, 0, -1);
@@ -264,8 +280,7 @@ export class SurfaceCharacter {
     this.velocity.y = 0;
     if (this.velocity.lengthSq() < 0.001) this.velocity.set(0, 0, 0);
 
-    const nextPosition = this.group.position.clone().addScaledVector(this.velocity, delta);
-    this.resolveObstacles(nextPosition, obstacles);
+    const nextPosition = this.scratchNextPosition.copy(this.group.position).addScaledVector(this.velocity, delta);
 
     const offsetX = nextPosition.x - boundaryCenterX;
     const offsetZ = nextPosition.z - boundaryCenterZ;
@@ -279,26 +294,37 @@ export class SurfaceCharacter {
       if (outwardSpeed > 0) this.velocity.addScaledVector(outward, -outwardSpeed);
     }
 
-    const targetGroundY = getGroundHeight(nextPosition.x, nextPosition.z) + ON_FOOT_MOVEMENT_TUNING.GROUND_OFFSET;
-    const heightDelta = targetGroundY - this.group.position.y;
-    nextPosition.y = Math.abs(heightDelta) > 2.5
-      ? targetGroundY
-      : THREE.MathUtils.lerp(
-          this.group.position.y,
-          targetGroundY,
-          1 - Math.exp(-delta * ON_FOOT_MOVEMENT_TUNING.GROUND_RESPONSE)
-        );
+    if (collisionResolver) {
+      const collision = collisionResolver(
+        this.group.position,
+        this.scratchDisplacement.copy(nextPosition).sub(this.group.position),
+        this.velocity
+      );
+      nextPosition.copy(collision.position);
+      this.grounded = collision.grounded;
+    } else {
+      this.resolveObstacles(nextPosition, obstacles);
+      const targetGroundY = getGroundHeight(nextPosition.x, nextPosition.z) + ON_FOOT_MOVEMENT_TUNING.GROUND_OFFSET;
+      const heightDelta = targetGroundY - this.group.position.y;
+      nextPosition.y = Math.abs(heightDelta) > 2.5
+        ? targetGroundY
+        : THREE.MathUtils.lerp(
+            this.group.position.y,
+            targetGroundY,
+            1 - Math.exp(-delta * ON_FOOT_MOVEMENT_TUNING.GROUND_RESPONSE)
+          );
+      this.grounded = true;
+    }
     this.group.position.copy(nextPosition);
-    this.grounded = true;
     this.speed = Math.hypot(this.velocity.x, this.velocity.z);
 
     if (this.speed > 0.12) {
       const facing = backwardDominant
-        ? cameraForward.clone().addScaledVector(cameraRight, movement.strafe * 0.28).normalize()
-        : this.velocity.clone().setY(0).normalize();
+        ? this.scratchFacing.copy(cameraForward).addScaledVector(cameraRight, movement.strafe * 0.28).normalize()
+        : this.scratchFacing.copy(this.velocity).setY(0).normalize();
       const targetYaw = Math.atan2(facing.x, facing.z);
-      const targetRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetYaw);
-      this.group.quaternion.slerp(targetRotation, 1 - Math.exp(-delta * ON_FOOT_MOVEMENT_TUNING.ROTATION_RESPONSE));
+      this.scratchRotation.setFromAxisAngle(SurfaceCharacter.UP, targetYaw);
+      this.group.quaternion.slerp(this.scratchRotation, 1 - Math.exp(-delta * ON_FOOT_MOVEMENT_TUNING.ROTATION_RESPONSE));
       this.facingYaw = this.group.rotation.y;
     }
 

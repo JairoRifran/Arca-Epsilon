@@ -16,7 +16,11 @@ export class LandingZone {
 
   private readonly guideLight: THREE.PointLight;
 
+  private readonly approachMarkers = new THREE.Group();
+
   private approachVisibility = 1;
+
+  private settled = false;
 
   constructor(readonly definition: LandingZoneDefinition) {
     this.group.name = definition.name;
@@ -31,8 +35,12 @@ export class LandingZone {
     });
 
     const padRadius = definition.radius * 0.48;
-    const plateau = new THREE.Mesh(new THREE.CylinderGeometry(padRadius, padRadius * 1.08, 1.2, 28), this.surfaceMaterial);
+    const plateau = new THREE.Mesh(new THREE.CylinderGeometry(padRadius, padRadius * 1.03, 0.12, 40), this.surfaceMaterial);
     plateau.name = 'Nereida Contact Slab';
+    // The gameplay anchor remains at y=1.5. Sink the visual slab to terrain
+    // level so it reads as a prepared apron rather than a floating arena.
+    plateau.position.y = -1.55;
+    plateau.receiveShadow = true;
     this.group.add(plateau);
 
     const seamMaterial = new THREE.MeshStandardMaterial({
@@ -44,7 +52,7 @@ export class LandingZone {
     });
     for (let i = 0; i < 4; i += 1) {
       const seam = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, padRadius * 1.25), seamMaterial);
-      seam.position.y = 0.64;
+      seam.position.y = -1.44;
       seam.rotation.y = (i / 4) * Math.PI;
       this.group.add(seam);
     }
@@ -58,17 +66,20 @@ export class LandingZone {
       blending: THREE.AdditiveBlending,
       fog: false
     });
+    this.approachMarkers.name = 'Nereida Approach Marker Guides';
+    this.group.add(this.approachMarkers);
 
     for (let i = 0; i < 4; i += 1) {
       const angle = (i * Math.PI) / 2 + Math.PI / 4;
       const padRadius = definition.radius * 0.72;
-      const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.2, 0.6, 16), this.surfaceMaterial);
-      pad.position.set(Math.cos(angle) * padRadius, 0.3, Math.sin(angle) * padRadius);
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.05, 0.12, 16), this.surfaceMaterial);
+      pad.position.set(Math.cos(angle) * padRadius, -1.53, Math.sin(angle) * padRadius);
+      pad.receiveShadow = true;
       this.group.add(pad);
 
       const markerLight = new THREE.Mesh(new THREE.OctahedronGeometry(1.5, 0), this.ringMaterial);
       markerLight.position.set(Math.cos(angle) * padRadius, 2.1, Math.sin(angle) * padRadius);
-      this.group.add(markerLight);
+      this.approachMarkers.add(markerLight);
     }
 
     this.beaconMaterial = new THREE.MeshBasicMaterial({
@@ -92,6 +103,7 @@ export class LandingZone {
 
   activate(position: THREE.Vector3, normal: THREE.Vector3): void {
     this.active = true;
+    this.setSettled(false);
     this.group.visible = true;
     this.group.position.copy(position);
     this.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal.clone().normalize());
@@ -113,13 +125,21 @@ export class LandingZone {
     this.approachVisibility = THREE.MathUtils.clamp(visibility, 0.18, 1);
   }
 
+  setSettled(settled: boolean): void {
+    this.settled = settled;
+    this.beacon.visible = !settled;
+    this.approachMarkers.visible = !settled;
+  }
+
   update(delta: number, elapsed: number): void {
     if (!this.active) return;
     const pulse = 0.46 + Math.sin(elapsed * 2.8) * 0.16;
     this.beaconMaterial.opacity = pulse * this.approachVisibility;
     this.ringMaterial.opacity = (0.22 + pulse * 0.22) * this.approachVisibility;
     this.surfaceMaterial.emissiveIntensity = 0.12 + this.approachVisibility * 0.18;
-    this.guideLight.intensity = (1.2 + pulse * 1.7) * this.approachVisibility;
+    this.guideLight.intensity = this.settled
+      ? 0.16
+      : (1.2 + pulse * 1.7) * this.approachVisibility;
     this.beacon.rotation.y += delta * 0.38;
   }
 }

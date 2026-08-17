@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { reloadAndAwaitRestore } from './missionProbeHelpers';
 
 test.setTimeout(900000);
 
@@ -72,6 +73,7 @@ test('mission 22 broken fronts: pressure, choices, checkpoints, nodes and M23 ho
   await run(page, TO_M19);
   await run(page, ['completeMission20', 'completeMission21']);
   expect((await page.evaluate(() => window.__arcaDebug?.getMission21State()))?.mission21Completed).toBe(true);
+  await page.evaluate(() => window.__arcaDebug?.clearDialogueQueue());
   expect(await page.evaluate(() => window.__arcaDebug?.startMission22())).toBe(true);
   expect((await m22(page))?.mission22Started).toBe(true);
 
@@ -152,12 +154,12 @@ test('mission 22 broken fronts: pressure, choices, checkpoints, nodes and M23 ho
   expect(state?.mission22Step).toBe('completed');
   expect(state?.mission23Unlocked).toBe(true);
 
-  await page.reload();
-  await ready(page);
-  const launch = page.locator('#launch-button');
-  if (await launch.isVisible()) await launch.click();
-  await expect.poll(async () => (await m22(page))?.mission22Completed, { timeout: 120000 }).toBe(true);
-  const completed = await m22(page);
+  const completed = await reloadAndAwaitRestore(
+    page,
+    m22,
+    (restored) => restored?.mission22Completed === true,
+    'M22 completed checkpoint'
+  );
   expect(completed?.mission23Unlocked).toBe(true);
   expect((await page.evaluate(() => window.__arcaDebug?.getMission21State()))?.mission21Completed).toBe(true);
   expect((await page.evaluate(() => window.__arcaDebug?.getMission20State()))?.mission20Completed).toBe(true);

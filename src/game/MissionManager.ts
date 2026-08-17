@@ -369,11 +369,13 @@ export class MissionManager {
     this.stepIndex = index;
     this.idleTimer = 0;
     this.hintOverride = '';
-    // Any step change resolves an outstanding refusal: the pilot has moved on to
-    // something else, so leaving the denial objective up would be the same stale
-    // instruction the redesign exists to remove.
-    this.denialObjective = '';
-    this.denialReason = '';
+    // Deliberately does NOT clear a standing refusal.
+    //
+    // Revealing the beacon is itself a step change, so clearing here wiped the
+    // denial in the same frame it was raised. More importantly the refusal is a
+    // fact about the descent gate, not about which step is current: it stands
+    // until the gate actually authorises, and `clearDenial` is called from
+    // there. Tying it to step changes was the bug.
   }
 
   recordActivity(): void {

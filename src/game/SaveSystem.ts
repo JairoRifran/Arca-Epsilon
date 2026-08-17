@@ -31,6 +31,7 @@ import type {
   Mission23TargetId
 } from '../assets/mission23Definitions';
 import type { Mission24StepId } from '../assets/mission24Definitions';
+import type { Mission25StateId } from '../assets/mission25Definitions';
 import type { ArkDepartureStepId } from '../assets/arkDepartureDefinitions';
 import type { ParasiteState } from './Mission15AuroraSabotage';
 
@@ -289,6 +290,13 @@ export type SaveGameData = {
   councilReviewed?: boolean;
   energyCircuitsBalanced?: number;
   energyReserveOnline?: boolean;
+  // --- Weapon stores (Stage 3A part B) --------------------------------------
+  // Optional so pre-magazine saves still load. `torpedoReserve` remains only as
+  // a legacy field; tube state is authoritative and reload no longer consumes it.
+  primaryMagazine?: number;
+  primaryReserve?: number;
+  torpedoTubes?: boolean[];
+  torpedoReserve?: number;
   sensorsDeployed?: boolean[];
   sensorsCalibrated?: boolean;
   shieldEmittersInstalled?: boolean[];
@@ -399,6 +407,10 @@ export type SaveGameData = {
   mission22InitialCommsFront?: Mission22FrontChoice;
   auroraFrontDefended?: boolean;
   nereidaFrontDefended?: boolean;
+  auroraHostilesDestroyed?: number;
+  nereidaHostilesDestroyed?: number;
+  orbitalHostilesDestroyed?: number;
+  finalHostilesDestroyed?: number;
   orbitalRelaysProtected?: boolean[];
   crossFrontCrisisManaged?: boolean;
   mission22SupportPriority?: Mission22FrontChoice;
@@ -460,6 +472,32 @@ export type SaveGameData = {
   finalFormationEntered?: boolean;
   mission24Completed?: boolean;
   mission25Unlocked?: boolean;
+  // Mission 25: La ultima orbita. Stable phase, inheritance and integrity
+  // checkpoints only; live enemies and weapon projectiles are rebuilt.
+  mission25Started?: boolean;
+  mission25State?: Mission25StateId;
+  mission25BriefingPlayed?: boolean;
+  mission25DefensePhase?: number;
+  mission25Wave?: number;
+  mission25WaveKills?: number;
+  mission25SystemIntegrities?: number[];
+  mission25ArkIntegrity?: number;
+  mission25InheritedM22Priority?: Mission22FrontChoice;
+  mission25InheritedM23Support?: boolean;
+  mission25InheritedM23TargetOrder?: Mission23TargetId[];
+  mission25CommandNodesDestroyed?: boolean[];
+  mission25CommandTargetLocated?: boolean;
+  mission25CommandTargetExposed?: boolean;
+  mission25CommandCoreIntegrity?: number;
+  mission25FinalPhase?: number;
+  mission25ThreatNeutralized?: boolean;
+  mission25StabilizationComplete?: boolean;
+  mission25ChapterEndShown?: boolean;
+  mission25ChapterEndDismissed?: boolean;
+  mission25Completed?: boolean;
+  chapterCompleted?: boolean;
+  mission25EnemiesDestroyed?: number;
+  mission25EmergencyReinforcementUsed?: boolean;
 
   // --- Mission 01 prologue: departure from Arca Epsilon --------------------
   // All optional. A save written before the prologue existed has none of

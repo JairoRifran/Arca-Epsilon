@@ -112,13 +112,14 @@ let contactShadowGeometry: THREE.CircleGeometry | null = null;
  */
 export function createContactShadow(radius: number, opacity = 0.3, texture?: THREE.Texture): THREE.Mesh {
   contactShadowGeometry ??= new THREE.CircleGeometry(1, 14);
-  const material = sharedBasicMaterial({
+  const spec: BasicSpec = {
     color: 0x000000,
     transparent: true,
     opacity: Number(opacity.toFixed(2)),
-    depthWrite: false,
-    map: texture
-  });
+    depthWrite: false
+  };
+  if (texture) spec.map = texture;
+  const material = sharedBasicMaterial(spec);
   const shadow = new THREE.Mesh(contactShadowGeometry, material);
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.03;

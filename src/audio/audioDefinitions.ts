@@ -102,6 +102,17 @@ export type SfxTrackId =
   | 'sfx-footstep-run-01'
   | 'sfx-footstep-run-02'
   | 'sfx-footstep-run-03'
+  | 'sfx-player-laser-burst-a'
+  | 'sfx-player-laser-burst-b'
+  | 'sfx-player-laser-burst-heavy'
+  | 'sfx-player-laser-charge-short'
+  | 'sfx-player-laser-mechanical-release'
+  | 'sfx-player-torpedo-eject'
+  | 'sfx-player-torpedo-ignite'
+  | 'sfx-player-torpedo-engine'
+  | 'sfx-player-torpedo-near-miss'
+  | 'sfx-player-torpedo-impact'
+  | 'sfx-player-torpedo-detonation'
   // --- Aurora expedition ambience/one-shots. No generated files yet; every
   // cue below declares an existing-asset fallback in sfxCueFallbacks so the
   // journey still sounds like something before the pipeline runs.
@@ -250,6 +261,17 @@ export const sfxTrackIds: readonly SfxTrackId[] = [
   'sfx-footstep-run-01',
   'sfx-footstep-run-02',
   'sfx-footstep-run-03',
+  'sfx-player-laser-burst-a',
+  'sfx-player-laser-burst-b',
+  'sfx-player-laser-burst-heavy',
+  'sfx-player-laser-charge-short',
+  'sfx-player-laser-mechanical-release',
+  'sfx-player-torpedo-eject',
+  'sfx-player-torpedo-ignite',
+  'sfx-player-torpedo-engine',
+  'sfx-player-torpedo-near-miss',
+  'sfx-player-torpedo-impact',
+  'sfx-player-torpedo-detonation',
   'sfx-aurora-wind-gust',
   'sfx-aurora-dust-sweep',
   'sfx-ship-turbulence-light',
@@ -375,6 +397,17 @@ export type SfxCue =
   | 'auroraRevealSwell'
   | 'routeBeaconScan'
   | 'routeBeaconConfirm'
+  | 'playerLaserBurstA'
+  | 'playerLaserBurstB'
+  | 'playerLaserBurstHeavy'
+  | 'playerLaserChargeShort'
+  | 'playerLaserMechanicalRelease'
+  | 'playerTorpedoEject'
+  | 'playerTorpedoIgnite'
+  | 'playerTorpedoEngine'
+  | 'playerTorpedoNearMiss'
+  | 'playerTorpedoImpact'
+  | 'playerTorpedoDetonation'
   // --- Mission 13 ---
   | 'stormWindDistant'
   | 'stormWindHeavy'
@@ -433,6 +466,17 @@ export const sfxCues: Record<SfxCue, SfxTrackId> = {
   auroraRevealSwell: 'sfx-aurora-reveal-swell',
   routeBeaconScan: 'sfx-route-beacon-scan',
   routeBeaconConfirm: 'sfx-route-beacon-confirm',
+  playerLaserBurstA: 'sfx-player-laser-burst-a',
+  playerLaserBurstB: 'sfx-player-laser-burst-b',
+  playerLaserBurstHeavy: 'sfx-player-laser-burst-heavy',
+  playerLaserChargeShort: 'sfx-player-laser-charge-short',
+  playerLaserMechanicalRelease: 'sfx-player-laser-mechanical-release',
+  playerTorpedoEject: 'sfx-player-torpedo-eject',
+  playerTorpedoIgnite: 'sfx-player-torpedo-ignite',
+  playerTorpedoEngine: 'sfx-player-torpedo-engine',
+  playerTorpedoNearMiss: 'sfx-player-torpedo-near-miss',
+  playerTorpedoImpact: 'sfx-player-torpedo-impact',
+  playerTorpedoDetonation: 'sfx-player-torpedo-detonation',
   stormWindDistant: 'sfx-m13-wind-distant-loop',
   stormWindHeavy: 'sfx-m13-wind-heavy-loop',
   stormEmHum: 'sfx-m13-electromagnetic-hum-loop',
@@ -537,6 +581,17 @@ export const sfxCueFallbacks: Partial<Record<SfxCue, SfxCue>> = {
   auroraRevealSwell: 'atlas',
   routeBeaconScan: 'scanner',
   routeBeaconConfirm: 'confirm',
+  playerLaserBurstA: 'counterSignal',
+  playerLaserBurstB: 'defenseNetwork',
+  playerLaserBurstHeavy: 'counterSignal',
+  playerLaserChargeShort: 'scanner',
+  playerLaserMechanicalRelease: 'liftLock',
+  playerTorpedoEject: 'liftLock',
+  playerTorpedoIgnite: 'shipThrust',
+  playerTorpedoEngine: 'shipEngine',
+  playerTorpedoNearMiss: 'shipTurbulence',
+  playerTorpedoImpact: 'liftLock',
+  playerTorpedoDetonation: 'counterSignal',
   // Mission 13 stand-ins: every storm cue maps onto an existing sound so the
   // mission is fully audible before the M13 files are authored.
   stormWindDistant: 'auroraWindGust',
@@ -586,6 +641,25 @@ const AURORA_SEGMENT_TRACKS: Record<AuroraTravelSegment, MusicTrackId> = {
 };
 
 export function resolveMusicTrack(context: MusicContext): MusicTrackId {
+  if (context.currentMissionId === 'mission-25') {
+    if (context.missionStep === 'awaitingTrigger' || context.missionStep === 'finalBriefing' || context.missionStep === 'threatDetected') {
+      return 'music-final-orbit-intro';
+    }
+    if (context.missionStep === 'defensePerimeter' || context.missionStep === 'arkSystemsUnderAttack') {
+      return 'music-final-orbit-assault';
+    }
+    if (context.missionStep === 'relayDefense' || context.missionStep === 'counterattackPreparation') {
+      return 'music-final-orbit-allies';
+    }
+    if (context.missionStep === 'commandTargetLocated' || context.missionStep === 'commandTargetProtected') {
+      return 'music-final-orbit-shield-break';
+    }
+    if (context.missionStep === 'arkUnderPressure' || context.missionStep === 'commandTargetExposed' || context.missionStep === 'finalAssault') {
+      return 'music-final-orbit-last-stand';
+    }
+    if (context.missionStep === 'freeExploration') return 'music-ark-no-longer-alone';
+    return 'music-final-orbit-resolution';
+  }
   if (context.currentMissionId === 'mission-24') {
     if (
       context.missionStep === 'detectFinalFleet' ||

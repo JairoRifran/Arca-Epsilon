@@ -39,13 +39,15 @@ void main() {
   float facing = clamp(dot(vView, n), -1.0, 1.0);
   float fresnel = pow(clamp(1.0 - abs(facing), 0.0, 1.0), uPower);
 
-  float lightWrap = dot(n, normalize(uLightDir)) * 0.5 + 0.5;
+  float lightDot = dot(n, normalize(uLightDir));
+  float lightWrap = lightDot * 0.5 + 0.5;
   float forwardScatter = smoothstep(0.08, 0.95, lightWrap);
+  float illuminatedLimb = mix(0.055, 1.0, smoothstep(-0.42, 0.24, lightDot));
   float noise = hash31(floor((vObjectNormal + 1.0) * 38.0));
   float breakup = mix(1.0, 0.82 + noise * 0.34, uVariation);
 
-  float alpha = fresnel * uDensity * breakup;
-  vec3 color = uColor * uIntensity * mix(0.62, 1.18, forwardScatter);
+  float alpha = fresnel * uDensity * breakup * illuminatedLimb;
+  vec3 color = uColor * uIntensity * mix(0.48, 1.12, forwardScatter);
   gl_FragColor = vec4(color * alpha, alpha);
 }
 `;

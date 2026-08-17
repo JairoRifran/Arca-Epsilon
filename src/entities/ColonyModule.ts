@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { habitatModuleNereida01 } from '../assets/colonyDefinitions';
 import { createSoftParticleTexture } from '../assets/materials';
+import {
+  NereidaBaseInfrastructure,
+  type NereidaBaseDetailProfile,
+  type NereidaBaseInfrastructureDiagnostics
+} from './NereidaBaseInfrastructure';
 
 const OXYGEN_WARNING_COLOR = new THREE.Color(0x5a2a1d);
 const OXYGEN_ONLINE_COLOR = new THREE.Color(0x72d9b0);
@@ -446,6 +451,7 @@ export class ColonyModule {
   private readonly mastSegments: THREE.Mesh[] = [];
   private readonly body: THREE.Group;
   private readonly groundContact: THREE.Group;
+  private readonly infrastructure: NereidaBaseInfrastructure;
   private readonly impactScarMaterial: THREE.MeshBasicMaterial;
   private readonly accessDoor: THREE.Group;
   private readonly entryRamp: THREE.Group;
@@ -608,6 +614,9 @@ export class ColonyModule {
     this.body = new THREE.Group();
     this.body.name = 'Nereida Habitat Body';
     this.group.add(this.body);
+
+    this.infrastructure = new NereidaBaseInfrastructure();
+    this.body.add(this.infrastructure.group);
 
     const underbody = new THREE.Mesh(new THREE.CylinderGeometry(4.65, 5.25, 0.46, 24), this.darkMetalMaterial);
     underbody.position.y = 0.3;
@@ -1080,6 +1089,14 @@ export class ColonyModule {
     return count;
   }
 
+  setDetailProfile(profile: NereidaBaseDetailProfile): void {
+    this.infrastructure.setDetailProfile(profile);
+  }
+
+  getInfrastructureDiagnostics(): NereidaBaseInfrastructureDiagnostics {
+    return this.infrastructure.getDiagnostics();
+  }
+
   consumeOnlineAnnouncement(): boolean {
     if (!this.onlineAnnouncementPending) return false;
     this.onlineAnnouncementPending = false;
@@ -1162,8 +1179,10 @@ export class ColonyModule {
     finePositions.needsUpdate = true;
   }
 
-  update(delta: number, elapsed: number): void {
+  update(delta: number, elapsed: number, observerPosition?: THREE.Vector3): void {
     if (!this.group.visible) return;
+
+    this.infrastructure.update(elapsed, observerPosition, this.group.position);
 
     if (this.deploymentProgress > 0 && this.deploymentProgress < 1.0) {
       const previous = this.deploymentProgress;

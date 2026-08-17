@@ -1,5 +1,6 @@
 .env.local
 .env.*.local
+.vercel/
 
 
 # Audio generator run report (used by --failed-only)
@@ -13,7 +14,15 @@ dist/
 artifacts/
 test-results/
 playwright-report/
+coverage/
+.codex-runtime/
 
 # Dev server logs
-vite-dev.log
-vite-dev.err.log
+*.log
+*.log.*
+
+# Local editor / OS state
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
+*.tsbuildinfo

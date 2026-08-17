@@ -105,7 +105,7 @@ export class PostProcessing {
   private readonly tintTarget = new THREE.Vector3(1, 1, 1);
 
   /** Base bloom strength; entry adds on top of it and restores it after. */
-  private baseBloomStrength = 0.52;
+  private baseBloomStrength = 0.46;
 
   private hazeTarget = 0;
 
@@ -130,9 +130,9 @@ export class PostProcessing {
 
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
-      0.52,
-      0.72,
-      0.82
+      0.46,
+      0.58,
+      0.9
     );
     this.composer.addPass(this.bloomPass);
 

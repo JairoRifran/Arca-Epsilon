@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generatedAt": "2026-07-27T23:29:52.973Z",
+  "generatedAt": "2026-08-04T14:15:22.760Z",
   "assets": [
     {
       "id": "music-main-theme",
@@ -725,6 +725,166 @@
         "footstep",
         "run",
         "03"
+      ]
+    },
+    {
+      "id": "sfx-player-laser-burst-a",
+      "path": "/audio/generated/sfx_player_laser_burst_a.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.2,
+      "tags": [
+        "sfx",
+        "player",
+        "laser",
+        "burst",
+        "a"
+      ]
+    },
+    {
+      "id": "sfx-player-laser-burst-b",
+      "path": "/audio/generated/sfx_player_laser_burst_b.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.35,
+      "tags": [
+        "sfx",
+        "player",
+        "laser",
+        "burst",
+        "b"
+      ]
+    },
+    {
+      "id": "sfx-player-laser-burst-heavy",
+      "path": "/audio/generated/sfx_player_laser_burst_heavy.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.5,
+      "tags": [
+        "sfx",
+        "player",
+        "laser",
+        "burst",
+        "heavy"
+      ]
+    },
+    {
+      "id": "sfx-player-laser-charge-short",
+      "path": "/audio/generated/sfx_player_laser_charge_short.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 0.8,
+      "tags": [
+        "sfx",
+        "player",
+        "laser",
+        "charge",
+        "short"
+      ]
+    },
+    {
+      "id": "sfx-player-laser-mechanical-release",
+      "path": "/audio/generated/sfx_player_laser_mechanical_release.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 0.8,
+      "tags": [
+        "sfx",
+        "player",
+        "laser",
+        "mechanical",
+        "release"
+      ]
+    },
+    {
+      "id": "sfx-player-torpedo-eject",
+      "path": "/audio/generated/sfx_player_torpedo_eject.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.2,
+      "tags": [
+        "sfx",
+        "player",
+        "torpedo",
+        "eject"
+      ]
+    },
+    {
+      "id": "sfx-player-torpedo-ignite",
+      "path": "/audio/generated/sfx_player_torpedo_ignite.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.5,
+      "tags": [
+        "sfx",
+        "player",
+        "torpedo",
+        "ignite"
+      ]
+    },
+    {
+      "id": "sfx-player-torpedo-engine",
+      "path": "/audio/generated/sfx_player_torpedo_engine.mp3",
+      "category": "sfx",
+      "loop": true,
+      "available": true,
+      "durationSeconds": 5,
+      "tags": [
+        "sfx",
+        "player",
+        "torpedo",
+        "engine"
+      ]
+    },
+    {
+      "id": "sfx-player-torpedo-near-miss",
+      "path": "/audio/generated/sfx_player_torpedo_near_miss.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 2,
+      "tags": [
+        "sfx",
+        "player",
+        "torpedo",
+        "near",
+        "miss"
+      ]
+    },
+    {
+      "id": "sfx-player-torpedo-impact",
+      "path": "/audio/generated/sfx_player_torpedo_impact.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 1.2,
+      "tags": [
+        "sfx",
+        "player",
+        "torpedo",
+        "impact"
+      ]
+    },
+    {
+      "id": "sfx-player-torpedo-detonation",
+      "path": "/audio/generated/sfx_player_torpedo_detonation.mp3",
+      "category": "sfx",
+      "loop": false,
+      "available": true,
+      "durationSeconds": 3.5,
+      "tags": [
+        "sfx",
+        "player",
+        "torpedo",
+        "detonation"
       ]
     },
     {

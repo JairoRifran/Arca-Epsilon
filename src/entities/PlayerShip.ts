@@ -1,9 +1,16 @@
 import * as THREE from 'three';
+import {
+  cannonMuzzleHardpoints,
+  mainEngineHardpoints,
+  torpedoTubeHardpoints,
+  ventralPodHardpoint
+} from '../game/PlayerShipHardpoints';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { AssetLoader } from '../core/AssetLoader';
 import { createSoftParticleTexture, materialLibrary } from '../assets/materials';
 import { loadOptionalModel, loadPreferredModel, type ModelLodPaths } from '../core/ModelLod';
 import { freezeStaticChildren } from '../assets/materialCache';
+import { PLAYER_SHIP_TARGET_MAX_DIMENSION } from '../game/PlayerShipDimensions';
 
 const ENGINE_CYAN = new THREE.Color(0x55cfff);
 const ENGINE_WHITE = new THREE.Color(0xe9fbff);
@@ -420,6 +427,14 @@ export class PlayerShip {
 
   private parkedVisualState = false;
 
+  private weaponRecoil = 0;
+
+  private weaponVibration = 0;
+
+  private weaponRecoilSide = 0;
+
+  private weaponEmitterMaterial?: THREE.MeshStandardMaterial;
+
   private sensorDish?: THREE.Group;
 
   private sensorDishPitch?: THREE.Group;
@@ -478,6 +493,9 @@ export class PlayerShip {
 
   /** Forward acceleration intent (0..1), fed by the main loop each frame. */
   thrustInput = 0;
+
+  /** Braking intent (0..1); used only to present the main engine unloading. */
+  brakeInput = 0;
 
   /** Vertical-support intent (0..1) while hovering on the surface. */
   liftInput = 0;
@@ -546,16 +564,23 @@ export class PlayerShip {
     this.diagnostics.lodLevel = useLow ? 'low' : this.nearLevel;
     this.diagnostics.triangles = this.diagnostics.trianglesByLod[this.diagnostics.lodLevel] ?? 0;
 
+    this.weaponRecoil *= Math.exp(-15 * delta);
+    this.weaponVibration *= Math.exp(-22 * delta);
+    if (this.weaponRecoil < 0.0001) this.weaponRecoil = 0;
+    if (this.weaponVibration < 0.0001) this.weaponVibration = 0;
+
     if (!this.group.visible) {
       this.diagnostics.skippedVisualUpdates += 1;
       return;
     }
 
     const accel = THREE.MathUtils.clamp(this.thrustInput, 0, 1);
-    const speedDrive = Math.min(speed * 0.013, 0.24);
-    const boostDrive = boosting ? 0.72 : 0;
-    const plumeDrive = THREE.MathUtils.clamp(0.08 + accel * 0.78 + speedDrive + boostDrive, 0.08, 1.65);
-    const throttle = THREE.MathUtils.clamp(speed * 0.03 + accel * 1.05 + (boosting ? 0.95 : 0), 0.3, 2.8);
+    const braking = THREE.MathUtils.clamp(this.brakeInput, 0, 1);
+    const speedDrive = Math.min(speed * 0.006, 0.12);
+    const boostDrive = boosting && braking < 0.1 ? 0.72 : 0;
+    const poweredDrive = accel * (1 - braking * 0.88);
+    const plumeDrive = THREE.MathUtils.clamp(0.06 + poweredDrive * 0.82 + speedDrive + boostDrive, 0.06, 1.65);
+    const throttle = THREE.MathUtils.clamp(0.18 + speedDrive + poweredDrive * 1.15 + boostDrive, 0.18, 2.8);
     const engineFlicker = 0.96 + Math.sin(elapsed * 23.2) * 0.025 + Math.sin(elapsed * 37.7) * 0.015;
 
     for (const material of this.engineMaterials) {
@@ -568,14 +593,14 @@ export class PlayerShip {
       const radius = 0.76 + plumeDrive * 0.2;
       const boostMix = boosting ? 1 : 0;
 
-      engine.coreGlowMaterial.emissiveIntensity = (1.8 + throttle * 2.1) * localFlicker;
-      engine.throatMaterial.emissiveIntensity = 0.55 + throttle * 1.85 + boostMix * 1.1;
+      engine.coreGlowMaterial.emissiveIntensity = (1.25 + throttle * 1.0) * localFlicker;
+      engine.throatMaterial.emissiveIntensity = 0.45 + throttle * 0.92 + boostMix * 0.65;
       engine.throatMaterial.emissive.copy(HEAT_ORANGE).lerp(ENGINE_WHITE, THREE.MathUtils.clamp(plumeDrive * 0.48, 0, 0.72));
 
       this.updatePlumeMaterial(engine.outerMaterial, elapsed, plumeDrive, length * 1.1, radius * 1.18, boostMix);
       this.updatePlumeMaterial(engine.innerMaterial, elapsed, plumeDrive, length * 0.86, radius * 0.68, boostMix);
-      engine.outerMaterial.uniforms.uOpacity.value = 0.045 + plumeDrive * 0.16;
-      engine.innerMaterial.uniforms.uOpacity.value = 0.11 + plumeDrive * 0.34;
+      engine.outerMaterial.uniforms.uOpacity.value = 0.025 + plumeDrive * 0.085;
+      engine.innerMaterial.uniforms.uOpacity.value = 0.055 + plumeDrive * 0.16;
 
       engine.outerPlume.visible = plumeDrive > 0.045;
       engine.innerPlume.visible = plumeDrive > 0.045;
@@ -597,7 +622,7 @@ export class PlayerShip {
         ring.position.z = 0.72 + ringIndex * (0.42 + plumeDrive * 0.28);
         const ringScale = 0.34 + ringIndex * 0.075 + plumeDrive * 0.08;
         ring.scale.setScalar(ringScale);
-        ringMaterial.opacity = active * (0.045 + (boosting ? 0.04 : 0));
+        ringMaterial.opacity = active * (0.018 + (boosting ? 0.014 : 0));
       }
 
       engine.light.intensity = 0.42 + throttle * 0.42;
@@ -639,8 +664,16 @@ export class PlayerShip {
     }
 
     const idle = THREE.MathUtils.clamp(1 - speed * 0.08, 0, 1);
-    this.body.position.y = this.parkedVisualState ? 0 : Math.sin(elapsed * 1.1) * 0.12 * idle;
-    this.body.rotation.z = this.parkedVisualState ? 0 : Math.sin(elapsed * 0.8) * 0.01 * idle;
+    const structuralPulse = Math.sin(elapsed * 112) * this.weaponVibration;
+    this.body.position.x = this.weaponRecoilSide * this.weaponRecoil * 0.012;
+    this.body.position.y = (this.parkedVisualState ? 0 : Math.sin(elapsed * 1.1) * 0.12 * idle) + structuralPulse * 0.008;
+    this.body.position.z = this.weaponRecoil * 0.065;
+    this.body.rotation.x = structuralPulse * 0.0025;
+    this.body.rotation.z = (this.parkedVisualState ? 0 : Math.sin(elapsed * 0.8) * 0.01 * idle)
+      - this.weaponRecoilSide * this.weaponRecoil * 0.0018;
+    if (this.weaponEmitterMaterial) {
+      this.weaponEmitterMaterial.emissiveIntensity = 1.1 + this.weaponRecoil * 4.8 + structuralPulse * 0.35;
+    }
 
     if (this.sensorDish) {
       this.sensorDish.rotation.y += delta * (0.32 + accel * 0.18);
@@ -768,17 +801,26 @@ export class PlayerShip {
   }
 
   getEngineSocketPositions(): THREE.Vector3[] {
-    const width = Math.max(this.bounds.x, 4);
-    const height = Math.max(this.bounds.y, 1.8);
-    const depth = Math.max(this.bounds.z, 6);
-    return [
-      new THREE.Vector3(-width * 0.18, -height * 0.16, depth * 0.48),
-      new THREE.Vector3(width * 0.18, -height * 0.16, depth * 0.48)
-    ];
+    return mainEngineHardpoints(this.bounds).map((e) => e.position.clone());
+  }
+
+  /** Full engine hardpoints: mouth, axis and radius, from the one source. */
+  getEngineHardpoints(): ReturnType<typeof mainEngineHardpoints> {
+    return mainEngineHardpoints(this.bounds);
   }
 
   /** Local-space muzzle positions of the twin laser cannons. */
   getCannonOffsets(): THREE.Vector3[] {
+    return cannonMuzzleHardpoints(this.bounds).map((m) => m.position.clone());
+  }
+
+  /**
+   * Where the cannon barrels are BUILT, as distinct from where they fire.
+   *
+   * The muzzle hardpoint sits forward of the barrel tip so the shot starts
+   * outside the hull; the geometry still hangs off the original socket.
+   */
+  getCannonMountOffsets(): THREE.Vector3[] {
     const width = Math.max(this.bounds.x, 4);
     const depth = Math.max(this.bounds.z, 6);
     return [
@@ -789,25 +831,70 @@ export class PlayerShip {
 
   /** Local-space mount of the ventral missile pod. */
   getMissilePodOffset(): THREE.Vector3 {
-    return new THREE.Vector3(0, -Math.max(this.bounds.y, 1.8) * 0.3, this.bounds.z * 0.06);
+    return ventralPodHardpoint(this.bounds);
+  }
+
+  /** Local-space launch mouths, matching the four recessed tubes on the pod. */
+  getMissileTubeOffsets(): THREE.Vector3[] {
+    return torpedoTubeHardpoints(this.bounds).map((t) => t.position.clone());
+  }
+
+  triggerWeaponResponse(kind: 'laser' | 'missile', hardpointSide = 0): void {
+    const recoil = kind === 'missile' ? 0.72 : 0.24;
+    const vibration = kind === 'missile' ? 0.62 : 0.3;
+    this.weaponRecoil = Math.min(1, Math.max(this.weaponRecoil, recoil));
+    this.weaponVibration = Math.min(1, this.weaponVibration + vibration);
+    this.weaponRecoilSide = THREE.MathUtils.clamp(hardpointSide, -1, 1);
+  }
+
+  clearWeaponResponse(): void {
+    this.weaponRecoil = 0;
+    this.weaponVibration = 0;
+    this.weaponRecoilSide = 0;
+    if (this.weaponEmitterMaterial) this.weaponEmitterMaterial.emissiveIntensity = 1.1;
   }
 
   /**
    * Exact world-space hull bounds for one-shot landing/restore placement.
    * Callers provide the target so this never allocates in a frame loop.
    */
+  /** Hull extents in local units. Landing gear mounts derive from these. */
+  get hullBounds(): THREE.Vector3 {
+    return this.bounds;
+  }
+
+  /**
+   * Y of the hull's underside in the ship's own local space.
+   *
+   * The model is centred by `normalizeModel`, so the belly sits half the
+   * height below the origin. Landing gear bays seat on this line rather than
+   * on a hand-tuned constant, which is what let the access hatch drift inside
+   * the fuselage when the ship was rescaled.
+   */
+  get hullBottomLocalY(): number {
+    return -this.bounds.y * 0.5;
+  }
+
   getHullWorldBounds(target: THREE.Box3): THREE.Box3 {
     this.group.updateWorldMatrix(true, true);
-    const visibleHull = this.nearRoot?.visible ? this.nearRoot : this.lowRoot?.visible ? this.lowRoot : this.modelRoot;
-    return target.setFromObject(visibleHull, true);
+    // Parking, boarding and save normalization need one physical hull source.
+    // The low LOD has slightly different extents, so selecting it by visibility
+    // made the measured belly clearance jump when the camera crossed the LOD
+    // threshold during a restore.
+    return target.setFromObject(this.nearRoot ?? this.modelRoot, true);
   }
 
   setParkedVisualState(parked: boolean): void {
     this.parkedVisualState = parked;
     if (!parked) return;
-    this.body.position.y = 0;
-    this.body.rotation.z = 0;
+    this.clearWeaponResponse();
+    this.body.position.set(0, 0, 0);
+    this.body.rotation.set(0, 0, 0);
     this.group.updateWorldMatrix(true, true);
+  }
+
+  get visualOscillationActive(): boolean {
+    return !this.parkedVisualState;
   }
 
   /** Releases runtime-created geometry, materials and textures owned here. */
@@ -831,7 +918,7 @@ export class PlayerShip {
     imported.name = `Player Scout ${this.nearLevel}`;
     const primaryStats = this.prepareImportedModel(imported);
     this.nearRoot = this.orientModel(imported);
-    const primaryScale = this.normalizeModel(this.nearRoot, 9.2, true);
+    const primaryScale = this.normalizeModel(this.nearRoot, PLAYER_SHIP_TARGET_MAX_DIMENSION, true);
     this.modelRoot.add(this.nearRoot);
 
     let lowStats: { meshCount: number; triangles: number } | undefined;
@@ -839,7 +926,7 @@ export class PlayerShip {
       lowStats = this.prepareImportedModel(low.scene);
       this.lowRoot = this.orientModel(low.scene);
       this.lowRoot.name = 'Player Scout low';
-      this.normalizeModel(this.lowRoot, 9.2, false);
+      this.normalizeModel(this.lowRoot, PLAYER_SHIP_TARGET_MAX_DIMENSION, false);
       this.lowRoot.visible = false;
       this.modelRoot.add(this.lowRoot);
     } else {
@@ -1377,6 +1464,7 @@ export class PlayerShip {
       roughness: 0.22,
       metalness: 0.3
     }));
+    this.weaponEmitterMaterial = emitterGlow;
 
     this.addPremiumSensor(accents, trim, seamMetal, emitterGlow);
     this.addPremiumCannons(accents, trim, ceramic, seamMetal, emitterGlow);
@@ -1476,7 +1564,7 @@ export class PlayerShip {
     const barrelInnerGeometry = this.trackGeometry(new THREE.CylinderGeometry(0.062, 0.075, 1.48, 10));
     const sleeveGeometry = this.trackGeometry(new THREE.CylinderGeometry(0.19, 0.21, 0.48, 12, 1, true));
 
-    for (const [index, socket] of this.getCannonOffsets().entries()) {
+    for (const [index, socket] of this.getCannonMountOffsets().entries()) {
       const cannon = new THREE.Group();
       cannon.name = `Integrated Laser Cannon ${index + 1}`;
 
@@ -1643,9 +1731,10 @@ export class PlayerShip {
     material.uniforms.uLength.value = length;
     material.uniforms.uRadius.value = radius;
     material.uniforms.uBoost.value = boostMix;
+    const core = (material.uniforms.uCore.value as number) > 0.5;
     (material.uniforms.uHotColor.value as THREE.Color)
-      .copy(ENGINE_WHITE)
-      .lerp(ENGINE_BOOST_WHITE, boostMix * 0.75);
+      .copy(core ? ENGINE_WHITE : ENGINE_CYAN)
+      .lerp(ENGINE_BOOST_WHITE, boostMix * (core ? 0.38 : 0.16));
     (material.uniforms.uCoolColor.value as THREE.Color)
       .copy(ENGINE_DEEP_BLUE)
       .lerp(ENGINE_CYAN, THREE.MathUtils.clamp(drive * 0.48, 0, 0.68));

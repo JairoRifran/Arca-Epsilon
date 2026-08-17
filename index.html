@@ -3,24 +3,414 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#020507" />
+    <style>
+      /* Critical first paint: the full UI stylesheet arrives with main.ts. */
+      html,
+      body,
+      #app {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #000;
+        color: #e8f2f6;
+      }
+
+      html {
+        color-scheme: dark;
+      }
+
+      #game-canvas {
+        position: fixed;
+        inset: 0;
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: #000;
+      }
+
+      .boot-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483000;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background-color: #000;
+        background-image:
+          radial-gradient(circle at 18% 24%, rgba(210, 235, 244, 0.7) 0 1px, transparent 1.5px),
+          radial-gradient(circle at 71% 62%, rgba(143, 190, 207, 0.5) 0 1px, transparent 1.4px),
+          radial-gradient(circle at 47% 38%, rgba(30, 77, 91, 0.16), transparent 34%);
+        background-size: 173px 173px, 251px 251px, 100% 100%;
+        isolation: isolate;
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .boot-backdrop,
+      .boot-starfield,
+      .boot-shade {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        padding: 0;
+        border: 0;
+      }
+
+      .boot-backdrop {
+        z-index: -3;
+        object-fit: cover;
+        object-position: center;
+      }
+
+      .boot-starfield {
+        z-index: -2;
+      }
+
+      .boot-shade {
+        z-index: -1;
+        background: rgba(0, 3, 5, 0.24);
+      }
+
+      .boot-loading-view {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        align-content: center;
+        width: min(34rem, calc(100% - 3rem));
+        height: max-content;
+        margin: auto;
+        color: #dce9ed;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 420ms ease, visibility 420ms linear;
+      }
+
+      .boot-loading-copy p,
+      .boot-progress-meta p {
+        margin: 0 0 0.55rem;
+      }
+
+      .boot-loading-title {
+        display: block;
+        font-size: clamp(1.35rem, 3vw, 2rem);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .boot-progress-meta {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-top: 1.25rem;
+        font-size: 0.75rem;
+      }
+
+      .boot-progress-track {
+        height: 2px;
+        overflow: hidden;
+        background: rgba(190, 218, 227, 0.2);
+      }
+
+      .boot-progress-track i {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: #a9d9e7;
+        transform: scaleX(0);
+        transform-origin: left center;
+      }
+
+      .main-menu,
+      .menu-drawer,
+      .hud {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .main-menu {
+        position: absolute;
+        inset: 0;
+      }
+
+      .boot-screen.is-ready .boot-loading-view {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .boot-screen.is-ready .main-menu {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .boot-screen.is-hidden {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+    </style>
+    <link rel="preload" as="image" href="/images/arca-epsilon-boot-space.jpg" fetchpriority="high" />
     <title>Arca Epsilon</title>
   </head>
   <body>
     <div id="app">
       <canvas id="game-canvas" aria-label="Arca Epsilon"></canvas>
 
-      <section class="boot-screen" id="boot-screen">
-        <div class="boot-copy">
-          <p class="eyebrow">Proyecto Exodo / Nave colonial Epsilon</p>
-          <h1>Arca Epsilon</h1>
-          <p>
-            Año 2189. La Tierra dejo de ser hogar. La Arca Epsilon desperto
-            fuera de toda ruta conocida. Tu primera mision es encontrar un
-            planeta habitable para los ultimos humanos.
-          </p>
-          <p class="loading-status" id="loading-status">Cargando modelos oficiales...</p>
-          <button id="launch-button" type="button" disabled>Iniciar exploracion</button>
+      <section class="boot-screen is-loading" id="boot-screen" aria-label="Arca Epsilon">
+        <img
+          class="boot-backdrop"
+          id="boot-backdrop"
+          src="/images/arca-epsilon-boot-space.jpg"
+          alt=""
+          fetchpriority="high"
+          decoding="async"
+        />
+        <canvas class="boot-starfield" id="boot-starfield" aria-hidden="true"></canvas>
+        <div class="boot-shade" aria-hidden="true"></div>
+
+        <div class="boot-system-mark" aria-hidden="true">
+          <span>AE / 2189</span>
+          <i></i>
+          <span>ÉXODO</span>
         </div>
+
+        <section class="boot-loading-view" id="boot-loading-view" aria-live="polite">
+          <div class="boot-loading-copy">
+            <p class="eyebrow">Proyecto Éxodo · Arca colonial Epsilon</p>
+            <strong class="boot-loading-title">Secuencia de despertar</strong>
+          </div>
+          <div class="boot-progress-meta">
+            <p class="loading-status" id="loading-status">Inicializando sistemas</p>
+            <strong id="boot-progress-value">0%</strong>
+          </div>
+          <div
+            class="boot-progress-track"
+            role="progressbar"
+            aria-label="Carga del juego"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <i id="boot-progress-bar"></i>
+          </div>
+        </section>
+
+        <section class="boot-copy main-menu" id="main-menu" aria-hidden="true">
+          <div class="main-menu__heading">
+            <p class="eyebrow">Proyecto Éxodo · Nave colonial Epsilon</p>
+            <h1>Arca Epsilon</h1>
+            <p class="chapter-title">Capítulo I</p>
+            <p class="main-menu__premise">
+              Fuera de toda ruta humana, el último arca busca un mundo donde comenzar de nuevo.
+            </p>
+          </div>
+
+          <nav class="main-menu__actions" aria-label="Menú principal">
+            <button class="menu-command menu-command--primary" id="launch-button" type="button" disabled>
+              <span>Continuar</span><i aria-hidden="true"></i>
+            </button>
+            <button class="menu-command" id="new-game-button" type="button" data-open-menu-panel="new-game">
+              Nueva partida
+            </button>
+            <button class="menu-command menu-command--mode" id="combat-mode-button" type="button">
+              <span>Combate</span><small>Offline</small>
+            </button>
+            <button class="menu-command menu-command--mode" id="garage-mode-button" type="button">
+              <span>Garage</span><small>1 nave</small>
+            </button>
+            <button class="menu-command" id="load-game-button" type="button" data-open-menu-panel="load-game" disabled>
+              Cargar partida
+            </button>
+            <button class="menu-command" id="settings-button" type="button" data-open-menu-panel="settings">
+              Ajustes
+            </button>
+            <button class="menu-command" id="credits-button" type="button" data-open-menu-panel="credits">
+              Créditos
+            </button>
+            <button class="menu-command" id="exit-button" type="button" data-open-menu-panel="exit">
+              Salir
+            </button>
+          </nav>
+
+          <footer class="main-menu__footer">
+            <span id="menu-save-summary">Buscando expediciones registradas</span>
+            <span>ARCA EPSILON // SISTEMA COLONIAL</span>
+          </footer>
+        </section>
+
+        <aside class="menu-drawer" id="menu-drawer" aria-hidden="true">
+          <button class="menu-drawer__close" type="button" data-close-menu-panel aria-label="Cerrar">&times;</button>
+
+          <section data-menu-panel="new-game" aria-hidden="true" hidden>
+            <p class="eyebrow">Nueva expedición</p>
+            <h2>Comenzar desde la Arca</h2>
+            <p>La nueva partida reemplazará el único registro local cuando confirmes el lanzamiento.</p>
+            <div class="menu-drawer__actions">
+              <button id="confirm-new-game-button" type="button" class="menu-command menu-command--primary">Comenzar viaje</button>
+              <button type="button" class="menu-command" data-close-menu-panel>Conservar partida</button>
+            </div>
+          </section>
+
+          <section data-menu-panel="load-game" aria-hidden="true" hidden>
+            <p class="eyebrow">Registro local</p>
+            <h2>Expedición guardada</h2>
+            <p id="load-game-summary">Preparando datos de la misión.</p>
+            <div class="menu-drawer__actions">
+              <button id="confirm-load-game-button" type="button" class="menu-command menu-command--primary">Cargar expedición</button>
+              <button type="button" class="menu-command" data-close-menu-panel>Volver</button>
+            </div>
+          </section>
+
+          <section data-menu-panel="settings" aria-hidden="true" hidden>
+            <p class="eyebrow">Configuración</p>
+            <h2>Ajustes</h2>
+            <fieldset class="menu-settings-group">
+              <legend>Calidad visual</legend>
+              <div class="menu-segmented" id="menu-render-profile">
+                <label><input type="radio" name="menu-render-profile" value="performance"><span>Rendimiento</span></label>
+                <label><input type="radio" name="menu-render-profile" value="high"><span>Alta</span></label>
+                <label><input type="radio" name="menu-render-profile" value="ultra"><span>Ultra</span></label>
+              </div>
+            </fieldset>
+            <fieldset class="menu-settings-group">
+              <legend>Audio</legend>
+              <label class="menu-toggle"><input id="menu-audio-muted" type="checkbox"><span>Silenciar</span></label>
+              <label><span>Volumen general</span><input id="menu-master-volume" type="range" min="0" max="1" step="0.05"></label>
+              <label><span>Música</span><input id="menu-music-volume" type="range" min="0" max="1" step="0.05"></label>
+              <label><span>Efectos</span><input id="menu-sfx-volume" type="range" min="0" max="1" step="0.05"></label>
+            </fieldset>
+            <label class="menu-toggle"><input id="menu-reduced-motion" type="checkbox"><span>Reducir movimiento</span></label>
+          </section>
+
+          <section data-menu-panel="credits" aria-hidden="true" hidden>
+            <p class="eyebrow">Archivo de misión</p>
+            <h2>Créditos</h2>
+            <dl class="credits-list">
+              <div><dt>Concepto y dirección</dt><dd>Arca Epsilon</dd></div>
+              <div><dt>Tecnología</dt><dd>Three.js · TypeScript · Vite</dd></div>
+              <div><dt>Capítulo</dt><dd>I · El último viaje</dd></div>
+            </dl>
+          </section>
+
+          <section data-menu-panel="exit" aria-hidden="true" hidden>
+            <p class="eyebrow">Cerrar sesión</p>
+            <h2>Salir de Arca Epsilon</h2>
+            <p>Tu progreso local permanece en este navegador. Puedes cerrar esta pestaña cuando estés listo.</p>
+            <button type="button" class="menu-command menu-command--primary" data-close-menu-panel>Volver al menú</button>
+          </section>
+        </aside>
+      </section>
+
+      <section class="mode-screen garage-screen" id="garage-screen" aria-hidden="true" hidden>
+        <canvas id="garage-canvas" aria-label="Vista tridimensional de la nave equipada"></canvas>
+        <header class="mode-screen__topbar">
+          <div>
+            <span class="eyebrow">Hangar de configuración</span>
+            <strong>Garage</strong>
+          </div>
+          <button class="mode-icon-button" id="garage-back-button" type="button" aria-label="Volver al menú" title="Volver al menú">&times;</button>
+        </header>
+        <aside class="garage-roster" aria-label="Naves disponibles">
+          <span class="eyebrow">Inventario de naves</span>
+          <button class="garage-ship-entry is-selected" type="button">
+            <span id="garage-roster-name">Nave de Manejo Epsilon</span>
+            <small>Explorador táctico</small>
+          </button>
+          <p>Las futuras naves aparecerán aquí según los permisos del perfil.</p>
+        </aside>
+        <section class="garage-specification" aria-labelledby="garage-ship-name">
+          <p class="eyebrow">Unidad seleccionada</p>
+          <div class="garage-title-row">
+            <div>
+              <h2 id="garage-ship-name">Nave de Manejo Epsilon</h2>
+              <p id="garage-ship-class">Explorador táctico</p>
+            </div>
+            <span class="garage-equipped" id="garage-equipped-state">Equipada</span>
+          </div>
+          <p class="garage-description" id="garage-description"></p>
+          <dl class="garage-stats">
+            <div><dt>Daño</dt><dd id="garage-stat-damage">24 / pulso</dd></div>
+            <div><dt>Blindaje</dt><dd id="garage-stat-hull">100</dd></div>
+            <div><dt>Escudo</dt><dd id="garage-stat-shield">100</dd></div>
+            <div><dt>Impulso</dt><dd id="garage-stat-speed">35 m/s²</dd></div>
+            <div><dt>Maniobrabilidad</dt><dd id="garage-stat-maneuver">2,3 mrad/px</dd></div>
+            <div><dt>Torpedos</dt><dd id="garage-stat-torpedoes">4 tubos</dd></div>
+          </dl>
+        </section>
+      </section>
+
+      <section class="combat-mode-layer" id="combat-mode-layer" aria-hidden="true" hidden>
+        <section class="combat-setup" id="combat-setup">
+          <header class="mode-screen__topbar">
+            <div><span class="eyebrow">Simulación táctica offline</span><strong>Combate</strong></div>
+            <button class="mode-icon-button" id="combat-back-button" type="button" aria-label="Volver al menú" title="Volver al menú">&times;</button>
+          </header>
+          <div class="combat-setup__content">
+            <div class="combat-briefing">
+              <p class="eyebrow">Escenario 01</p>
+              <h2 id="combat-scenario-name">Órbita del Arca</h2>
+              <p id="combat-scenario-description"></p>
+              <div class="combat-tags"><span>Orbital</span><span>Supervivencia</span><span>3 oleadas</span></div>
+            </div>
+            <aside class="combat-loadout">
+              <span class="eyebrow">Configuración</span>
+              <dl>
+                <div><dt>Nave</dt><dd id="combat-selected-ship">Nave de Manejo Epsilon</dd></div>
+                <div><dt>Dificultad</dt><dd>Normal</dd></div>
+                <div><dt>Escuadra</dt><dd>1 piloto local</dd></div>
+                <div><dt>Aliados IA</dt><dd>No desplegados</dd></div>
+              </dl>
+              <button class="menu-command menu-command--primary" id="combat-start-button" type="button">Iniciar escaramuza</button>
+            </aside>
+          </div>
+        </section>
+
+        <section class="combat-live-hud" id="combat-live-hud" aria-live="polite" hidden>
+          <div class="combat-live-hud__objective">
+            <span id="combat-state">Sistemas armados</span>
+            <strong id="combat-wave">Inicio en 3</strong>
+          </div>
+          <div class="combat-live-hud__telemetry">
+            <span id="combat-enemies">0 contactos</span>
+            <span id="combat-timer">00:00</span>
+            <label>Casco <progress id="combat-hull" max="100" value="100"></progress></label>
+          </div>
+        </section>
+
+        <section class="combat-results" id="combat-results" hidden>
+          <div class="combat-results__content">
+            <p class="eyebrow">Escaramuza finalizada</p>
+            <h2 id="combat-result-title">Victoria</h2>
+            <dl>
+              <div><dt>Bajas</dt><dd id="combat-result-kills">0</dd></div>
+              <div><dt>Oleadas</dt><dd id="combat-result-waves">0/3</dd></div>
+              <div><dt>Duración</dt><dd id="combat-result-time">00:00</dd></div>
+            </dl>
+            <div class="combat-results__actions">
+              <button class="menu-command menu-command--primary" id="combat-replay-button" type="button">Repetir</button>
+              <button class="menu-command" id="combat-return-button" type="button">Volver al menú</button>
+            </div>
+          </div>
+        </section>
       </section>
 
       <main class="hud" id="hud">
@@ -40,19 +430,31 @@
           </div>
         </header>
 
+        <!--
+          Jerarquia de lectura, de arriba hacia abajo:
+          mision -> objetivo actual -> accion -> blanco y distancia -> estado
+          -> progreso -> informacion secundaria. Cada nivel tiene un peso
+          tipografico distinto para que la mirada encuentre el objetivo actual
+          sin leer el panel entero.
+        -->
         <aside class="objective-panel">
-          <span class="label">Mision activa</span>
           <h2 id="mission-name">Mision 01</h2>
+          <p id="objective-step">Rastreo profundo</p>
           <p id="objective-text">Encuentra un planeta habitable.</p>
           <div class="next-action-callout">
             <kbd id="next-key">E</kbd>
             <span id="next-action">Presiona E para escanear</span>
           </div>
+          <div class="objective-target" id="objective-target">
+            <span class="objective-target__name" id="objective-target-name">Objetivo</span>
+            <strong class="objective-target__distance" id="objective-distance">0 m</strong>
+            <span class="objective-state" id="objective-state" data-state="idle">En espera</span>
+          </div>
+          <div class="scan-progress">
+            <span id="mission-progress-label">Progreso</span>
+            <progress id="habitability-progress" max="100" value="0"></progress>
+          </div>
           <dl class="objective-grid">
-            <div>
-              <dt>Objetivo</dt>
-              <dd id="objective-distance">0 m</dd>
-            </div>
             <div>
               <dt>Scanner</dt>
               <dd id="scanner-status">En espera</dd>
@@ -62,12 +464,9 @@
               <dd id="signal-strength">0%</dd>
             </div>
           </dl>
-          <div class="scan-progress">
-            <span id="mission-progress-label">Progreso</span>
-            <progress id="habitability-progress" max="100" value="0"></progress>
-          </div>
           <p class="mission-hint" id="mission-hint"></p>
         </aside>
+
 
         <aside class="systems-panel">
           <h2>Arca Epsilon</h2>
@@ -95,6 +494,7 @@
             <span id="laser-status">Laser listo</span>
             <span id="missile-status">Misiles 4/4</span>
             <span id="lock-status">Sin blanco</span>
+            <span id="hit-feedback" aria-live="polite"></span>
           </div>
           <p class="diagnostics-readout" id="diagnostics-readout">GLB: cargando</p>
         </aside>
@@ -178,7 +578,9 @@
           <span><kbd>Shift</kbd> impulso</span>
           <span><kbd>E</kbd> escanear</span>
           <span><kbd>Space</kbd> láser</span>
-          <span><kbd>R</kbd> misil</span>
+          <span><kbd>R</kbd> torpedo</span>
+          <span><kbd>T</kbd> objetivo</span>
+          <span><kbd>G</kbd> recargar</span>
           <span><kbd>V</kbd> cambiar cámara</span>
           <span class="map-hint" onclick="window.dispatchEvent(new KeyboardEvent('keydown', {code: 'KeyM'}))"><kbd>M</kbd> mapa estelar</span>
         </footer>

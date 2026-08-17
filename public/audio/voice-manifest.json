@@ -1,7 +1,52 @@
 {
   "version": 2,
-  "generatedAt": "2026-07-29T16:33:19.211Z",
+  "generatedAt": "2026-08-04T14:11:57.144Z",
   "assets": [
+    {
+      "id": "m01_tutorial_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_tutorial_start.mp3"
+    },
+    {
+      "id": "m01_tutorial_propulsion",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_tutorial_propulsion.mp3"
+    },
+    {
+      "id": "m01_tutorial_complete",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_tutorial_complete.mp3"
+    },
+    {
+      "id": "m01_descent_denied_reason",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_descent_denied_reason.mp3"
+    },
+    {
+      "id": "m01_beacon_located",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_beacon_located.mp3"
+    },
+    {
+      "id": "m01_transfer_complete",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_transfer_complete.mp3"
+    },
+    {
+      "id": "m01_corridor_sent",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_corridor_sent.mp3"
+    },
+    {
+      "id": "m01_atlas_detected_vos",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_atlas_detected_vos.mp3"
+    },
+    {
+      "id": "m01_atmospheric_entry_vos",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_atmospheric_entry_vos.mp3"
+    },
     {
       "id": "m01_start_commander",
       "speakerId": "commander-soren",
@@ -903,6 +948,11 @@
       "path": "/audio/voices/commander/m16_start.mp3"
     },
     {
+      "id": "m16_alert",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m16_alert.mp3"
+    },
+    {
       "id": "m16_terminal",
       "speakerId": "commander-soren",
       "path": "/audio/voices/commander/m16_terminal.mp3"
@@ -913,9 +963,34 @@
       "path": "/audio/voices/commander/m16_probe_confirmed.mp3"
     },
     {
+      "id": "m16_triple_link",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m16_triple_link.mp3"
+    },
+    {
+      "id": "m16_atlas_key",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m16_atlas_key.mp3"
+    },
+    {
+      "id": "m16_seed_world",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m16_seed_world.mp3"
+    },
+    {
+      "id": "m16_seed_network",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m16_seed_network.mp3"
+    },
+    {
       "id": "m16_protocols",
       "speakerId": "commander-soren",
       "path": "/audio/voices/commander/m16_protocols.mp3"
+    },
+    {
+      "id": "m16_nodes_synced",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m16_nodes_synced.mp3"
     },
     {
       "id": "m16_simulation",
@@ -926,6 +1001,11 @@
       "id": "m16_energy_deficit",
       "speakerId": "commander-soren",
       "path": "/audio/voices/commander/m16_energy_deficit.mp3"
+    },
+    {
+      "id": "m16_final_line",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m16_final_line.mp3"
     },
     {
       "id": "m17_start",
@@ -953,6 +1033,11 @@
       "path": "/audio/voices/commander/m17_sensors.mp3"
     },
     {
+      "id": "m17_calibration",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m17_calibration.mp3"
+    },
+    {
       "id": "m17_shield",
       "speakerId": "commander-soren",
       "path": "/audio/voices/commander/m17_shield.mp3"
@@ -976,6 +1061,306 @@
       "id": "m17_stabilized",
       "speakerId": "commander-soren",
       "path": "/audio/voices/commander/m17_stabilized.mp3"
+    },
+    {
+      "id": "m17_signatures",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m17_signatures.mp3"
+    },
+    {
+      "id": "m17_not_a_simulation",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m17_not_a_simulation.mp3"
+    },
+    {
+      "id": "m18_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m18_start.mp3"
+    },
+    {
+      "id": "m18_attack_confirmed",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m18_attack_confirmed.mp3"
+    },
+    {
+      "id": "m18_weapons_free",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m18_weapons_free.mp3"
+    },
+    {
+      "id": "m18_takeoff",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m18_takeoff.mp3"
+    },
+    {
+      "id": "m18_transmission",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m18_transmission.mp3"
+    },
+    {
+      "id": "m18_nereida_target",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m18_nereida_target.mp3"
+    },
+    {
+      "id": "m18_closing",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m18_closing.mp3"
+    },
+    {
+      "id": "m19_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m19_start.mp3"
+    },
+    {
+      "id": "m19_priority",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m19_priority.mp3"
+    },
+    {
+      "id": "m19_ark_target",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m19_ark_target.mp3"
+    },
+    {
+      "id": "m19_closing",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m19_closing.mp3"
+    },
+    {
+      "id": "m20_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m20_start.mp3"
+    },
+    {
+      "id": "m20_engines",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m20_engines.mp3"
+    },
+    {
+      "id": "m20_counterattack",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m20_counterattack.mp3"
+    },
+    {
+      "id": "m20_closing",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m20_closing.mp3"
+    },
+    {
+      "id": "m21_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m21_start.mp3"
+    },
+    {
+      "id": "m21_response_defiant",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m21_response_defiant.mp3"
+    },
+    {
+      "id": "m21_response_diplomatic",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m21_response_diplomatic.mp3"
+    },
+    {
+      "id": "m21_response_strategic",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m21_response_strategic.mp3"
+    },
+    {
+      "id": "m21_channels_restored",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m21_channels_restored.mp3"
+    },
+    {
+      "id": "m21_routes",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m21_routes.mp3"
+    },
+    {
+      "id": "m21_pleyadian_network",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m21_pleyadian_network.mp3"
+    },
+    {
+      "id": "m21_closing",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m21_closing.mp3"
+    },
+    {
+      "id": "m22_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m22_start.mp3"
+    },
+    {
+      "id": "m22_command_defiant",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m22_command_defiant.mp3"
+    },
+    {
+      "id": "m22_command_diplomatic",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m22_command_diplomatic.mp3"
+    },
+    {
+      "id": "m22_command_strategic",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m22_command_strategic.mp3"
+    },
+    {
+      "id": "m22_cross_crisis",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m22_cross_crisis.mp3"
+    },
+    {
+      "id": "m22_support_chosen",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m22_support_chosen.mp3"
+    },
+    {
+      "id": "m22_joint_network",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m22_joint_network.mp3"
+    },
+    {
+      "id": "m22_final_pressure",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m22_final_pressure.mp3"
+    },
+    {
+      "id": "m22_closing",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m22_closing.mp3"
+    },
+    {
+      "id": "m23_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m23_start.mp3"
+    },
+    {
+      "id": "m23_joint_forces",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m23_joint_forces.mp3"
+    },
+    {
+      "id": "m23_beacon_located",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m23_beacon_located.mp3"
+    },
+    {
+      "id": "m23_beacon_collapse",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m23_beacon_collapse.mp3"
+    },
+    {
+      "id": "m23_closing",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m23_closing.mp3"
+    },
+    {
+      "id": "m24_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m24_start.mp3"
+    },
+    {
+      "id": "m24_boarded",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m24_boarded.mp3"
+    },
+    {
+      "id": "m24_upper_atmosphere",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m24_upper_atmosphere.mp3"
+    },
+    {
+      "id": "m24_ark_located",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m24_ark_located.mp3"
+    },
+    {
+      "id": "m24_ark_arrival",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m24_ark_arrival.mp3"
+    },
+    {
+      "id": "m24_pleyadian_integrated",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m24_pleyadian_integrated.mp3"
+    },
+    {
+      "id": "m24_sector_revisited",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m24_sector_revisited.mp3"
+    },
+    {
+      "id": "m24_final_line",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m24_final_line.mp3"
+    },
+    {
+      "id": "m25_start",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m25_start.mp3"
+    },
+    {
+      "id": "m25_threat_detected",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m25_threat_detected.mp3"
+    },
+    {
+      "id": "m25_joint_support",
+      "speakerId": "pleyadan",
+      "path": "/audio/voices/pleyadan/m25_joint_support.mp3"
+    },
+    {
+      "id": "m25_counterattack",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m25_counterattack.mp3"
+    },
+    {
+      "id": "m25_threat_collapse",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m25_threat_collapse.mp3"
+    },
+    {
+      "id": "m25_final",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m25_final.mp3"
+    },
+    {
+      "id": "m01_prologue_commander_intro",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_prologue_commander_intro.mp3"
+    },
+    {
+      "id": "m01_prologue_context",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_prologue_context.mp3"
+    },
+    {
+      "id": "m01_prologue_situation",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_prologue_situation.mp3"
+    },
+    {
+      "id": "m01_prologue_first_task",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_prologue_first_task.mp3"
+    },
+    {
+      "id": "m01_prologue_preflight",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_prologue_preflight.mp3"
+    },
+    {
+      "id": "m01_prologue_clamps_released",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_prologue_clamps_released.mp3"
+    },
+    {
+      "id": "m01_prologue_farewell",
+      "speakerId": "commander-soren",
+      "path": "/audio/voices/commander/m01_prologue_farewell.mp3"
     }
   ]
 }

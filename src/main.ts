@@ -13,7 +13,7 @@ import { PostProcessing } from './core/PostProcessing';
 import { Mothership } from './entities/Mothership';
 import { PlayerShip } from './entities/PlayerShip';
 import { SurfaceCharacter } from './entities/SurfaceCharacter';
-import { ShipAccessLift } from './entities/ShipAccessLift';
+import { SHIP_ACCESS_FOOT_TRAVEL, ShipAccessLift } from './entities/ShipAccessLift';
 import {
   CockpitInterior,
   type CockpitAlertSeverity,
@@ -65,6 +65,19 @@ import { Mission01FlightAssist, type Mission01AssistSnapshot } from './game/Miss
 import { Mission01BeaconSurvey, type Mission01BeaconSnapshot } from './game/Mission01BeaconSurvey';
 import { Mission01CameraProfile } from './game/Mission01CameraProfile';
 import { Mission01Hud, type Mission01HudSlotId } from './ui/Mission01Hud';
+import { FlightCombatHUD, type CombatWeaponMode, type FlightCombatHudFrame } from './ui/FlightCombatHUD';
+import { BootExperience, type BootTaskId } from './ui/BootExperience';
+import { GameModeController } from './modes/GameModeController';
+import {
+  LocalPlayerProfileRepository,
+  type PlayerProfileRepository
+} from './profile/PlayerProfileRepository';
+import { ownedShipIds, type PlayerProfile } from './profile/PlayerProfile';
+import { ShipCatalog, type ShipDefinition } from './ships/ShipCatalog';
+import { GarageView } from './garage/GarageView';
+import { CombatScenarioCatalog, ARK_ORBIT_SURVIVAL } from './combat/CombatScenarioCatalog';
+import { CombatSession } from './combat/CombatSession';
+import { CombatModeView } from './combat/CombatModeView';
 import {
   MISSION01_ANALYSIS_LINE_SECONDS,
   MISSION01_ANALYSIS_SEQUENCE,
@@ -76,7 +89,19 @@ import {
   mission01TutorialTuning
 } from './assets/mission01OnboardingDefinitions';
 import { createEntryProfile, updateEntryProfile } from './game/entryProfile';
+import { PLAYER_SHIP_FLIGHT_TUNING } from './game/PlayerShipFlightTuning';
+import type { AtmosphericAscentMetrics } from './game/AtmosphericAscentController';
+import { shieldRadius } from './game/PlayerShipHardpoints';
+import {
+  LANDING_GEAR_TUNING,
+  PILOT_HEIGHT_METRES,
+  PLAYER_SHIP_BASE_COLLIDERS,
+  PLAYER_SHIP_SCALE_FACTOR,
+  PLAYER_SHIP_TARGET_MAX_DIMENSION,
+  scaleShipMetric
+} from './game/PlayerShipDimensions';
 import { ArkDockingAssembly } from './entities/ArkDockingAssembly';
+import { PlayerShipLandingGear } from './entities/PlayerShipLandingGear';
 import {
   arkDepartureTuning,
   ARK_DEPARTURE_DIALOGUE,
@@ -88,6 +113,20 @@ import { SurfaceArrivalSystem } from './game/SurfaceArrivalSystem';
 import { ThreatDirector } from './game/ThreatDirector';
 import { StarMap, type StarMapEntity } from './game/StarMap';
 import { WeaponSystem, type WeaponTarget } from './systems/WeaponSystem';
+import { PLAYER_TORPEDO_TUBES } from './game/CombatTuningProfile';
+import { HostileContactTracker } from './systems/HostileContactTracker';
+import { CombatCameraImpulse } from './systems/CombatCameraImpulse';
+import {
+  EnemyCombatVisualDirector,
+  type EnemyWeaponClass
+} from './systems/EnemyCombatVisualDirector';
+import {
+  COLLISION_CATEGORY,
+  CollisionWorld,
+  createCharacterCollisionResult,
+  createShipCollisionResult,
+  type ShipSphereDefinition
+} from './systems/CollisionWorld';
 import { PlanetaryWorld, type ResourceSiteTerrainMetric } from './game/PlanetaryWorld';
 import { ColonyManager } from './game/ColonyManager';
 import { FirstFootholdMission } from './game/FirstFootholdMission';
@@ -118,6 +157,7 @@ import {
 import { AuroraSurveyProbe } from './entities/AuroraSurveyProbe';
 import { AuroraSettlementBeacon } from './entities/AuroraSettlementBeacon';
 import { AuroraHabitatModule } from './entities/AuroraHabitatModule';
+import { AuroraSettlementInfrastructure } from './entities/AuroraSettlementInfrastructure';
 import { Mission11AuroraExpansion, type Mission11Snapshot } from './game/Mission11AuroraExpansion';
 import {
   auroraCultivationBedDefinition,
@@ -165,6 +205,7 @@ import { Mission21SilenceRupture, type Mission21Snapshot } from './game/Mission2
 import { Mission22BrokenFronts, type Mission22Snapshot } from './game/Mission22BrokenFronts';
 import { Mission23Counteroffensive, type Mission23Snapshot } from './game/Mission23Counteroffensive';
 import { Mission24ReturnToOrigin, type Mission24Snapshot } from './game/Mission24ReturnToOrigin';
+import { Mission25LastOrbit, type Mission25Snapshot } from './game/Mission25LastOrbit';
 import { AtmosphericAscentController } from './game/AtmosphericAscentController';
 import { CoalitionScoutDrone } from './entities/CoalitionScoutDrone';
 import { CoalitionBreachDrone } from './entities/CoalitionBreachDrone';
@@ -174,6 +215,8 @@ import { ThreeFrontCommandNetwork } from './entities/ThreeFrontCommandNetwork';
 import { CoalitionLogisticsPlatform, type LogisticsPlatformState } from './entities/CoalitionLogisticsPlatform';
 import { CoalitionJumpBeacon } from './entities/CoalitionJumpBeacon';
 import { ArkFinalPreparationNetwork, type ArkFinalPreparationState } from './entities/ArkFinalPreparationNetwork';
+import { ArkFinalDefenseNetwork } from './entities/ArkFinalDefenseNetwork';
+import { CoalitionSiegeCommand } from './entities/CoalitionSiegeCommand';
 import { AtmosphericAscentEffect } from './effects/AtmosphericAscentEffect';
 import {
   auroraSupplyCacheDefinition,
@@ -264,6 +307,13 @@ import {
   type Mission24StepId
 } from './assets/mission24Definitions';
 import {
+  MISSION25_PRIORITY_LABELS,
+  MISSION25_STATE_ORDER,
+  MISSION25_SYSTEM_LABELS,
+  mission25Tuning,
+  type Mission25StateId
+} from './assets/mission25Definitions';
+import {
   PremiumVisualLayer,
   type PremiumVisualQuality,
   type PremiumVisualState
@@ -315,6 +365,8 @@ import { Mission21ResponsePanel } from './ui/Mission21ResponsePanel';
 import { Mission22CommandPanel } from './ui/Mission22CommandPanel';
 import { Mission23ChoicePanel } from './ui/Mission23ChoicePanel';
 import { Mission24AscentHud } from './ui/Mission24AscentHud';
+import { Mission25Hud } from './ui/Mission25Hud';
+import { ChapterEndScreen } from './ui/ChapterEndScreen';
 import { AudioManager, type AudioSettings } from './audio/AudioManager';
 import { EngineAudio, type EngineAudioSnapshot } from './audio/EngineAudio';
 import { FootstepAudio } from './audio/FootstepAudio';
@@ -370,6 +422,56 @@ export type Mission12DebugState = Mission12Snapshot;
 export type Mission13DebugState = Mission13Snapshot;
 export type Mission14DebugState = Mission14Snapshot;
 export type Mission24DebugState = Mission24Snapshot;
+export type Mission25DebugState = Mission25Snapshot;
+export type Mission25VisualDebugState = {
+  defenseNetworkBuilt: boolean;
+  defenseNetworkVisible: boolean;
+  defendableSystemCount: number;
+  relaysVisible: boolean;
+  alliedSupportVisible: boolean;
+  contactSignaturesVisible: boolean;
+  commandTargetBuilt: boolean;
+  commandTargetVisible: boolean;
+  commandActiveNodes: number;
+  commandCoreExposed: boolean;
+  hudMounted: boolean;
+  hudVisible: boolean;
+  chapterEndMounted: boolean;
+  chapterEndVisible: boolean;
+  resourcesReleased: boolean;
+  mothershipSceneInstances: number;
+  playerShipSceneInstances: number;
+};
+export type Mission25Diagnostics = {
+  activeMission: string;
+  state: Mission25StateId;
+  mothershipUuid: string;
+  mothershipCount: number;
+  playerShipCount: number;
+  distanceToArk: number;
+  activeEnemies: number;
+  enemiesByType: { scouts: number; siegeCommand: number };
+  enemyPositions: [number, number, number][];
+  minimumEnemyArkDistance: number;
+  enemiesDestroyed: number;
+  wave: number;
+  activeProjectiles: number;
+  defendableSystems: string[];
+  systemIntegrities: number[];
+  arkIntegrity: number;
+  inheritedM22Priority: string;
+  inheritedM23Support: boolean;
+  finalTargetActive: boolean;
+  nodesDestroyed: number;
+  coreExposed: boolean;
+  targetIntegrity: number;
+  threatNeutralized: boolean;
+  chapterEndVisible: boolean;
+  musicCue: string;
+  activeTimers: number;
+  resourcesReleased: boolean;
+  saveRestored: boolean;
+};
 
 /**
  * Mission 01 prologue diagnostics: sequence state plus the scene-graph facts
@@ -401,10 +503,19 @@ export type ArkDepartureDebugState = ArkDepartureSnapshot & {
 export type Mission01OnboardingDebugState = {
   missionStep: string;
   objective: string;
+  controlsEnabled: boolean;
+  dialoguePausesGameplay: boolean;
+  dialogueAwaitingInput: boolean;
+  cameraMode: CameraMode;
+  flightMode: 'space' | 'surface' | 'atmosphericAscent';
+  arkDepartureStep: ArkDepartureStepId;
+  arkTranslationLocked: boolean;
+  arkThrustLimit: number;
   assistLevel: string;
   assistActive: boolean;
   /** Live camera-to-hull distance, in metres. */
   cameraDistance: number;
+  framingActive: boolean;
   /** Distance the framing profile is asking for, before damping. */
   cameraFraming: number;
   /** Estimated fraction of frame height the hull spans. */
@@ -412,6 +523,15 @@ export type Mission01OnboardingDebugState = {
   cameraFov: number;
   speed: number;
   acceleration: number;
+  thrustInput: number;
+  spool: number;
+  shipPosition: [number, number, number];
+  shipVelocity: [number, number, number];
+  shipViewport: [number, number];
+  objectiveViewport: [number, number];
+  cameraFollowError: number;
+  alignmentYawError: number;
+  alignmentPitchError: number;
   pitch: number;
   yaw: number;
   roll: number;
@@ -455,6 +575,27 @@ export type CameraProbeResult = {
   targetName: string;
   targetPosition: [number, number, number];
   cameraPosition: [number, number, number];
+};
+
+export type ArkPlatformVisualDebugState = {
+  platformBuilt: boolean;
+  platformVisible: boolean;
+  platformMeshes: number;
+  platformInstancedMeshes: number;
+  platformMaterials: number;
+  platformTriangles: number;
+  platformSize: [number, number, number];
+  launchAnchorWorld: [number, number, number];
+  corridorFocusWorld: [number, number, number];
+  dockingAssemblyBuilt: boolean;
+  dockingGateCount: number;
+  dockingGuideModuleCount: number;
+  dockingMeshes: number;
+  dockingInstancedMeshes: number;
+  dockingTriangles: number;
+  drawCalls: number;
+  sceneTriangles: number;
+  fps: number;
 };
 
 export type AudioDebugState = {
@@ -513,6 +654,130 @@ type CorridorPip = {
   index: number;
 };
 
+/**
+ * Writes text only when it changed.
+ *
+ * The HUD rewrote every readout on every frame. Assigning the same string back
+ * still costs a DOM mutation, and there are ~30 of these per frame at 60 Hz.
+ * Guarding on the current value makes the steady state free.
+ */
+function setText(element: HTMLElement, value: string): void {
+  if (element.textContent !== value) element.textContent = value;
+}
+
+/** Movement keys never denote an action, only travel. */
+const TRAVEL_KEYS = new Set(['WASD', 'W', 'A', 'S', 'D', 'SHIFT', 'MOUSE', '']);
+
+type ObjectiveStateKey = 'idle' | 'approach' | 'inrange' | 'working' | 'blocked' | 'complete';
+
+const objectiveStateTracker = {
+  /** `mission|step`, to notice a step boundary without a mission-side hook. */
+  signature: '',
+  lastDistance: Number.POSITIVE_INFINITY,
+  /**
+   * When the confirmation expires, on the simulation clock.
+   *
+   * Counting frames was wrong: the software renderer used for captures runs at
+   * about 2 FPS, so a 54-frame hold lasted almost half a minute and every
+   * sample came back reading "objetivo completado".
+   */
+  completeUntil: -Infinity,
+  state: 'idle' as ObjectiveStateKey
+};
+
+/** How long the completion confirmation holds, in seconds. */
+const OBJECTIVE_COMPLETE_SECONDS = 1.1;
+
+/**
+ * Derives the objective's state from data the resolver already publishes.
+ *
+ * `blockedReason` is the game's own answer to "can the player act right now" --
+ * 52 call sites set it -- so the HUD can report range state without any mission
+ * having to grow a new field, and the prompt can never promise a key the game
+ * would ignore. Progress and closing distance fill in the two states that
+ * blockedReason alone cannot express.
+ */
+function updateObjectiveState(display: ReturnType<typeof getCurrentObjectiveDisplay>): void {
+  const now = clock.elapsedTime;
+  const signature = `${display.missionTitle}|${display.stepTitle}`;
+  if (objectiveStateTracker.signature && objectiveStateTracker.signature !== signature) {
+    // A step boundary is the one moment worth interrupting for. It is a class
+    // toggle plus a CSS animation, so it costs nothing and blocks no input.
+    objectiveStateTracker.completeUntil = now + OBJECTIVE_COMPLETE_SECONDS;
+    objectivePanel.classList.remove('is-objective-complete');
+    void objectivePanel.offsetWidth;
+    objectivePanel.classList.add('is-objective-complete');
+    void sfxManager.play('confirm', 0.32);
+  }
+  objectiveStateTracker.signature = signature;
+
+  const distance = display.distance;
+  const closing = distance < objectiveStateTracker.lastDistance - 0.5;
+  objectiveStateTracker.lastDistance = distance;
+
+  const actionable = display.blockedReason.length === 0;
+  const actionKey = display.key.toUpperCase();
+  const hasActionKey = !TRAVEL_KEYS.has(actionKey);
+  const progress = habitabilityProgress.value;
+  const working = actionable && progress > 1 && progress < 99;
+
+  let state: ObjectiveStateKey;
+  let label: string;
+  // The key hint is the load-bearing signal, not `blockedReason` on its own:
+  // plenty of steps never set a reason, so an empty one was being read as "in
+  // range" and the panel claimed LISTO at 3.5 km. A travel key means the game
+  // is asking the player to move, which is never a ready state.
+  if (now < objectiveStateTracker.completeUntil) {
+    // Only a real step boundary lights this. `display.urgency === 'complete'`
+    // is a persistent mission state, not an event, and using it here pinned
+    // every objective to "completed" for the whole step.
+    state = 'complete';
+    // The panel already renders the next step at this point, so describe the
+    // transition without claiming that the newly displayed objective is done.
+    label = 'Objetivo actualizado';
+  } else if (!actionable) {
+    state = 'blocked';
+    label = 'Fuera de rango';
+  } else if (hasActionKey && working) {
+    state = 'working';
+    label = `En curso ${Math.round(progress)}%`;
+  } else if (hasActionKey) {
+    state = 'inrange';
+    label = 'En rango';
+  } else if (Number.isFinite(distance) && distance > 0) {
+    state = 'approach';
+    label = closing ? 'Aproximando' : 'En ruta';
+  } else {
+    state = 'idle';
+    label = 'En espera';
+  }
+
+  if (objectiveStateTracker.state !== state) {
+    objectiveStateTracker.state = state;
+    objectiveState.dataset.state = state;
+  }
+  setText(objectiveState, label);
+
+  // Publish the contextual action for the existing `#interact-prompt`, which
+  // already owns the bottom-centre slot. Adding a second prompt element put two
+  // overlapping callouts on screen; this reuses the one that was already there.
+  if (actionable && hasActionKey && state !== 'complete') {
+    objectiveContextAction.key = actionKey;
+    objectiveContextAction.label = display.nextAction;
+  } else {
+    objectiveContextAction.key = '';
+    objectiveContextAction.label = '';
+  }
+}
+
+/**
+ * The mission action the objective panel currently considers live.
+ *
+ * Written by `updateObjectiveState`, read by the interact-prompt driver, so the
+ * prompt and the panel cannot disagree about whether a key does anything.
+ */
+const objectiveContextAction = { key: '', label: '' };
+
 function getElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) {
@@ -524,7 +789,20 @@ function getElement<T extends HTMLElement>(selector: string): T {
 const canvas = getElement<HTMLCanvasElement>('#game-canvas');
 const bootScreen = getElement<HTMLElement>('#boot-screen');
 const launchButton = getElement<HTMLButtonElement>('#launch-button');
-const loadingStatus = getElement<HTMLElement>('#loading-status');
+const bootBackdrop = getElement<HTMLImageElement>('#boot-backdrop');
+const confirmNewGameButton = getElement<HTMLButtonElement>('#confirm-new-game-button');
+const confirmLoadGameButton = getElement<HTMLButtonElement>('#confirm-load-game-button');
+const loadGameSummary = getElement<HTMLElement>('#load-game-summary');
+const combatModeButton = getElement<HTMLButtonElement>('#combat-mode-button');
+const garageModeButton = getElement<HTMLButtonElement>('#garage-mode-button');
+const garageScreen = getElement<HTMLElement>('#garage-screen');
+const garageBackButton = getElement<HTMLButtonElement>('#garage-back-button');
+const combatModeLayer = getElement<HTMLElement>('#combat-mode-layer');
+const menuAudioMuted = getElement<HTMLInputElement>('#menu-audio-muted');
+const menuMasterVolume = getElement<HTMLInputElement>('#menu-master-volume');
+const menuMusicVolume = getElement<HTMLInputElement>('#menu-music-volume');
+const menuSfxVolume = getElement<HTMLInputElement>('#menu-sfx-volume');
+const menuReducedMotion = getElement<HTMLInputElement>('#menu-reduced-motion');
 const hud = getElement<HTMLElement>('#hud');
 const scanButton = getElement<HTMLButtonElement>('#scan-button');
 const sectorName = getElement<HTMLElement>('#sector-name');
@@ -542,6 +820,10 @@ const missionNameReadout = getElement<HTMLElement>('#mission-name');
 const objectiveText = getElement<HTMLElement>('#objective-text');
 const nextAction = getElement<HTMLElement>('#next-action');
 const objectiveDistance = getElement<HTMLElement>('#objective-distance');
+const objectiveStep = getElement<HTMLElement>('#objective-step');
+const objectiveTargetName = getElement<HTMLElement>('#objective-target-name');
+const objectiveState = getElement<HTMLElement>('#objective-state');
+const objectivePanel = getElement<HTMLElement>('.objective-panel');
 const scannerStatus = getElement<HTMLElement>('#scanner-status');
 const signalStrength = getElement<HTMLElement>('#signal-strength');
 const habitabilityProgress = getElement<HTMLProgressElement>('#habitability-progress');
@@ -566,6 +848,7 @@ const objectiveMarkerDistance = getElement<HTMLElement>('#objective-marker-dista
 const laserStatus = getElement<HTMLElement>('#laser-status');
 const missileStatus = getElement<HTMLElement>('#missile-status');
 const lockStatus = getElement<HTMLElement>('#lock-status');
+const hitFeedback = getElement<HTMLElement>('#hit-feedback');
 const heatOverlay = getElement<HTMLElement>('#heat-overlay');
 const phaseBanner = getElement<HTMLElement>('#phase-banner');
 const phaseBannerTitle = getElement<HTMLElement>('#phase-banner-title');
@@ -587,6 +870,29 @@ const meters = {
 
 const urlParams = new URLSearchParams(window.location.search);
 const diagnosticsMode = urlParams.has('test') || urlParams.has('debug');
+const bootExperience = new BootExperience(bootScreen, diagnosticsMode);
+const gameModes = new GameModeController();
+const shipCatalog = new ShipCatalog();
+const profileRepository: PlayerProfileRepository = new LocalPlayerProfileRepository(window.localStorage, shipCatalog);
+let playerProfile: PlayerProfile = profileRepository.load();
+const combatScenarioCatalog = new CombatScenarioCatalog();
+let garageView: GarageView | undefined;
+let combatSession: CombatSession | undefined;
+let combatResultsPresented = false;
+let combatProfileRecorded = false;
+let combatWorldVisibility = new Map<THREE.Object3D, boolean>();
+let combatDisplayedVelocity = -1;
+let combatDisplayedArkDistance = -1;
+const combatSpawnScratch = new THREE.Vector3();
+const combatOriginScratch = new THREE.Vector3();
+const combatEnemyPositionScratch = new THREE.Vector3();
+const combatModeView = new CombatModeView(combatModeLayer, {
+  onStart: () => startCombatSession(),
+  onBack: () => closeCombatSetup(),
+  onReturnToMenu: () => exitCombatToMenu(),
+  onReplay: () => replayCombatSession()
+});
+let activeBootTask: BootTaskId = 'systems';
 /**
  * The M01 prologue puts the ship in the Ark's clamps, which is the right first
  * experience for a player and the wrong starting state for an automated probe
@@ -699,6 +1005,37 @@ let previousVerticalInput = 0;
 let shipTerrainY = 0;
 let shipAltitudeResetForce = 0;
 const resources: ResourceState = { hull: 87, energy: 76, oxygen: 64, memory: 41 };
+
+/**
+ * Weapon economy.
+ *
+ * The primary draws on the ship's shared energy pool rather than a magazine,
+ * so its cost has to be read against that pool's regeneration, not in
+ * isolation. Measured before tuning (see tests/playerWeaponResources.spec.ts).
+ */
+const PRIMARY_ENERGY_COST = 1.4;
+/** Below this the trigger is refused, leaving a reserve for flight systems. */
+const PRIMARY_ENERGY_FLOOR = 2;
+const TORPEDO_ENERGY_COST = 3.8;
+
+/**
+ * Counters for the weapon audit. Plain accumulators: incremented on the real
+ * fire paths, read only through the diagnostics hook, never logged per frame.
+ */
+const weaponAudit = {
+  primaryFireEvents: 0,
+  primaryShotsCreated: 0,
+  primaryChargesSpent: 0,
+  torpedoLaunchEvents: 0,
+  torpedoesCreated: 0,
+  torpedoTubesConsumed: 0,
+  reloadRequestCount: 0,
+  lastBlockReason: 'none' as string
+};
+
+/** Latest reload message, shown briefly in the HUD weapon strip. */
+let weaponReloadMessage = '';
+let weaponReloadMessageAt = -999;
 const settings = {
   thrust: 35,
   boost: 2.35,
@@ -714,11 +1051,19 @@ const settings = {
 let spaceThrustLevel = 0;
 let spaceBoostLevel = 0;
 let spaceThrustPitch = 0;
+let spaceBrakeActive = false;
+let spaceCameraLag = 0;
+let lastSpaceBrakeStartSpeed = 0;
+let lastSpaceBrakeFirstSampleSpeed = 0;
+let spaceBrakeActivations = 0;
+const MISSION01_REALTIME_MAX_DELTA = 0.45;
+const MISSION01_FLIGHT_SUBSTEP = 0.05;
 const spaceForward = new THREE.Vector3();
 const spaceRight = new THREE.Vector3();
 const spaceUp = new THREE.Vector3();
 const spaceAxial = new THREE.Vector3();
 const spaceLateral = new THREE.Vector3();
+const spaceAttitudeRight = new THREE.Vector3();
 const mission24ApproachDirection = new THREE.Vector3();
 
 const SURFACE_SHIP_TUNING = {
@@ -763,10 +1108,30 @@ let smoothYaw = yaw;
 let smoothPitch = pitch;
 let bankRoll = 0;
 let launched = false;
+let expeditionStartedThisSession = false;
 let traveled = 0;
 let lastScan = -10;
+const LATE_INTERACTION_COOLDOWN_SECONDS = 0.18;
+const LATE_INTERACTION_BUFFER_SECONDS = 0.4;
+let lastLateInteractionAt = -10;
+let pendingLateInteractionUntil = -Infinity;
+let pendingLateInteractionMission = '';
+let pendingLateInteractionStep = '';
+let queuedLateInteractionMission = '';
+let queuedLateInteractionStep = '';
+let queuedLateInteractionDelta = 0;
 let cameraShake = 0;
-let liftLockTremorRemaining = 0;
+let weaponImpactAudioCursor = 0;
+let weaponImpactSoundToggle = false;
+let playerLaserAudioToggle = false;
+let torpedoIgnitionAudioCursor = 0;
+let torpedoImpactAudioCursor = 0;
+let torpedoDetonationAudioCursor = 0;
+let enemyNearMissCursor = 0;
+let enemyHeavyDestructionCursor = 0;
+let enemyThreatWarningRemaining = 0;
+let enemyThreatWarningText = '';
+let lastPlayerDamageFeedbackAt = -10;
 let transientWarning = '';
 let lastDockMessageAt = -20;
 let audioContext: AudioContext | undefined;
@@ -776,16 +1141,43 @@ let habitabilityReportShown = false;
 let missionCompleteShown = false;
 const missionDiscoveries: string[] = [];
 
+const BOOT_TASK_STATUS: Record<BootTaskId, string> = {
+  backdrop: 'Cartografiando espacio profundo',
+  mothership: 'Cargando estructuras de la Arca',
+  playerShip: 'Preparando protocolos de navegación',
+  orbitalMarker: 'Cargando estructuras orbitales',
+  cockpit: 'Inicializando sistemas de cabina',
+  pilot: 'Sincronizando protocolos de superficie',
+  systems: 'Sincronizando red de misión'
+};
+
 function updateLoadingState(state: AssetLoadState): void {
   if (state.status === 'loading') {
-    const progress = state.progress > 0 ? ` ${Math.round(state.progress * 100)}%` : '';
-    loadingStatus.textContent = `Cargando modelos oficiales${progress}`;
-  }
-
-  if (state.status === 'failed') {
-    loadingStatus.textContent = `Fallo GLB: ${state.error}`;
+    bootExperience.updateTask(activeBootTask, state.progress, BOOT_TASK_STATUS[activeBootTask]);
+  } else if (state.status === 'loaded') {
+    bootExperience.completeTask(activeBootTask, BOOT_TASK_STATUS[activeBootTask]);
+  } else if (state.status === 'failed') {
+    bootExperience.failTask(activeBootTask, `Reintentando ${BOOT_TASK_STATUS[activeBootTask].toLocaleLowerCase()}`);
   }
 }
+
+const bootBackdropReady = new Promise<void>((resolve) => {
+  const complete = (): void => {
+    bootExperience.completeTask('backdrop', BOOT_TASK_STATUS.backdrop);
+    resolve();
+  };
+  const failed = (): void => {
+    bootExperience.failTask('backdrop', 'Fondo estelar no disponible · continuando con navegación segura');
+    resolve();
+  };
+  if (bootBackdrop.complete) {
+    if (bootBackdrop.naturalWidth > 0) complete();
+    else failed();
+    return;
+  }
+  bootBackdrop.addEventListener('load', complete, { once: true });
+  bootBackdrop.addEventListener('error', failed, { once: true });
+});
 
 const assetLoader = new AssetLoader(updateLoadingState);
 assetLoader.enableKTX2(renderer, '/basis/');
@@ -806,6 +1198,97 @@ const missionManager = new MissionManager();
 const colonizationPlan = new ColonizationPlan();
 const threatDirector = new ThreatDirector();
 const weaponSystem = new WeaponSystem();
+/**
+ * Single owner of hostile screen positions.
+ *
+ * Every system that needs to know where a contact is on screen reads from here
+ * rather than projecting again — the brief's "una única actualización central
+ * de contactos", and the reason the marker layer costs one pass regardless of
+ * how many panels want the data.
+ */
+const hostileContacts = new HostileContactTracker(document.body);
+/**
+ * Reused source descriptors. Rebuilt in place each frame rather than
+ * reallocated: the contact update runs every frame and must not produce
+ * garbage.
+ */
+/** Reused forward vector for target selection; the handler must not allocate. */
+const shipForwardScratch = new THREE.Vector3();
+const hostileContactSources: {
+  source: { readonly targets: WeaponTarget[]; readonly activeCount: number };
+  type: string;
+  maxHealth: number;
+}[] = [
+  { source: { targets: [], activeCount: 0 }, type: 'BRECHA', maxHealth: mission19Tuning.breachDroneHealth },
+  { source: { targets: [], activeCount: 0 }, type: 'DRON', maxHealth: mission18Tuning.droneHealth },
+  { source: { targets: [], activeCount: 0 }, type: 'INTERFERIDOR', maxHealth: mission20Tuning.jammerHealth }
+];
+const enemyCombatVisuals = new EnemyCombatVisualDirector();
+weaponSystem.setVisualCompanion(enemyCombatVisuals);
+const combatCameraImpulse = new CombatCameraImpulse();
+const collisionWorld = new CollisionWorld();
+const characterCollisionResult = createCharacterCollisionResult();
+const shipCollisionResult = createShipCollisionResult();
+const characterCollisionProbeResult = createCharacterCollisionResult();
+const shipCollisionProbeResult = createShipCollisionResult();
+const collisionDisplacement = new THREE.Vector3();
+const collisionProbeStart = new THREE.Vector3();
+const collisionProbeDisplacement = new THREE.Vector3();
+const collisionProbeVelocity = new THREE.Vector3();
+const EMPTY_CHARACTER_OBSTACLES: never[] = [];
+/**
+ * The ship's composite collider, derived once from the central dimensions.
+ *
+ * These offsets live in the ship group's local space, and that group is never
+ * scaled — only the GLB root inside it is — so they are effectively world-unit
+ * values. Scaling the mesh alone would therefore leave the hull looking 1.7x
+ * bigger while still colliding at the old size; multiplying the authored base
+ * values by the same central factor is what keeps the two in step.
+ */
+const PLAYER_SHIP_COLLIDERS: readonly ShipSphereDefinition[] = PLAYER_SHIP_BASE_COLLIDERS.map(
+  (definition) => ({
+    offset: new THREE.Vector3(
+      scaleShipMetric(definition.offset[0]),
+      scaleShipMetric(definition.offset[1]),
+      scaleShipMetric(definition.offset[2])
+    ),
+    radius: scaleShipMetric(definition.radius)
+  })
+);
+let lastShipCollisionFeedbackAt = -Infinity;
+const weaponProbeObject = new THREE.Group();
+weaponProbeObject.name = 'Diagnostics Combat Target';
+weaponProbeObject.visible = false;
+const weaponProbeMaterial = new THREE.MeshStandardMaterial({
+  color: 0x293238,
+  emissive: 0x10242d,
+  emissiveIntensity: 0.35,
+  roughness: 0.58,
+  metalness: 0.72
+});
+const weaponProbeMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(12, 1), weaponProbeMaterial);
+weaponProbeMesh.name = 'Diagnostics Combat Target Hull';
+weaponProbeObject.add(weaponProbeMesh);
+weaponProbeObject.userData.combatMass = 'light';
+weaponProbeObject.userData.combatEngineAnchors = [[0, 0, 10.5]];
+weaponSystem.group.add(weaponProbeObject);
+const weaponProbeVelocity = new THREE.Vector3();
+const weaponProbeTarget: WeaponTarget = {
+  id: 'diagnostics-combat-target',
+  object: weaponProbeObject,
+  radius: 12,
+  health: 0,
+  hostile: false,
+  velocity: weaponProbeVelocity
+};
+const weaponProbeTargets: WeaponTarget[] = [weaponProbeTarget];
+let combatHudProbeActive = false;
+let combatPacingProbeActive = false;
+let combatJammerProbeActive = false;
+let combatHudJammingProbeActive = false;
+const enemyCombatImpactScratch = new THREE.Vector3();
+const enemyCombatDirectionScratch = new THREE.Vector3();
+const enemyCombatRightScratch = new THREE.Vector3();
 const starMap = new StarMap();
 const planetaryWorld = new PlanetaryWorld();
 const colonyManager = new ColonyManager();
@@ -843,7 +1326,7 @@ const auroraSectorRoute = new AuroraSectorRoute((x, z) => planetaryWorld.getHeig
  * back to the analytic height elsewhere (or before the valley is baked), so it
  * is safe to use for every Aurora placement and for on-foot ground contact.
  */
-function auroraSurfaceHeight(x: number, z: number): number {
+function surfaceGroundHeight(x: number, z: number): number {
   const valley = auroraRevealEffect.groundHeightAt(x, z);
   return Number.isFinite(valley) ? valley : planetaryWorld.getHeightAt(x, z);
 }
@@ -857,6 +1340,8 @@ const mission10 = new Mission10AuroraFoothold();
 const auroraSurveyProbes = auroraSamplePointDefinitions.map((definition) => new AuroraSurveyProbe(definition));
 const auroraSettlementBeacon = new AuroraSettlementBeacon();
 const auroraHabitatModule = new AuroraHabitatModule();
+const auroraSettlementInfrastructure = new AuroraSettlementInfrastructure();
+auroraHabitatModule.group.add(auroraSettlementInfrastructure.group);
 let mission10DeployStartedAt = -Infinity;
 const mission11 = new Mission11AuroraExpansion();
 const auroraSecondModule = new AuroraSecondModule();
@@ -924,6 +1409,10 @@ let mission19WarnedAt = -Infinity;
 const mission19DefenseScratch = new THREE.Vector3();
 const mission20 = new Mission20ArkBattle();
 const coalitionJammer = new CoalitionJammer();
+const coalitionJammerContactSource = {
+  targets: [coalitionJammer.target],
+  get activeCount(): number { return coalitionJammer.alive ? 1 : 0; }
+};
 const mission20AnnouncedBeats = new Set<string>();
 const mission20Scratch = new THREE.Vector3();
 let mission20WarnedAt = -Infinity;
@@ -940,6 +1429,7 @@ const mission22AnnouncedBeats = new Set<string>();
 const mission22Scratch = new THREE.Vector3();
 const mission22DefenseCooldowns = new Float32Array(4);
 const mission22VisualIntegrities: [number, number, number] = [100, 100, 100];
+let mission22LastElapsed = 0;
 const mission23 = new Mission23Counteroffensive();
 const coalitionLogisticsPlatform = new CoalitionLogisticsPlatform();
 const coalitionJumpBeacon = new CoalitionJumpBeacon();
@@ -961,6 +1451,7 @@ const arkDockingAssembly = new ArkDockingAssembly();
 /** Reused every frame for the cradle distance: never allocate in the loop. */
 const arkDepartureScratch = new THREE.Vector3();
 const arkDepartureAnchorWorld = new THREE.Vector3();
+const arkDepartureObjectiveWorld = new THREE.Vector3();
 /** Latches so each commander beat is spoken exactly once per session. */
 const arkDepartureAnnouncedBeats = new Set<string>();
 let arkDepartureTitleTimer = 0;
@@ -977,6 +1468,9 @@ const mission01Camera = new Mission01CameraProfile();
 const mission01Scratch = new THREE.Vector3();
 const mission01BeaconWorld = new THREE.Vector3();
 const mission01Forward = new THREE.Vector3();
+const mission01DiagnosticShipWorld = new THREE.Vector3();
+const mission01DiagnosticObjectiveWorld = new THREE.Vector3();
+const mission01DiagnosticProjection = new THREE.Vector3();
 /** Latches so each onboarding beat fires exactly once per session. */
 const mission01AnnouncedBeats = new Set<string>();
 /** Seconds since the clamps released, for the camera handover blend. */
@@ -992,6 +1486,7 @@ const atmosphericAscentEffect = new AtmosphericAscentEffect();
 const arkFinalPreparationNetwork = new ArkFinalPreparationNetwork();
 const mission24AnnouncedBeats = new Set<string>();
 const mission24Scratch = new THREE.Vector3();
+const mission24ApproachOutward = new THREE.Vector3();
 const mission24ObjectiveGuidance: Mission03ObjectiveGuidance = {};
 const mission24AscentInput = { thrustUp: false, thrustForward: false, brake: false, turn: 0, boost: false };
 const mission24VisualState: ArkFinalPreparationState = {
@@ -1010,6 +1505,24 @@ const mission24VisualState: ArkFinalPreparationState = {
 let mission24OrbitalEnvironmentActive = false;
 let mission24RehearsalEngaged = false;
 let mission24LastSequenceElapsed = -1;
+const mission25 = new Mission25LastOrbit();
+const arkFinalDefenseNetwork = new ArkFinalDefenseNetwork();
+const coalitionSiegeCommand = new CoalitionSiegeCommand();
+const mission25AnnouncedBeats = new Set<string>();
+const mission25ObjectiveGuidance: Mission03ObjectiveGuidance = {};
+const mission25Scratch = new THREE.Vector3();
+const mission25DebugOffset = new THREE.Vector3();
+const mission25WaveOrigin = new THREE.Vector3();
+const mission25WeaponTargets: WeaponTarget[] = [];
+const liveWeaponTargets: WeaponTarget[] = [];
+const noWeaponTargets: WeaponTarget[] = [];
+const noHostileContactSource = { targets: noWeaponTargets, activeCount: 0 };
+let mission25TransitionElapsed = 0;
+let mission25TransitionStartedAt = 0;
+let mission25WaveLaunched = false;
+let mission25ResourcesReleased = true;
+let mission25LastSavedStep: Mission25StateId = 'inactive';
+let mission25HudUpdateAccumulator = 0;
 function sleepMission24LegacyVisuals(): void {
   pleyadanRelayBeacon.group.visible = false;
   pleyadanHologram.group.visible = false;
@@ -1082,6 +1595,10 @@ function applyRenderProfile(profile: RenderProfile): void {
   }
   lightPool.setSlotCount(settings.maxPointLights);
   premiumVisuals.setQuality(settings.premiumQuality);
+  weaponSystem.setQuality(profile);
+  enemyCombatVisuals.setQuality(profile);
+  planetaryWorld.setDetailProfile(profile);
+  auroraSettlementInfrastructure.setDetailProfile(profile);
   try {
     window.localStorage.setItem(RENDER_PROFILE_STORAGE_KEY, profile);
   } catch {
@@ -1320,22 +1837,111 @@ const voiceManager = new VoiceManager(audioManager, sfxManager);
 // Mission 13's storm soundscape. Owns only its own ambience and one-shots —
 // the score itself stays with MusicManager, which already crossfades and ducks.
 const mission13Audio = new Mission13AudioDirector(sfxManager);
-void voiceManager.initialize();
+const voiceInitialization = voiceManager.initialize();
 let dialogueAudioActive = false;
 const upgradeSystem = new UpgradeSystem();
 const colonyPanel = new ColonyPanel();
 const surfaceObjectivePanel = new SurfaceObjectivePanel();
 const surfaceMapPanel = new SurfaceMapPanel();
 const mission24AscentHud = new Mission24AscentHud(hud);
+const mission25Hud = new Mission25Hud(hud);
+const flightCombatHud = new FlightCombatHUD(
+  hud,
+  () => playTone(920, 0.07),
+  () => {
+    playTone(1160, 0.11);
+    void sfxManager.play('confirm', 0.3);
+  }
+);
+let combatWeaponMode: CombatWeaponMode = 'laser';
+const flightCombatHudFrame: FlightCombatHudFrame = {
+  camera,
+  ship,
+  shipVelocity: velocity,
+  referenceUp: WORLD_UP,
+  target: undefined,
+  visible: false,
+  horizonMode: 'inertial',
+  weapon: 'laser',
+  projectileSpeed: weaponSystem.laserProjectileSpeed,
+  weaponReady: true,
+  torpedoLocked: false,
+  targetOccluded: false,
+  jammed: false,
+  critical: false,
+  hitFeedback: 'none',
+  hitPulse: 0
+};
+const chapterEndScreen = new ChapterEndScreen(
+  () => continueExploringAfterChapter(),
+  () => returnToChapterMenu()
+);
 const mission01Hud = new Mission01Hud(hud);
 const cameraModeSystem = new CameraModeSystem();
 const cockpitInterior = new CockpitInterior(assetLoader);
 const playerModeSystem = new PlayerModeSystem();
 const inputActionRouter = new InputActionRouter();
 const surfaceCharacter = new SurfaceCharacter(assetLoader);
+const playerShipLandingGear = new PlayerShipLandingGear();
+// Parented to the ship: the legs are part of the airframe, so they inherit its
+// transform instead of being re-synced every frame.
+ship.add(playerShipLandingGear.group);
+playerShipLandingGear.setGroundSampler(surfaceGroundHeight);
+// Same terrain source the hull parks against: line-of-sight and ground contact
+// must agree about where the hills are.
+hostileContacts.setGroundSampler(surfaceGroundHeight);
+
 const shipAccessLift = new ShipAccessLift();
-void audioManager.initialize();
-audioManager.onSettingsChanged(() => syncFallbackAudioGain());
+// The bay samples the ground under its own egress foot rather than inheriting
+// the ship's, so a sloped parking spot no longer leaves the exit hanging.
+// Same source `parkShipOnTerrain` uses, so hull and foot agree on the ground.
+shipAccessLift.setGroundSampler(surfaceGroundHeight);
+// Deliberately NOT scaled with the hull in this stage. The bay is a
+// scene-level group anchored to the ship's ground position, and scaling it
+// pushes its ground exit from 6.25 m to 10.6 m out from the centreline — far
+// enough that on sloped ground (Aurora's valley floor) the exit anchor and the
+// terrain under it diverge by ~0.8 m and boarding stops resolving. The exit
+// still clears the widened wing (half-width 6.09 m), so the bay keeps working
+// unchanged; making it proportionate to the bigger hull belongs with the
+// hatch/ladder redesign, where the anchor can follow its own ground height.
+const audioInitialization = audioManager.initialize();
+audioManager.onSettingsChanged((audioSettings) => {
+  syncFallbackAudioGain();
+  menuAudioMuted.checked = audioSettings.muted;
+  menuMasterVolume.value = String(audioSettings.master);
+  menuMusicVolume.value = String(audioSettings.music);
+  menuSfxVolume.value = String(audioSettings.sfx);
+});
+
+menuAudioMuted.addEventListener('change', () => audioManager.setSettings({ muted: menuAudioMuted.checked }));
+menuMasterVolume.addEventListener('input', () => audioManager.setSettings({ master: Number(menuMasterVolume.value) }));
+menuMusicVolume.addEventListener('input', () => audioManager.setSettings({ music: Number(menuMusicVolume.value) }));
+menuSfxVolume.addEventListener('input', () => audioManager.setSettings({ sfx: Number(menuSfxVolume.value) }));
+
+document.querySelectorAll<HTMLInputElement>('input[name="menu-render-profile"]').forEach((inputElement) => {
+  inputElement.checked = inputElement.value === renderProfile;
+  inputElement.addEventListener('change', () => {
+    if (!inputElement.checked) return;
+    const profile = inputElement.value as RenderProfile;
+    if (profile in RENDER_PROFILES) applyRenderProfile(profile);
+  });
+});
+
+const REDUCED_MOTION_STORAGE_KEY = 'arca-epsilon-reduced-motion';
+try {
+  menuReducedMotion.checked = window.localStorage.getItem(REDUCED_MOTION_STORAGE_KEY) === 'true';
+} catch {
+  menuReducedMotion.checked = false;
+}
+bootExperience.setReducedMotion(menuReducedMotion.checked);
+menuReducedMotion.addEventListener('change', () => {
+  bootExperience.setReducedMotion(menuReducedMotion.checked);
+  try {
+    window.localStorage.setItem(REDUCED_MOTION_STORAGE_KEY, String(menuReducedMotion.checked));
+  } catch {
+    // The visual preference remains active for this session.
+  }
+});
 camera.add(cockpitInterior.group);
 let inSurfacePhase = false;
 
@@ -1512,6 +2118,45 @@ let exitShipTargetY = 0;
 let transitionGroundHeight = 0;
 const parkedShipBounds = new THREE.Box3();
 const boardingAnchorScratch = new THREE.Vector3();
+/**
+ * Test-only access inspection.
+ *
+ * The access is driven by mission state, so there is no way to hold it at
+ * "hatch 50 %, ladder stowed" long enough to photograph it. This pins the two
+ * progress values and parks an orbiting camera on the boarding anchor so each
+ * stage can be captured deterministically. Null in normal play, and only ever
+ * set through the debug hooks, which exist under `?test=1`.
+ */
+/**
+ * Diagnostic-only orbit around a named part of the ship.
+ *
+ * The access inspection rig frames the boarding anchor, which is on the ground
+ * — useful for the ladder, useless for looking at nozzles or the torpedo bay.
+ * This orbits a ship-local point instead. It never touches the gameplay chase
+ * camera; it exists purely so captures can be aimed.
+ */
+type ShipFeatureInspection = {
+  local: THREE.Vector3;
+  azimuth: number;
+  elevation: number;
+  distance: number;
+};
+let shipFeatureInspection: ShipFeatureInspection | null = null;
+const shipFeatureScratch = new THREE.Vector3();
+
+type AccessInspection = {
+  open: number;
+  lift: number;
+  azimuth: number;
+  elevation: number;
+  distance: number;
+  /** What the camera orbits: the ground anchor, or the hatch aperture itself. */
+  focus: 'anchor' | 'hatch';
+};
+let accessInspection: AccessInspection | null = null;
+const accessInspectionScratch = new THREE.Vector3();
+/** Reused by the chase camera for look-ahead and target bias. */
+const cameraLeadScratch = new THREE.Vector3();
 const PARKED_HULL_CLEARANCE = 0.12;
 const PARKED_RESTORE_TOLERANCE = 0.45;
 const BOARDING_HORIZONTAL_RANGE = 4.8;
@@ -1520,6 +2165,140 @@ let parkedShipTerrainHeight = 0;
 let parkedShipHullBottom = 0;
 let parkedShipTerrainSeparation = 0;
 let parkedShipResolved = false;
+/**
+ * Takeoff hand-off between the closed access and normal flight.
+ *
+ * Boarding used to jump straight from "pilot inside" to full flight control,
+ * which left the gear standing in `deployed` for the rest of the sortie: the
+ * ship flew with its legs out. These phases keep the gear updating and hold
+ * translation until the feet are genuinely clear of the ground.
+ *
+ * `unloading` bleeds the suspension and lifts the hull just enough to break
+ * contact; `retracting` folds the gear away. Camera stays live throughout.
+ */
+type ShipTakeoffPhase = 'none' | 'unloading' | 'retracting';
+let shipTakeoffPhase: ShipTakeoffPhase = 'none';
+let shipTakeoffElapsed = 0;
+let shipTakeoffLiftFrom = 0;
+let shipTakeoffLiftTarget = 0;
+/** How far the hull rises to unweight the gear — enough to break contact only. */
+const TAKEOFF_UNLOAD_LIFT = 0.32;
+/** Safety net: never hold the player longer than this waiting for the gear. */
+const TAKEOFF_MAX_SECONDS = 3.2;
+/** Surface navigation state, published to the HUD and diagnostics. */
+/** Normal surface flight ceiling, keeping ordinary flying inside the basin. */
+const SURFACE_FLIGHT_CEILING = 160;
+/**
+ * M20's atmospheric transition band.
+ *
+ * The climb starts handing over at the mission's own 900 m trigger and reaches
+ * vacuum at 2400 m. Those are game metres, not real ones: the point is a
+ * continuous, readable climb of a few seconds, not a physically scaled
+ * atmosphere.
+ */
+const M20_TRANSITION_START = 900;
+const M20_TRANSITION_TOP = 2400;
+/**
+ * Where the hull is re-seated once it reaches vacuum.
+ *
+ * M01 plays as a standoff from the Ark, so that — not the transition altitude —
+ * is the orbital reference. The rise keeps the approach slightly above the
+ * Ark's plane so it reads as arriving from below.
+ */
+const M20_ORBITAL_STANDOFF = 2400;
+const M20_ORBITAL_ENTRY_RISE = 180;
+/** Scratch for the orbital re-seat; the hand-off must not allocate. */
+const orbitalEntryScratch = new THREE.Vector3();
+const orbitalApproachScratch = new THREE.Vector3();
+/** Room above the transition so no clamp bites before the hand-off fires. */
+const SURFACE_ORBITAL_ASCENT_HEADROOM = M20_TRANSITION_TOP - 900 + 200;
+
+/**
+ * Progressive surface-to-space hand-off for M20.
+ *
+ * Reuses the ascent visuals M24 already owns — `atmosphericAscentEffect` draws
+ * the cloud deck, the planet limb and the star field — but drives them from the
+ * ship's own altitude instead of M24's guided-ascent controller. That keeps
+ * SPACE and WASD live throughout: the player flies out of the atmosphere rather
+ * than watching a cutscene.
+ */
+const mission20Transition = {
+  active: false,
+  progress: 0,
+  handedOver: false,
+  /**
+   * Synthesised metrics for the shared ascent effect. Only the five fields the
+   * effect actually reads vary; the rest satisfy the shared type so the rig can
+   * be reused without loosening its contract.
+   */
+  metrics: {
+    altitude: 0,
+    worldClearance: 0,
+    verticalSpeed: 0,
+    horizontalSpeed: 0,
+    totalSpeed: 0,
+    pressure: 0,
+    density: 0,
+    temperature: 0,
+    enginePower: 0,
+    heading: 0,
+    pitch: 0,
+    phase: 'ASCENSO',
+    orbitalStability: 0,
+    wind: 0,
+    cloudOpacity: 0,
+    starOpacity: 0,
+    curvature: 0,
+    maxFrameDisplacement: 0,
+    checkpoint: ''
+  } as AtmosphericAscentMetrics
+};
+
+/**
+ * True while the player is cleared to climb out of the basin.
+ *
+ * Derived straight from the mission rather than held as separate state: M20 is
+ * on its emergency-ascent step, the pilot is aboard, and the transition has not
+ * already happened.
+ */
+/**
+ * True while M20 is flying the orbital leg after the atmospheric hand-off.
+ *
+ * Derived from persisted mission state, NOT from the in-memory transition flag.
+ * `mission20Transition.handedOver` lives only for the session, so a player who
+ * saved in orbit and reloaded came back with the surface HUD, the close chase
+ * pose and "Cuenca Nereida" as the sector — every orbital rule silently off.
+ * `ascentComplete` is part of the saved mission, so this survives a load.
+ */
+function mission20OrbitalLegActive(): boolean {
+  return (
+    mission20.started &&
+    !mission20.completed &&
+    mission20.state.ascentComplete &&
+    !inSurfacePhase
+  );
+}
+
+function orbitalAscentAuthorized(): boolean {
+  return (
+    mission20.started &&
+    !mission20.completed &&
+    // Stays authorised after the ascent step too. Dropping it the instant the
+    // step advanced snapped the hull from 900 m back down to the 160 m ceiling
+    // in one frame — a visible teleport right at the mission beat.
+    (mission20.step === 'emergencyAscent' || mission20.state.ascentComplete) &&
+    playerModeSystem.insideShip &&
+    !playerModeSystem.transitionActive
+  );
+}
+
+let surfaceBrakeActive = false;
+let surfacePrecisionActive = false;
+/** Eased 0..1 blend into the precision camera pose. */
+let surfaceCameraPrecisionBlend = 0;
+let shipAccessFConsumed = false;
+let parkedShipRestoreChecked = false;
+let parkedShipSaveCorrected = false;
 let nearestInteractionTarget = '';
 let nearestInteractionDistance = Number.POSITIVE_INFINITY;
 let nearestInteractionAction: GameInputAction | 'none' = 'none';
@@ -1530,6 +2309,15 @@ let cameraFollowInitializedThisFrame = false;
 const cameraTargetCurrent = new THREE.Vector3();
 const cameraTargetPrevious = new THREE.Vector3();
 const cameraPositionBeforeUpdate = new THREE.Vector3();
+const cameraTargetScratch = new THREE.Vector3();
+const cameraLookTargetScratch = new THREE.Vector3();
+const cameraOffsetScratch = new THREE.Vector3();
+const cameraDesiredScratch = new THREE.Vector3();
+const cameraCockpitOffsetScratch = new THREE.Vector3();
+const cameraCockpitDesiredScratch = new THREE.Vector3();
+const cameraBasisScratch = new THREE.Quaternion();
+const cameraEulerScratch = new THREE.Euler(0, 0, 0, 'YXZ');
+const cameraExternalQuaternionScratch = new THREE.Quaternion();
 let cameraJumpDistance = 0;
 let shipCameraJumpDistance = 0;
 let lastCameraModeTransition = 'boot';
@@ -1595,6 +2383,7 @@ scene.add(
   orbitalMarker.group,
   landingZone.group,
   weaponSystem.group,
+  enemyCombatVisuals.group,
   planetaryWorld.group,
   surfaceResourceSystem.group,
   surfaceCharacter.group,
@@ -1645,10 +2434,226 @@ scene.add(
   coalitionJumpBeacon.group,
   atmosphericAscentEffect.group,
   arkFinalPreparationNetwork.group,
+  arkFinalDefenseNetwork.group,
+  coalitionSiegeCommand.group,
   auroraGreebleField.group,
   premiumVisuals.group,
   lightPool.group
 );
+
+function registerWorldCollisionVolumes(): void {
+  const arkSolid = (): boolean => mothership.group.visible && (gameModes.isCombat || arkDeparture.completed);
+  // Four hull quadrants leave a navigable +Z approach corridor; the rear
+  // bulkhead stops a ship from crossing the Ark end to end.
+  collisionWorld.registerBox({
+    id: 'ark-hull-port', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [-78, 0, -5], halfExtents: [36, 38, 108], owner: mothership.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: arkSolid
+  });
+  collisionWorld.registerBox({
+    id: 'ark-hull-starboard', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [88, 0, -5], halfExtents: [26, 38, 108], owner: mothership.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: arkSolid
+  });
+  collisionWorld.registerBox({
+    id: 'ark-hull-dorsal', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 57, -16], halfExtents: [27, 20, 96], owner: mothership.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: arkSolid
+  });
+  collisionWorld.registerBox({
+    id: 'ark-hull-ventral', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, -57, -16], halfExtents: [27, 20, 96], owner: mothership.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: arkSolid
+  });
+  collisionWorld.registerBox({
+    id: 'ark-rear-bulkhead', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 0, -86], halfExtents: [29, 38, 23], owner: mothership.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: arkSolid
+  });
+  for (const [index, x] of [-103, 103].entries()) {
+    collisionWorld.registerSphere({
+      id: `ark-engine-${index + 1}`, category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+      center: [x, -15, 68], radius: 24, owner: mothership.group,
+      dynamic: true, blocksCharacter: true, blocksShip: true, enabled: arkSolid
+    });
+  }
+
+  collisionWorld.registerSphere({
+    id: 'atlas-orbital-marker', category: COLLISION_CATEGORY.STATIC_WORLD,
+    center: [0, 0, 0], radius: 48, owner: orbitalMarker.group,
+    dynamic: true, blocksCharacter: false, blocksShip: true,
+    enabled: () => orbitalMarker.group.visible && !inSurfacePhase
+  });
+  for (let index = 0; index < defensiveBeacons.length; index += 1) {
+    const beacon = defensiveBeacons[index];
+    collisionWorld.registerSphere({
+      id: `defensive-beacon-${index + 1}`, category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+      center: [0, 0, 0], radius: 5.5, owner: beacon.group,
+      dynamic: true, blocksCharacter: false, blocksShip: true,
+      enabled: () => beacon.group.visible && !inSurfacePhase
+    });
+  }
+  for (let index = 0; index < cloakingProjectors.length; index += 1) {
+    const projector = cloakingProjectors[index];
+    collisionWorld.registerSphere({
+      id: `cloaking-projector-${index + 1}`, category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+      center: [0, 1.1, 0], radius: 1.35, owner: projector.group,
+      dynamic: true, blocksCharacter: true, blocksShip: true,
+      enabled: () => inSurfacePhase && projector.group.visible
+    });
+  }
+
+  // The player's hull blocks the pilot without covering the lift anchor at
+  // local +X. It is never queried as an obstacle by the ship controller.
+  collisionWorld.registerBox({
+    id: 'player-ship-hull', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 0.15, 0], halfExtents: [4.55, 2.8, 2.65], owner: ship,
+    dynamic: true, blocksCharacter: true, blocksShip: false,
+    enabled: () => inSurfacePhase && playerModeSystem.onFootActive
+  });
+
+  const nereidaVisible = (): boolean => inSurfacePhase
+    && planetaryWorld.group.visible
+    && planetaryWorld.colonyModule.group.visible
+    && planetaryWorld.colonyModule.deployed;
+  // U-shaped module shell: the front aperture and deployed ramp remain free.
+  collisionWorld.registerBox({
+    id: 'nereida-module-rear', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 3.2, -3.2], halfExtents: [5.25, 3.4, 2.1], owner: planetaryWorld.colonyModule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: nereidaVisible
+  });
+  collisionWorld.registerBox({
+    id: 'nereida-module-port', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [-4.2, 3.2, 0.7], halfExtents: [1.15, 3.4, 2.7], owner: planetaryWorld.colonyModule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: nereidaVisible
+  });
+  collisionWorld.registerBox({
+    id: 'nereida-module-starboard', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [4.2, 3.2, 0.7], halfExtents: [1.15, 3.4, 2.7], owner: planetaryWorld.colonyModule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: nereidaVisible
+  });
+  collisionWorld.registerBox({
+    id: 'nereida-front-port', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [-3.7, 3.2, 3.7], halfExtents: [1.45, 3.4, 1.15], owner: planetaryWorld.colonyModule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: nereidaVisible
+  });
+  collisionWorld.registerBox({
+    id: 'nereida-front-starboard', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [3.7, 3.2, 3.7], halfExtents: [1.45, 3.4, 1.15], owner: planetaryWorld.colonyModule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true, enabled: nereidaVisible
+  });
+  collisionWorld.registerBox({
+    id: 'nereida-airlock-door', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 2.55, 4.18], halfExtents: [1.25, 1.62, 0.34], owner: planetaryWorld.colonyModule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: false,
+    enabled: () => nereidaVisible() && !(colonyManager.state.baseNereidaOperational || colonyManager.state.operational)
+  });
+  collisionWorld.registerRamp({
+    id: 'nereida-entry-ramp', category: COLLISION_CATEGORY.STATIC_WORLD,
+    center: [0, 0, 5.25], halfWidth: 1.2, halfLength: 1.8,
+    bottomHeight: 0, topHeight: 1.05, owner: planetaryWorld.colonyModule.group,
+    dynamic: true,
+    enabled: () => nereidaVisible() && planetaryWorld.colonyModule.activationStage === 'online'
+  });
+
+  collisionWorld.registerSphere({
+    id: 'aurora-habitat', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 2.1, 0], radius: 2.45, owner: auroraHabitatModule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true,
+    enabled: () => inSurfacePhase && auroraHabitatModule.group.visible
+  });
+  collisionWorld.registerBox({
+    id: 'aurora-second-module', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 1.45, 0], halfExtents: [2.55, 1.55, 1.75], owner: auroraSecondModule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true,
+    enabled: () => inSurfacePhase && auroraSecondModule.group.visible
+  });
+  collisionWorld.registerBox({
+    id: 'aurora-water-filter', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 0.7, 0], halfExtents: [1.45, 0.85, 1.2], owner: auroraWaterFilter.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true,
+    enabled: () => inSurfacePhase && auroraWaterFilter.group.visible
+  });
+  collisionWorld.registerBox({
+    id: 'aurora-cultivation-bed', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 0.52, 0], halfExtents: [1.55, 0.65, 1.05], owner: auroraCultivationBed.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true,
+    enabled: () => inSurfacePhase && auroraCultivationBed.group.visible
+  });
+  collisionWorld.registerSphere({
+    id: 'aurora-crew-capsule', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 2.2, 0], radius: 2.55, owner: auroraCrewCapsule.group,
+    dynamic: true, blocksCharacter: true, blocksShip: true,
+    enabled: () => inSurfacePhase && auroraCrewCapsule.group.visible
+  });
+
+  for (const [index, formation] of [
+    [-168, -128, 15],
+    [208, 44, 12],
+    [-36, 224, 18]
+  ].entries()) {
+    const x = formation[0];
+    const z = formation[1];
+    const scale = formation[2];
+    collisionWorld.registerSphere({
+      id: `nereida-landmark-${index + 1}`, category: COLLISION_CATEGORY.STATIC_WORLD,
+      center: [x, surfaceGroundHeight(x, z) + scale * 0.7, z], radius: scale * 0.72,
+      dynamic: false, blocksCharacter: true, blocksShip: true,
+      enabled: () => inSurfacePhase
+    });
+  }
+  collisionWorld.registerBox({
+    id: 'nereida-supply-crate-1', category: COLLISION_CATEGORY.STATIC_WORLD,
+    center: [9.5, surfaceGroundHeight(9.5, 6.5) + 0.55, 6.5], halfExtents: [0.78, 0.58, 0.78],
+    dynamic: false, blocksCharacter: true, blocksShip: false, enabled: () => inSurfacePhase
+  });
+  collisionWorld.registerBox({
+    id: 'nereida-supply-crate-2', category: COLLISION_CATEGORY.STATIC_WORLD,
+    center: [-8, surfaceGroundHeight(-8, 9.5) + 0.55, 9.5], halfExtents: [0.78, 0.58, 0.78],
+    dynamic: false, blocksCharacter: true, blocksShip: false, enabled: () => inSurfacePhase
+  });
+
+  collisionWorld.registerBox({
+    id: 'coalition-jammer', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 0, 0], halfExtents: [17, 6.5, 9], owner: coalitionJammer.group,
+    dynamic: true, blocksCharacter: false, blocksShip: true,
+    enabled: () => coalitionJammer.group.visible && coalitionJammer.alive
+  });
+  collisionWorld.registerBox({
+    id: 'coalition-logistics-platform', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 0, 0], halfExtents: [80, 18, 60], owner: coalitionLogisticsPlatform.coreTarget.object,
+    dynamic: true, blocksCharacter: false, blocksShip: true,
+    enabled: () => coalitionLogisticsPlatform.group.visible && !mission23.state.logisticsPlatformDestroyed
+  });
+  collisionWorld.registerSphere({
+    id: 'coalition-jump-beacon-core', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 0, 0], radius: 43, owner: coalitionJumpBeacon.collisionAnchor,
+    dynamic: true, blocksCharacter: false, blocksShip: true,
+    enabled: () => coalitionJumpBeacon.group.visible && !mission23.state.jumpBeaconDestroyed
+  });
+  collisionWorld.registerBox({
+    id: 'coalition-siege-command', category: COLLISION_CATEGORY.DYNAMIC_SOLID,
+    center: [0, 0, 0], halfExtents: [54, 54, 16], owner: coalitionSiegeCommand.group,
+    dynamic: true, blocksCharacter: false, blocksShip: true,
+    enabled: () => coalitionSiegeCommand.group.visible && mission25.step !== 'threatCollapse' && !mission25.completed
+  });
+
+  collisionWorld.registerSphere({
+    id: 'ship-boarding-anchor', category: COLLISION_CATEGORY.INTERACTION,
+    center: [0, 0, 0], radius: 2.4, owner: shipAccessLift.boardingAnchor,
+    dynamic: true, blocksCharacter: false, blocksShip: false,
+    enabled: () => inSurfacePhase && shipAccessLift.group.visible
+  });
+  collisionWorld.registerSphere({
+    id: 'landing-zone-trigger', category: COLLISION_CATEGORY.TRIGGER,
+    center: [0, 0, 0], radius: firstLandingZone.assistRadius, owner: landingZone.group,
+    dynamic: true, blocksCharacter: false, blocksShip: false,
+    enabled: () => landingZone.active
+  });
+  collisionWorld.markReady();
+}
+
+registerWorldCollisionVolumes();
 
 // ---------------------------------------------------------------------------
 // Cinematic lighting rig
@@ -1658,16 +2663,16 @@ scene.add(
 // hulls) believable specular response instead of dead flat metal.
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
 scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.38;
+scene.environmentIntensity = 0.32;
 pmremGenerator.dispose();
 
 // Cool ambient fill: deep space lit by starlight, never flat black.
-const ambient = new THREE.HemisphereLight(0x4d6f92, 0x0a0a12, 0.55);
+const ambient = new THREE.HemisphereLight(0x4d6f92, 0x080a10, 0.36);
 scene.add(ambient);
 
 // Key light: the distant living star that owns the scene's contrast.
 // Near-white with a whisper of blue, like a real F-type star.
-const keyStar = new THREE.DirectionalLight(0xdfeaff, 3.2);
+const keyStar = new THREE.DirectionalLight(0xdfeaff, 2.55);
 keyStar.position.set(-260, 180, 120);
 scene.add(keyStar);
 // --- Character shadow rig -------------------------------------------------
@@ -1692,13 +2697,13 @@ let characterShadowAccumulator = CHARACTER_SHADOW_INTERVAL;
 let lastFrameDelta = 1 / 60;
 
 // Cold rim kicker so silhouettes separate from the void.
-const coldRim = new THREE.PointLight(0x8fb8e8, 1.9, 950, 1.8);
+const coldRim = new THREE.PointLight(0x8fb8e8, 1.25, 950, 1.8);
 coldRim.position.set(-420, 120, -620);
 scene.add(coldRim);
 
 // The dead red star that owns the deep sectors: deep ember orange,
 // the physically plausible color of a dying M-class star.
-const redDeadStar = new THREE.PointLight(0xff5a2e, 5.6, 1100, 1.7);
+const redDeadStar = new THREE.PointLight(0xff5a2e, 3.8, 1100, 1.7);
 redDeadStar.position.set(360, -90, -560);
 scene.add(redDeadStar);
 
@@ -1724,9 +2729,15 @@ scene.add(keyStarSprite);
 
 const playerShip = new PlayerShip(assetLoader);
 ship.add(playerShip.group);
+// Hatch frame seats on the hull's real underside rather than a constant, so a
+// rescale can never bury it inside the fuselage again.
+shipAccessLift.setHullBottomOffset(playerShip.hullBottomLocalY);
 scene.add(ship);
 
-const shieldEffect = new ShieldEffect(ship);
+// Shell sized from the hull's own bounds through the central hardpoint source,
+// so it stays a shield around the ship rather than a fixed sphere the hull has
+// outgrown.
+const shieldEffect = new ShieldEffect(ship, shieldRadius(playerShip.hullBounds));
 const engineTrail = new EngineTrail(ship);
 const entryEffect = new AtmosphericEntryEffect(ship);
 /**
@@ -1748,29 +2759,43 @@ let cloudBreakHoldUntil = -1;
 // Environment: layered starfield, nebula banks, planets, asteroid belt, dust
 // ---------------------------------------------------------------------------
 
-const starfield = new Starfield();
+const universeQuality = renderProfile === 'performance'
+  ? 'performance'
+  : renderProfile === 'ultra'
+    ? 'ultra'
+    : 'high';
+const starfield = new Starfield(universeQuality);
 scene.add(starfield.group);
 activeParticleBudget += starfield.starCount;
 
 const nebula = new NebulaBackdrop();
 scene.add(nebula.group);
 
-const planets = new PlanetGroup();
+const planets = new PlanetGroup(universeQuality);
 scene.add(planets.group);
 
 const asteroidField = new AsteroidField({
   center: new THREE.Vector3(430, -44, -690),
   radius: 210,
   thickness: 78,
-  count: 216,
+  count: universeQuality === 'performance' ? 144 : universeQuality === 'ultra' ? 280 : 216,
   minScale: 1.3,
-  maxScale: 5.8
+  maxScale: 5.8,
+  variantCount: universeQuality === 'performance' ? 6 : universeQuality === 'ultra' ? 10 : 8,
+  heroCount: universeQuality === 'performance' ? 3 : universeQuality === 'ultra' ? 8 : 6,
+  dustCount: universeQuality === 'performance' ? 150 : universeQuality === 'ultra' ? 420 : 260
 });
 scene.add(asteroidField.group);
-activeParticleBudget += 320;
+activeParticleBudget += asteroidField.particleCount;
 
-const cinematicDust = createCinematicDustField({ count: 1600, radius: 240, depth: 720, opacity: 0.18 });
-activeParticleBudget += 1600;
+const cinematicDustCount = universeQuality === 'performance' ? 620 : universeQuality === 'ultra' ? 1500 : 980;
+const cinematicDust = createCinematicDustField({
+  count: cinematicDustCount,
+  radius: 240,
+  depth: 720,
+  opacity: universeQuality === 'ultra' ? 0.055 : 0.038
+});
+activeParticleBudget += cinematicDustCount;
 scene.add(cinematicDust.points);
 
 // ---------------------------------------------------------------------------
@@ -1887,7 +2912,7 @@ function formatDistance(meters: number): string {
 }
 
 /** La franja de controles cambia con el modo de vuelo. */
-function setControlHints(mode: 'space' | 'surface' | 'foot'): void {
+function setControlHints(mode: 'space' | 'surface' | 'foot' | 'combat'): void {
   const chips: [string, string][] =
     mode === 'foot'
       ? [
@@ -1908,18 +2933,33 @@ function setControlHints(mode: 'space' | 'surface' | 'foot'): void {
           ['F', 'descender de la nave'],
           ['V', 'cambiar cámara']
         ]
-      : [
+      : mode === 'combat'
+        ? [
+            ['WASD', 'pilotar'],
+            ['Mouse', 'mirar'],
+            ['Shift', 'impulso'],
+            ['Space', 'láser'],
+            ['R', 'torpedo'],
+            ['T', 'objetivo'],
+            ['G', 'recargar'],
+            ['V', 'cambiar cámara']
+          ]
+        : [
           ['WASD', 'pilotar'],
           ['Mouse', 'mirar'],
           ['Shift', 'impulso'],
           ['E', 'escanear'],
           ['Space', 'láser'],
-          ['R', 'misil'],
+          ['R', 'torpedo'],
+          ['T', 'objetivo'],
+          ['G', 'recargar'],
           ['V', 'cambiar cámara']
         ];
   controlsStrip.innerHTML =
     chips.map(([key, label]) => `<span><kbd>${key}</kbd> ${label}</span>`).join('') +
-    `<span class="map-hint" id="map-hint-chip"><kbd>M</kbd> ${mode === 'space' ? 'mapa estelar' : 'mapa local'}</span>`;
+    (mode === 'combat'
+      ? ''
+      : `<span class="map-hint" id="map-hint-chip"><kbd>M</kbd> ${mode === 'space' ? 'mapa estelar' : 'mapa local'}</span>`);
   controlsStrip
     .querySelector('#map-hint-chip')
     ?.addEventListener('click', () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM' })));
@@ -1928,7 +2968,7 @@ function setControlHints(mode: 'space' | 'surface' | 'foot'): void {
 type OnFootInteraction = {
   id: string;
   label: string;
-  kind: 'ship' | 'landing' | 'habitat' | 'resource' | 'relay' | 'defense' | 'atlas' | 'aurora';
+  kind: 'ship' | 'landing' | 'habitat' | 'resource' | 'relay' | 'defense' | 'atlas' | 'aurora' | 'pleyadian' | 'auroraDefense';
   distance: number;
   resourceType?: SurfaceResourceType;
 };
@@ -2949,6 +3989,19 @@ function getSurfaceBoundaryAnchor(): THREE.Vector3 {
   return getSurfaceBoundaryAnchorFor(player.x, player.z);
 }
 
+function getSurfaceZoneAt(x: number, z: number): 'space' | 'nereida' | 'aurora' | 'surface-transit' {
+  if (!inSurfacePhase) return 'space';
+  const [auroraX, auroraZ] = auroraSettlementSiteDefinition.position;
+  if (
+    mission09.state.auroraSectorDiscovered &&
+    Math.hypot(x - auroraX, z - auroraZ) <= SURFACE_SHIP_TUNING.TELEMETRY_RADIUS
+  ) {
+    return 'aurora';
+  }
+  if (Math.hypot(x, z) <= SURFACE_SHIP_TUNING.TELEMETRY_RADIUS) return 'nereida';
+  return 'surface-transit';
+}
+
 /** True while the expedition is in transit and no boundary should apply. */
 function isSurfaceBoundarySuspended(): boolean {
   return mission09.started && !mission09.state.auroraSectorDiscovered;
@@ -2956,12 +4009,12 @@ function isSurfaceBoundarySuspended(): boolean {
 
 function getAuroraSettlementSite(): THREE.Vector3 {
   const [sx, sz] = auroraSettlementSiteDefinition.position;
-  return new THREE.Vector3(sx, auroraSurfaceHeight(sx, sz), sz);
+  return new THREE.Vector3(sx, surfaceGroundHeight(sx, sz), sz);
 }
 
 function getAuroraSamplePosition(index: number): THREE.Vector3 {
   const [px, pz] = auroraSamplePointDefinitions[index].position;
-  return new THREE.Vector3(px, auroraSurfaceHeight(px, pz), pz);
+  return new THREE.Vector3(px, surfaceGroundHeight(px, pz), pz);
 }
 
 function getActiveAuroraSampleIndex(): number {
@@ -2995,6 +4048,14 @@ function syncMission10Visuals(): void {
     mission10.state.auroraModuleDeployed,
     mission10.state.auroraModuleOperational,
     mission10.state.auroraStabilizationProgress
+  );
+  auroraSettlementInfrastructure.setLayout(site, surfaceGroundHeight);
+  auroraSettlementInfrastructure.setProgress(
+    mission10.state.auroraModuleDeployed,
+    mission11.state.auroraSecondModuleDeployed,
+    mission12.started,
+    mission12.state.auroraFirstCrewDisembarked,
+    mission13.started
   );
   syncAuroraCoreDressing();
 }
@@ -3265,7 +4326,7 @@ function getMission10ObjectiveLabel(): string {
 // ---------------------------------------------------------------------------
 
 function auroraStationPosition(position: readonly [number, number]): THREE.Vector3 {
-  return new THREE.Vector3(position[0], auroraSurfaceHeight(position[0], position[1]), position[1]);
+  return new THREE.Vector3(position[0], surfaceGroundHeight(position[0], position[1]), position[1]);
 }
 
 /** The station the current step is waiting at, for guidance/map/interaction. */
@@ -3318,7 +4379,7 @@ function syncMission11Visuals(): void {
   auroraEnergyLink.setEndpoints(
     auroraHabitatModule.interactionPosition,
     secondSite,
-    (x, z) => auroraSurfaceHeight(x, z)
+    (x, z) => surfaceGroundHeight(x, z)
   );
   auroraEnergyLink.restore(state.auroraSecondModuleDeployed, state.auroraEnergyLinkProgress);
 
@@ -3347,7 +4408,7 @@ function syncAuroraCoreDressing(): void {
     auroraStationPosition(auroraSecondModuleSiteDefinition.position),
     auroraStationPosition(auroraWaterFilterDefinition.position),
     auroraStationPosition(auroraCultivationBedDefinition.position),
-    (x, z) => auroraSurfaceHeight(x, z)
+    (x, z) => surfaceGroundHeight(x, z)
   );
 }
 
@@ -3729,7 +4790,7 @@ function syncMission12Visuals(): void {
   const capsuleVisible = state.auroraCrewCapsuleLanded || mission12.step === 'guideCapsuleDescent';
   auroraCrewCapsule.restore(capsuleVisible, state.auroraCrewCapsuleLanded);
 
-  auroraFirstCrew.setLayout(auroraCrewCapsule.interactionPosition, (x, z) => auroraSurfaceHeight(x, z));
+  auroraFirstCrew.setLayout(auroraCrewCapsule.interactionPosition, (x, z) => surfaceGroundHeight(x, z));
   auroraFirstCrew.restore(state.auroraFirstCrewDisembarked, state.auroraFirstCrewDisembarked);
 
   // The core reads as inhabited once people live in it: the habitat module
@@ -4261,7 +5322,7 @@ function syncMission13Visuals(): void {
   // Stations only exist once the storm mission is under way; before that the
   // clearing is exactly as M12 left it.
   auroraStormStations.setLayout(
-    (x, z) => auroraSurfaceHeight(x, z),
+    (x, z) => surfaceGroundHeight(x, z),
     auroraHabitatModule.interactionPosition
   );
   auroraStormStations.restore(
@@ -4273,7 +5334,7 @@ function syncMission13Visuals(): void {
     state.auroraShieldOnline
   );
   const habitat = auroraHabitatModule.interactionPosition;
-  auroraStormEffect.setOrigin(habitat.x, auroraSurfaceHeight(habitat.x, habitat.z), habitat.z);
+  auroraStormEffect.setOrigin(habitat.x, surfaceGroundHeight(habitat.x, habitat.z), habitat.z);
 }
 
 function getMission13Progress(): number {
@@ -4655,7 +5716,7 @@ function syncMission14Visuals(): void {
   // The trace layer only exists once M14 is under way; before that the
   // clearing is exactly as M13 left it.
   auroraTraceNodes.setLayout(
-    (x, z) => auroraSurfaceHeight(x, z),
+    (x, z) => surfaceGroundHeight(x, z),
     auroraStormStations.generatorPosition,
     auroraStormStations.antennaPosition
   );
@@ -5134,11 +6195,11 @@ function syncMission15Visuals(): void {
   // The supply cache and the sealed door are anchored to hardware M10-M13
   // already put in the clearing, so nothing new is placed for them.
   const [sx, sz] = auroraSupplyCacheDefinition.position;
-  auroraSupplyPosition.set(sx, auroraSurfaceHeight(sx, sz) + 1, sz);
+  auroraSupplyPosition.set(sx, surfaceGroundHeight(sx, sz) + 1, sz);
   const [dx, dz] = sealedModuleDoorDefinition.position;
-  auroraSealedDoorPosition.set(dx, auroraSurfaceHeight(dx, dz) + 1.2, dz);
+  auroraSealedDoorPosition.set(dx, surfaceGroundHeight(dx, dz) + 1.2, dz);
 
-  auroraParasiteNodes.setLayout((x, z) => auroraSurfaceHeight(x, z));
+  auroraParasiteNodes.setLayout((x, z) => surfaceGroundHeight(x, z));
   auroraParasiteNodes.restore(
     mission15.started && !mission15.completed,
     state.auroraParasiteStates,
@@ -5625,7 +6686,7 @@ function mission16StepIndex(step: string): number {
 
 /** The Pleyadian nodes only exist in the world from the sync step onward. */
 function mission16NodesShown(): boolean {
-  return mission16.started && mission16StepIndex(mission16.step) >= mission16StepIndex('synchronizeNodes');
+  return mission16.started && !mission17.started && mission16StepIndex(mission16.step) >= mission16StepIndex('synchronizeNodes');
 }
 
 function mission16NodeStates(): PleyadianNodeState[] {
@@ -5667,7 +6728,7 @@ function getMission16StationLabel(): string {
 }
 
 function syncMission16Visuals(): void {
-  pleyadianDefenseNodes.setLayout((x, z) => auroraSurfaceHeight(x, z));
+  pleyadianDefenseNodes.setLayout((x, z) => surfaceGroundHeight(x, z));
   const nodesShown = mission16NodesShown();
   pleyadianDefenseNodes.restore(nodesShown, mission16NodeStates(), mission16.activeNodeIndex);
   const habitat = auroraStationPosition(auroraSettlementSiteDefinition.position);
@@ -5684,7 +6745,7 @@ function mission16ProtocolIntensity(): number {
 function startMission16IfReady(): boolean {
   // Cheap guard first: building a snapshot every frame just to be told the
   // mission cannot start yet is a per-frame allocation in the hot loop.
-  if (!inSurfacePhase || mission16.started || !mission15.completed) return false;
+  if (!inSurfacePhase || mission16.started || mission17.started || !mission15.completed) return false;
   if (!mission16.start(mission15.snapshot())) return false;
   syncMission16Visuals();
   triggerDialogue('m16_start', 'mission16-start');
@@ -6021,7 +7082,7 @@ function mission17StepRange(): number {
 }
 
 function syncMission17Visuals(): void {
-  auroraDefenseNetwork.setLayout((x, z) => auroraSurfaceHeight(x, z));
+  auroraDefenseNetwork.setLayout((x, z) => surfaceGroundHeight(x, z));
   const shown = mission17NetworkShown();
   auroraDefenseNetwork.restore(
     shown,
@@ -6037,6 +7098,7 @@ function syncMission17Visuals(): void {
 function startMission17IfReady(): boolean {
   if (!inSurfacePhase || mission17.started || !mission16.completed) return false;
   if (!mission17.start(mission16.snapshot())) return false;
+  syncMission16Visuals();
   syncMission17Visuals();
   triggerDialogue('m17_start', 'mission17-start');
   triggerDialogue('m17_council', 'mission17-council', 3.2);
@@ -6050,7 +7112,29 @@ function performMission17Interaction(position: THREE.Vector3): boolean {
   if (!mission17.started || mission17.completed) return false;
   const station = getMission17StationPosition();
   const distance = position.distanceTo(station);
-  const inRange = distance <= mission17StepRange();
+  const inRange = lateMissionStepInRange('mission17', position, distance <= mission17StepRange());
+
+  if (mission17.step === 'deploySensors' && inRange) {
+    const sensorIndex = mission17.activeSensorIndex;
+    const before = mission17.sensorsDeployedCount;
+    const done = mission17.advanceSensor(mission17Tuning.sensorSeconds, true);
+    const deployed = mission17.sensorsDeployedCount > before;
+    if (deployed) {
+      syncMission17Visuals();
+      void sfxManager.play('confirm', 0.45);
+      transientWarning = `SENSOR ${mission17.sensorsDeployedCount}/3 DESPLEGADO`;
+      missionText.textContent = done
+        ? 'Perímetro cubierto. Calibra la detección con el protocolo Pleyadiano.'
+        : `${defenseSensorDefinitions[sensorIndex].shortName} desplegado (${mission17.sensorsDeployedCount}/3). Ve a ${getMission17StationLabel()}.`;
+      if (done) {
+        triggerDialogue('m17_sensors', 'mission17-sensors');
+        showPhaseBanner('PERIMETRO CUBIERTO', 'Tres rutas vigiladas');
+      }
+      saveProgress();
+    }
+    return deployed;
+  }
+
   missionText.textContent = inRange
     ? `${getMission17StationLabel()}: ${Math.round(mission17.phaseProgress)}%.`
     : `${getMission17StationLabel()} a ${Math.round(distance)} m.`;
@@ -6083,7 +7167,8 @@ function updateMission17Systems(delta: number, elapsed: number): void {
   const activePlayer = getActivePlayerPosition();
   const station = getMission17StationPosition();
   const distance = activePlayer.distanceTo(station);
-  const inRange = distance <= mission17StepRange();
+  const inRange = lateMissionStepInRange('mission17', activePlayer, distance <= mission17StepRange());
+  const interactionDelta = consumeLateMissionInteractionDelta('mission17', mission17.step, delta);
 
   // Search readout for whichever field part is being worked.
   const activeSensor = mission17.activeSensorIndex;
@@ -6118,7 +7203,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
 
   switch (mission17.step) {
     case 'emergencyCouncil':
-      if (mission17.advanceCouncil(delta, inRange)) {
+      if (mission17.advanceCouncil(interactionDelta, inRange)) {
         syncMission17Visuals();
         void sfxManager.play('confirm', 0.45);
         triggerDialogue('m17_deficit', 'mission17-deficit');
@@ -6131,7 +7216,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
       break;
     case 'installEnergyReserve': {
       const before = state.energyCircuitsBalanced;
-      const done = mission17.advanceEnergyReserve(delta, inRange);
+      const done = mission17.advanceEnergyReserve(interactionDelta, inRange);
       if (state.energyCircuitsBalanced > before) {
         void sfxManager.play('confirm', 0.4);
         const label = ENERGY_CIRCUITS[Math.min(before, ENERGY_CIRCUITS.length - 1)];
@@ -6150,7 +7235,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
     }
     case 'deploySensors': {
       const before = mission17.sensorsDeployedCount;
-      const done = mission17.advanceSensor(delta, inRange);
+      const done = mission17.advanceSensor(interactionDelta, inRange);
       if (mission17.sensorsDeployedCount > before) {
         syncMission17Visuals();
         void sfxManager.play('confirm', 0.45);
@@ -6168,7 +7253,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
       break;
     }
     case 'calibrateDetection':
-      if (mission17.advanceCalibration(delta, inRange)) {
+      if (mission17.advanceCalibration(interactionDelta, inRange)) {
         syncMission17Visuals();
         void sfxManager.play('scanner', 0.5);
         triggerDialogue('m17_calibration', 'mission17-calibration');
@@ -6181,7 +7266,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
       break;
     case 'installShieldEmitters': {
       const before = mission17.emittersInstalledCount;
-      const done = mission17.advanceEmitter(delta, inRange);
+      const done = mission17.advanceEmitter(interactionDelta, inRange);
       if (mission17.emittersInstalledCount > before) {
         syncMission17Visuals();
         void sfxManager.play('confirm', 0.45);
@@ -6200,7 +7285,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
     }
     case 'establishAlertNetwork': {
       const before = state.alertChannelsVerified;
-      const done = mission17.advanceAlertNetwork(delta, inRange);
+      const done = mission17.advanceAlertNetwork(interactionDelta, inRange);
       if (state.alertChannelsVerified > before) {
         void sfxManager.play('confirm', 0.4);
         const enclave = ALERT_ENCLAVES[Math.min(before, ALERT_ENCLAVES.length - 1)];
@@ -6219,7 +7304,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
     }
     case 'markEvacuationRoutes': {
       const before = state.evacMarkersSet;
-      const done = mission17.advanceEvacuation(delta, inRange);
+      const done = mission17.advanceEvacuation(interactionDelta, inRange);
       if (state.evacMarkersSet > before) {
         void sfxManager.play('confirm', 0.38);
         const marker = EVAC_MARKERS[Math.min(before, EVAC_MARKERS.length - 1)];
@@ -6237,7 +7322,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
       break;
     }
     case 'runDefenseDrill':
-      if (mission17.advanceDrill(delta, inRange)) {
+      if (mission17.advanceDrill(interactionDelta, inRange)) {
         syncMission17Visuals();
         void sfxManager.play('warning', 0.5);
         triggerDialogue('m17_drill', 'mission17-drill');
@@ -6250,7 +7335,7 @@ function updateMission17Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'stabilizeOverload': {
-      const done = mission17.advanceStabilize(delta, inRange);
+      const done = mission17.advanceStabilize(interactionDelta, inRange);
       if (!done) {
         transientWarning = `SOBRECARGA ${Math.round(mission17.overloadPercent)}%`;
         if (mission17.overloadCritical && clock.elapsedTime - mission17OverloadWarnedAt > 8) {
@@ -6298,7 +7383,7 @@ function getMission17ObjectiveGuidance(): Mission03ObjectiveGuidance {
   const activePosition = getActivePlayerPosition();
   const station = getMission17StationPosition();
   const distance = activePosition.distanceTo(station);
-  const inRange = distance <= mission17StepRange();
+  const inRange = lateMissionStepInRange('mission17', activePosition, distance <= mission17StepRange());
 
   if (mission17.step === 'detectIncomingSignatures') {
     return { nextAction: 'Multiples firmas descendiendo. Esto ya no es una simulación.', key: '' };
@@ -6306,7 +7391,7 @@ function getMission17ObjectiveGuidance(): Mission03ObjectiveGuidance {
   if (mission17.step === 'stabilizeOverload') {
     return {
       nextAction: `Purga la sobrecarga: ${Math.round(mission17.overloadPercent)}%.`,
-      key: inRange ? '' : 'WASD',
+      key: inRange ? 'E' : 'WASD',
       blockedReason: inRange ? '' : 'Fuera del núcleo: la sobrecarga sigue subiendo.'
     };
   }
@@ -6322,8 +7407,8 @@ function getMission17ObjectiveGuidance(): Mission03ObjectiveGuidance {
     nextAction: inRange
       ? `${getMission17StationLabel()}: ${Math.round(mission17.phaseProgress)}%.`
       : `${getMission17StationLabel()} a ${Math.round(distance)} m.`,
-    key: inRange ? '' : 'WASD',
-    blockedReason: !inRange && mission17.phaseProgress > 0 ? 'Fuera de la estación: el avance se está perdiendo.' : ''
+    key: inRange ? 'E' : 'WASD',
+    blockedReason: inRange ? '' : 'Fuera del alcance de interacción.'
   };
 }
 
@@ -6345,7 +7430,7 @@ function getMission18CriticalPosition(): THREE.Vector3 {
 
 function getMission18WreckagePosition(): THREE.Vector3 {
   const [x, z] = droneWreckageDefinition.position;
-  return mission18WreckageScratch.set(x, auroraSurfaceHeight(x, z) + droneWreckageDefinition.height, z);
+  return mission18WreckageScratch.set(x, surfaceGroundHeight(x, z) + droneWreckageDefinition.height, z);
 }
 
 /** The station the current M18 step is worked at. */
@@ -6457,14 +7542,39 @@ function updateMission18Turrets(delta: number): void {
   }
 }
 
+/**
+ * True while a mission after M18 is flying the shared Coalition scout fleet.
+ *
+ * M18, M19, M20, M22 and M23 all borrow the same `coalitionDrones` pool, and
+ * each one tidies it up when it is finished. Those cleanups run in mission
+ * order inside the same frame, so a finished mission must never clear a wave a
+ * later mission owns. M19's air corridor was missing from the M18 and M20
+ * cleanup guards, which cleared its wave on the very frame it launched.
+ */
+function airFleetInUseByLaterMission(): boolean {
+  return (
+    (mission19.started && !mission19.completed) ||
+    (mission20.started && !mission20.completed) ||
+    mission22.started ||
+    mission23.started
+  );
+}
+
 function updateMission18Systems(delta: number, elapsed: number): void {
   startMission18IfReady();
   if (!mission18.started) {
-    if (coalitionDrones.activeCount > 0 && !mission22.started && !mission23.started) coalitionDrones.clearAll();
+    if (
+      coalitionDrones.activeCount > 0 &&
+      !airFleetInUseByLaterMission() &&
+      !combatPacingProbeActive
+    ) coalitionDrones.clearAll();
     return;
   }
   if (mission18.completed) {
-    if (coalitionDrones.activeCount > 0 && !mission22.started && !mission23.started) coalitionDrones.clearAll();
+    // The scout fleet is shared. M18 tidies it up once it is done, but only if
+    // nobody else is flying it — M19's air corridor was missing from this list,
+    // so this ran first every frame and wiped the wave M19 had just launched.
+    if (coalitionDrones.activeCount > 0 && !airFleetInUseByLaterMission()) coalitionDrones.clearAll();
     mission18.setActiveDrones(0);
     auroraDefenseEffect.setShieldTest(0);
     auroraDefenseEffect.update(delta, elapsed);
@@ -6475,7 +7585,8 @@ function updateMission18Systems(delta: number, elapsed: number): void {
   const activePlayer = getActivePlayerPosition();
   const station = getMission18StationPosition();
   const distance = activePlayer.distanceTo(station);
-  const inRange = distance <= mission18StepRange();
+  const inRange = lateMissionStepInRange('mission18', activePlayer, distance <= mission18StepRange());
+  const interactionDelta = consumeLateMissionInteractionDelta('mission18', mission18.step, delta);
   mission18.advanceMeters(delta);
   mission18.setActiveDrones(coalitionDrones.activeCount);
 
@@ -6489,6 +7600,7 @@ function updateMission18Systems(delta: number, elapsed: number): void {
   }
 
   // --- Drones: deterministic flight + damage feedback into the mission.
+  coalitionDrones.clearNavigationObstacle();
   coalitionDrones.update(
     delta,
     elapsed,
@@ -6502,11 +7614,12 @@ function updateMission18Systems(delta: number, elapsed: number): void {
         saveProgress();
       }
     },
-    (dronePosition) => {
+    (_dronePosition, muzzlePosition) => {
       // A completed attack pass presses whatever the current step protects.
+      const impactPoint = emitEnemyCombatShot(muzzlePosition, getMission18StationPosition(), 'light', 7);
       if (mission18.step === 'defendShield') {
         mission18.damageShield(mission18Tuning.shieldDamagePerHit);
-        auroraDefenseEffect.registerShieldImpact(dronePosition);
+        auroraDefenseEffect.registerShieldImpact(impactPoint);
       } else if (mission18.step === 'defendCriticalSystem') {
         mission18.damageCriticalSystem(4);
       }
@@ -6527,7 +7640,7 @@ function updateMission18Systems(delta: number, elapsed: number): void {
   switch (mission18.step) {
     case 'realAlert':
       transientWarning = 'CONTACTOS REALES // NO ES UN SIMULACRO';
-      if (mission18.advanceAlert(delta, inRange)) {
+      if (mission18.advanceAlert(interactionDelta, inRange)) {
         syncMission18Visuals();
         void sfxManager.play('warning', 0.6);
         triggerDialogue('m18_shelter', 'mission18-shelter');
@@ -6539,7 +7652,7 @@ function updateMission18Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'identifyHostiles':
-      if (mission18.advanceIdentify(delta, inRange)) {
+      if (mission18.advanceIdentify(interactionDelta, inRange)) {
         syncMission18Visuals();
         void sfxManager.play('scanner', 0.5);
         triggerDialogue('m18_identified', 'mission18-identified');
@@ -6551,7 +7664,7 @@ function updateMission18Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'authorizeDefenseWeapons':
-      if (mission18.advanceAuthorize(delta, inRange)) {
+      if (mission18.advanceAuthorize(interactionDelta, inRange)) {
         syncMission18Visuals();
         void sfxManager.play('confirm', 0.55);
         triggerDialogue('m18_weapons_free', 'mission18-weapons-free');
@@ -6579,7 +7692,7 @@ function updateMission18Systems(delta: number, elapsed: number): void {
         showPhaseBanner('BRECHA // ANTENA ALCANZADA', 'Repara bajo fuego');
       });
       transientWarning = `ANTENA ${Math.round(mission18.criticalIntegrityPercent)}%`;
-      if (mission18.advanceRepair(delta, inRange)) {
+      if (mission18.advanceRepair(interactionDelta, inRange)) {
         syncMission18Visuals();
         void sfxManager.play('confirm', 0.5);
         triggerDialogue('m18_mast_restored', 'mission18-mast-restored');
@@ -6652,7 +7765,7 @@ function updateMission18Systems(delta: number, elapsed: number): void {
       break;
     }
     case 'recoverWreckage':
-      if (mission18.advanceWreckage(delta, inRange)) {
+      if (mission18.advanceWreckage(interactionDelta, inRange)) {
         syncMission18Visuals();
         void sfxManager.play('scanner', 0.5);
         triggerDialogue('m18_wreckage', 'mission18-wreckage');
@@ -6664,7 +7777,7 @@ function updateMission18Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'confirmNereidaTarget':
-      if (mission18.advanceNereidaConfirm(delta, inRange)) {
+      if (mission18.advanceNereidaConfirm(interactionDelta, inRange)) {
         syncMission18Visuals();
         coalitionDrones.clearAll();
         void sfxManager.play('confirm', 0.5);
@@ -6711,13 +7824,13 @@ function getMission18ObjectiveGuidance(): Mission03ObjectiveGuidance {
   const activePosition = getActivePlayerPosition();
   const station = getMission18StationPosition();
   const distance = activePosition.distanceTo(station);
-  const inRange = distance <= mission18StepRange();
+  const inRange = lateMissionStepInRange('mission18', activePosition, distance <= mission18StepRange());
   return {
     nextAction: inRange
       ? `${getMission18StationLabel()}: ${Math.round(mission18.phaseProgress)}%.`
       : `${getMission18StationLabel()} a ${Math.round(distance)} m.`,
-    key: inRange ? '' : 'WASD',
-    blockedReason: !inRange && mission18.phaseProgress > 0 ? 'Fuera de la estación: el avance se está perdiendo.' : ''
+    key: inRange ? 'E' : 'WASD',
+    blockedReason: inRange ? '' : 'Fuera del alcance de interacción.'
   };
 }
 
@@ -6845,7 +7958,8 @@ function performMission19Interaction(position: THREE.Vector3): boolean {
     const station = getMission19StationPosition();
     if (position.distanceTo(station) <= mission19StepRange()) {
       // Pressing at the gate confirms the currently highlighted priority.
-      if (mission19.choosePriority('atlasCore')) {
+      const selected = mission19.choosePriority('atlasCore');
+      if (selected) {
         syncMission19Visuals();
         void sfxManager.play('confirm', 0.5);
         triggerDialogue('m19_priority', 'mission19-priority');
@@ -6853,10 +7967,11 @@ function performMission19Interaction(position: THREE.Vector3): boolean {
         missionText.textContent = 'Rehabilita la batería pesada.';
         saveProgress();
       }
+      return selected;
     } else {
       missionText.textContent = `Compuerta Atlas a ${Math.round(position.distanceTo(station))} m.`;
     }
-    return true;
+    return false;
   }
   const station = getMission19StationPosition();
   const distance = position.distanceTo(station);
@@ -6905,7 +8020,8 @@ function updateMission19Systems(delta: number, elapsed: number): void {
   const activePlayer = getActivePlayerPosition();
   const station = getMission19StationPosition();
   const distance = activePlayer.distanceTo(station);
-  const inRange = distance <= mission19StepRange();
+  const inRange = lateMissionStepInRange('mission19', activePlayer, distance <= mission19StepRange());
+  const interactionDelta = consumeLateMissionInteractionDelta('mission19', mission19.step, delta);
   const airborne =
     playerModeSystem.insideShip &&
     !playerModeSystem.transitionActive &&
@@ -6917,31 +8033,48 @@ function updateMission19Systems(delta: number, elapsed: number): void {
     (mission19.step === 'repelGroundIncursion' && coalitionBreachDrones.activeCount > 0);
   mission19.advanceMeters(delta, underInterference);
   mission19.setActiveIntruders(coalitionBreachDrones.activeCount + coalitionDrones.activeCount);
+  // Keep the airborne swarm centred on the player. The origin was set once at
+  // launch, so flying anywhere left the entire dogfight orbiting a point behind
+  // the ship — the reason kills were being scored off-camera.
+  if (coalitionDrones.activeCount > 0 && playerModeSystem.insideShip) {
+    coalitionDrones.setOrigin(ship.position.x, ship.position.y, ship.position.z);
+  }
 
   // --- Waves -------------------------------------------------------------
   if (mission19.step === 'clearAirspace' && coalitionDrones.activeCount === 0 && !mission19AnnouncedBeats.has('wave:air')) {
-    mission19AnnouncedBeats.add('wave:air');
     const habitat = auroraStationPosition(auroraSettlementSiteDefinition.position);
     coalitionDrones.setOrigin(ship.position.x, habitat.y, ship.position.z);
     coalitionDrones.launchWave(mission19Tuning.airWaveCount);
-    showPhaseBanner('CONTACTOS EN RUTA', 'Despeja el corredor');
-    void sfxManager.play('warning', 0.5);
+    // Latch the beat only once the wave actually exists. The flag used to be
+    // set before launching, so a launch that produced no drones — the shared
+    // M18 fleet not yet ready on the frame the corridor opens — marked the
+    // wave as "already fought" forever: no enemies, no objective change, and
+    // the mission stuck at clearAirspace with nothing left to trigger it.
+    if (coalitionDrones.activeCount > 0) {
+      mission19AnnouncedBeats.add('wave:air');
+      showPhaseBanner('CONTACTOS EN RUTA', 'Despeja el corredor');
+      void sfxManager.play('warning', 0.5);
+    }
   }
   if (
     mission19.step === 'repelGroundIncursion' &&
     coalitionBreachDrones.activeCount === 0 &&
     !mission19AnnouncedBeats.has('wave:ground')
   ) {
-    mission19AnnouncedBeats.add('wave:ground');
     syncMission19Visuals();
     syncMission20Visuals();
     coalitionBreachDrones.launchWave(mission19Tuning.groundWaveCount, true);
-    showPhaseBanner('INCURSION TERRESTRE', 'Avanzan hacia Atlas');
-    void sfxManager.play('warning', 0.55);
+    // Same rule as the air wave: only record it once it really launched.
+    if (coalitionBreachDrones.activeCount > 0) {
+      mission19AnnouncedBeats.add('wave:ground');
+      showPhaseBanner('INCURSION TERRESTRE', 'Avanzan hacia Atlas');
+      void sfxManager.play('warning', 0.55);
+    }
   }
 
   // Air drones reuse M18's fleet wholesale.
   if (coalitionDrones.activeCount > 0) {
+    coalitionDrones.setNavigationObstacle(mothership.group.position, 155);
     coalitionDrones.update(
       delta,
       elapsed,
@@ -6978,7 +8111,7 @@ function updateMission19Systems(delta: number, elapsed: number): void {
   switch (mission19.step) {
     case 'emergencyTransmission':
       transientWarning = 'NEREIDA // SIN COMUNICACIONES';
-      if (mission19.advanceTransmission(delta, inRange)) {
+      if (mission19.advanceTransmission(interactionDelta, inRange)) {
         syncMission19Visuals();
         void sfxManager.play('warning', 0.55);
         triggerDialogue('m19_defenses_down', 'mission19-defenses-down');
@@ -7018,7 +8151,7 @@ function updateMission19Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'restoreDefenses': {
-      const restored = mission19.advanceDefenseRestore(delta, inRange);
+      const restored = mission19.advanceDefenseRestore(interactionDelta, inRange);
       if (restored) {
         syncMission19Visuals();
         void sfxManager.play('confirm', 0.45);
@@ -7050,7 +8183,7 @@ function updateMission19Systems(delta: number, elapsed: number): void {
         showPhaseBanner('BRECHA EN ATLAS', 'Cierra las compuertas');
       });
       transientWarning = `ATLAS ${Math.round(mission19.atlasStabilityPercent)}%`;
-      if (mission19.advanceGateSeal(delta, inRange)) {
+      if (mission19.advanceGateSeal(interactionDelta, inRange)) {
         syncMission19Visuals();
         void sfxManager.play('confirm', 0.5);
         triggerDialogue('m19_gate_sealed', 'mission19-gate-sealed');
@@ -7068,7 +8201,7 @@ function updateMission19Systems(delta: number, elapsed: number): void {
       mission19Beat('counter', () => {
         triggerDialogue('m19_counterattack', 'mission19-counterattack');
       });
-      if (mission19.advanceCounterattack(delta, inRange)) {
+      if (mission19.advanceCounterattack(interactionDelta, inRange)) {
         syncMission19Visuals();
         void sfxManager.play('confirm', 0.55);
         showPhaseBanner('BATERIA PESADA ACTIVA', 'Expulsando la unidad de extraccion');
@@ -7095,7 +8228,7 @@ function updateMission19Systems(delta: number, elapsed: number): void {
       break;
     }
     case 'recoverEnemyWreckage':
-      if (mission19.advanceWreckage(delta, inRange)) {
+      if (mission19.advanceWreckage(interactionDelta, inRange)) {
         syncMission19Visuals();
         void sfxManager.play('scanner', 0.5);
         triggerDialogue('m19_wreckage', 'mission19-wreckage');
@@ -7107,7 +8240,7 @@ function updateMission19Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'confirmArkTarget':
-      if (mission19.advanceArkConfirm(delta, inRange)) {
+      if (mission19.advanceArkConfirm(interactionDelta, inRange)) {
         syncMission19Visuals();
         coalitionBreachDrones.clearAll();
         coalitionDrones.clearAll();
@@ -7147,13 +8280,13 @@ function getMission19ObjectiveGuidance(): Mission03ObjectiveGuidance {
   const activePosition = getActivePlayerPosition();
   const station = getMission19StationPosition();
   const distance = activePosition.distanceTo(station);
-  const inRange = distance <= mission19StepRange();
+  const inRange = lateMissionStepInRange('mission19', activePosition, distance <= mission19StepRange());
   return {
     nextAction: inRange
       ? `${getMission19StationLabel()}: ${Math.round(mission19.phaseProgress)}%.`
       : `${getMission19StationLabel()} a ${Math.round(distance)} m.`,
     key: inRange ? 'E' : 'WASD',
-    blockedReason: !inRange && mission19.phaseProgress > 0 ? 'Fuera de la estación: el avance se está perdiendo.' : ''
+    blockedReason: inRange ? '' : 'Fuera del alcance de interacción.'
   };
 }
 
@@ -7168,12 +8301,37 @@ function mission20Beat(key: string, run: () => void): void {
 }
 
 /** Resolve an Ark station offset against the Ark's own hull. Never absolute. */
+/**
+ * Resolves an Ark hull offset to a world position.
+ *
+ * The offsets in `mission20Definitions` are hull-local, authored against the
+ * Ark's own axes. This used to add them straight to the Ark's world position,
+ * which is only correct for an unrotated hull — and the Ark sits at roughly
+ * (0.08, -0.34, 0.02) rad. That put every station 34-51 m off the feature it
+ * names, worst at the aft link, so flying to the visible hull point never
+ * entered the 60 m interaction range and the step stalled at 67%.
+ *
+ * Going through `matrixWorld` handles rotation, position and any parent scale
+ * in one step, which is the whole reason the offsets were declared local.
+ */
 function arkStation(offset: readonly [number, number, number], out: THREE.Vector3): THREE.Vector3 {
-  return out.copy(mothership.group.position).add(mission20OffsetScratch.set(offset[0], offset[1], offset[2]));
+  mothership.group.updateWorldMatrix(true, false);
+  return out
+    .copy(mission20OffsetScratch.set(offset[0], offset[1], offset[2]))
+    .applyMatrix4(mothership.group.matrixWorld);
 }
 
 /** The station the current M20 step is flown to. */
 function getMission20StationPosition(): THREE.Vector3 {
+  // These steps use the generic `sky` target, but the live objective is the
+  // drifting electronic-warfare unit rather than the Ark encounter centre.
+  if (
+    (mission20.step === 'locateJammer' || mission20.step === 'disableJammer') &&
+    coalitionJammer.isActive
+  ) {
+    return mission20Scratch.copy(coalitionJammer.position);
+  }
+  if (mission20.step === 'stabilizeArk') return mission20Scratch.copy(mothership.group.position);
   switch (mission20.stepDefinition.target) {
     case 'link': {
       const index = Math.max(0, mission20.activeLinkIndex);
@@ -7266,25 +8424,30 @@ function performMission20Interaction(position: THREE.Vector3): boolean {
 }
 
 function updateMission20Systems(delta: number, elapsed: number): void {
+  // Visual probes own the jammer only in diagnostics and must not let the
+  // dormant mission lifecycle clear or advance it.
+  if (combatJammerProbeActive) return;
   startMission20IfReady();
   if (!mission20.started) {
+    hud.classList.toggle('is-interference', mission05.state.interferenceActive);
     if (coalitionJammer.isActive && !mission23.started) coalitionJammer.clear();
     return;
   }
   if (mission20.completed) {
+    hud.classList.toggle('is-interference', mission05.state.interferenceActive);
     if (coalitionJammer.isActive && !mission23.started) coalitionJammer.clear();
-    if (coalitionDrones.activeCount > 0 && !mission22.started && !mission23.started) coalitionDrones.clearAll();
+    if (coalitionDrones.activeCount > 0 && !airFleetInUseByLaterMission()) coalitionDrones.clearAll();
     return;
   }
 
   const playerPosition = ship.position;
   const station = getMission20StationPosition();
   const distance = playerPosition.distanceTo(station);
-  const inRange = distance <= mission20Tuning.stationRange;
+  const inRange = lateMissionStepInRange('mission20', playerPosition, distance <= mission20Tuning.stationRange);
+  const interactionDelta = consumeLateMissionInteractionDelta('mission20', mission20.step, delta);
   const arkDistance = playerPosition.distanceTo(mothership.group.position);
   const aboveAtmosphere = !inSurfacePhase || ship.position.y > mission20Tuning.ascentAltitude;
 
-  mission20.setActiveHostiles(coalitionDrones.activeCount + (coalitionJammer.alive ? 1 : 0));
   if (mission20.step === 'locateJammer' || mission20.step === 'disableJammer') {
     mission20.setJammerDistance(
       coalitionJammer.isActive ? playerPosition.distanceTo(coalitionJammer.position) : Number.POSITIVE_INFINITY
@@ -7293,14 +8456,27 @@ function updateMission20Systems(delta: number, elapsed: number): void {
   mission20.advanceSiphon(delta);
 
   // --- Waves: one launch per combat step, never twice ----------------------
-  const waveCount = mission20.activeWaveCount;
+  // Waves used to launch once per step and never again: the guard was "has this
+  // step ever announced", so if the drones left the field without every one of
+  // them being reported destroyed -- despawned, cleared, or simply flown out --
+  // the step was stranded. `defendEngines` was the worst case, because its only
+  // other exit is repairing a damaged engine, and an undamaged engine makes
+  // `advanceEngineRepair` return false for ever. That is a dead end: no
+  // hostiles, engine at 100%, and E doing nothing.
+  //
+  // The wave now tracks the outstanding kills instead. An empty sky with kills
+  // still owed sends the shortfall, so a step can always be finished.
+  const waveRemaining = mission20.waveKillsRemaining;
   const waveKey = `wave:${mission20.step}`;
-  if (waveCount > 0 && coalitionDrones.activeCount === 0 && !mission20AnnouncedBeats.has(waveKey)) {
-    mission20AnnouncedBeats.add(waveKey);
+  if (waveRemaining > 0 && coalitionDrones.activeCount === 0) {
     syncMission20Visuals();
-    coalitionDrones.launchWave(Math.min(waveCount, mission20Tuning.maxSimultaneous));
-    showPhaseBanner(getMission20StationLabel(), `${waveCount} hostil(es)`);
-    void sfxManager.play('warning', 0.5);
+    coalitionDrones.launchWave(Math.min(waveRemaining, mission20Tuning.maxSimultaneous));
+    // The callout stays once per step; only the spawning repeats.
+    if (!mission20AnnouncedBeats.has(waveKey)) {
+      mission20AnnouncedBeats.add(waveKey);
+      showPhaseBanner(getMission20StationLabel(), `${mission20.activeWaveCount} hostil(es)`);
+      void sfxManager.play('warning', 0.5);
+    }
   }
   // The jammer deploys with its escorts and lives until they are gone.
   if (mission20.step === 'locateJammer' && !coalitionJammer.isActive && !mission20.state.jammerDisabled) {
@@ -7313,28 +8489,48 @@ function updateMission20Systems(delta: number, elapsed: number): void {
       delta,
       elapsed,
       () => {
-        if (mission20.reportHostileDestroyed()) {
+        const waveAdvanced = mission20.reportHostileDestroyed();
+        if (mission20.jammerExposed) {
+          mission20Beat('jammer-exposed', () => {
+            void sfxManager.play('warning', 0.55);
+            showPhaseBanner('INTERFERIDOR EXPUESTO', 'Destruye el nucleo de guerra electronica');
+          });
+        }
+        if (waveAdvanced) {
           syncMission20Visuals();
           coalitionDrones.clearAll();
           saveProgress();
         }
       },
-      (dronePosition) => {
+      (_dronePosition, muzzlePosition) => {
         // A completed pass presses whatever the current step protects.
+        const impactPoint = emitEnemyCombatShot(muzzlePosition, getMission20StationPosition(), 'medium', 18);
         if (mission20.step === 'defendEngines') {
           mission20.damageEngine(0, mission20Tuning.engineLossPerHit);
         } else if (mission20.step === 'protectCivilianModules') {
           mission20.damageModule(0, mission20Tuning.moduleLossPerHit);
         }
         mission20.damageArk(mission20Tuning.integrityLossPerHit);
-        auroraDefenseEffect.registerShieldImpact(dronePosition);
+        auroraDefenseEffect.registerShieldImpact(impactPoint);
       }
     );
   }
   coalitionJammer.update(delta, elapsed, () => {
-    // Killing the jammer itself also clears the suppression.
-    mission20.reportHostileDestroyed();
+    // The real jammer death, rather than a VFX timeout, clears suppression.
+    if (mission20.reportHostileDestroyed()) {
+      syncMission20Visuals();
+      coalitionDrones.clearAll();
+      void sfxManager.play('confirm', 0.55);
+      showPhaseBanner('INTERFERIDOR NEUTRALIZADO', 'Fijacion de blancos restablecida');
+      saveProgress();
+    }
   });
+  hud.classList.toggle(
+    'is-interference',
+    mission05.state.interferenceActive ||
+      (coalitionJammer.alive && (mission20.step === 'locateJammer' || mission20.step === 'disableJammer'))
+  );
+  mission20.setActiveHostiles(coalitionDrones.activeCount + (coalitionJammer.alive ? 1 : 0));
 
   switch (mission20.step) {
     case 'emergencyAscent':
@@ -7360,7 +8556,7 @@ function updateMission20Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'restoreArkLink': {
-      const linked = mission20.advanceLink(delta, inRange);
+      const linked = mission20.advanceLink(interactionDelta, inRange);
       if (linked >= 0) {
         syncMission20Visuals();
         void sfxManager.play('confirm', 0.45);
@@ -7393,7 +8589,12 @@ function updateMission20Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'disableJammer':
-      transientWarning = `ESCOLTAS ${mission20.readout.hostilesRemaining} // INTERFERIDOR ACTIVO`;
+      transientWarning = mission20.jammerExposed
+        ? `INTERFERIDOR EXPUESTO // CASCO ${Math.max(0, Math.round(coalitionJammer.target.health))}`
+        : `ESCOLTAS ${mission20.readout.hostilesRemaining} // INTERFERIDOR BLINDADO`;
+      missionText.textContent = mission20.jammerExposed
+        ? `Núcleo de guerra electrónica expuesto: casco ${Math.max(0, Math.round(coalitionJammer.target.health))}.`
+        : `Blindaje activo: ${mission20.readout.hostilesRemaining} escolta(s) restante(s).`;
       break;
     case 'defendEngines': {
       mission20Beat('engines', () => {
@@ -7402,7 +8603,8 @@ function updateMission20Systems(delta: number, elapsed: number): void {
       });
       const r = mission20.readout;
       transientWarning = `MOTOR ${Math.round(r.engineIntegrity)}% // HOSTILES ${r.hostilesActive}`;
-      if (mission20.advanceEngineRepair(delta, inRange)) {
+      missionText.textContent = `Propulsión ${Math.round(r.engineIntegrity)}% // ${r.hostilesRemaining} hostil(es) restante(s).`;
+      if (mission20.advanceEngineRepair(interactionDelta, inRange)) {
         void sfxManager.play('confirm', 0.45);
         transientWarning = 'MOTOR ESTABILIZADO';
       }
@@ -7415,6 +8617,7 @@ function updateMission20Systems(delta: number, elapsed: number): void {
         showPhaseBanner('MODULOS CIVILES EXPUESTOS', 'Intercepta antes del impacto');
       });
       transientWarning = `MODULOS ${Math.round(mission20.worstModuleIntegrity)}% // HOSTILES ${mission20.readout.hostilesActive}`;
+      missionText.textContent = `Módulos civiles ${Math.round(mission20.worstModuleIntegrity)}% // ${mission20.readout.hostilesRemaining} hostil(es).`;
       break;
     case 'stopDataBreach':
       mission20Beat('breach', () => {
@@ -7423,7 +8626,10 @@ function updateMission20Systems(delta: number, elapsed: number): void {
         showPhaseBanner('BRECHA EN EL NUCLEO', 'Corta el acoplamiento desde fuera');
       });
       transientWarning = `DATOS EXTRAIDOS ${Math.round(mission20.readout.dataSiphoned)}%`;
-      if (mission20.advanceBreachCut(delta, inRange)) {
+      missionText.textContent = mission20.waveKillsRemaining > 0
+        ? `Acoplamiento protegido por ${mission20.readout.hostilesRemaining} escolta(s).`
+        : `Acoplamiento expuesto // datos extraídos ${Math.round(mission20.readout.dataSiphoned)}%.`;
+      if (mission20.advanceBreachCut(interactionDelta, inRange)) {
         syncMission20Visuals();
         coalitionDrones.clearAll();
         void sfxManager.play('confirm', 0.5);
@@ -7436,7 +8642,8 @@ function updateMission20Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'activateArkCounterattack':
-      if (mission20.advanceCounterattack(delta, inRange)) {
+      missionText.textContent = `Batería principal // activación ${Math.round(mission20.phaseProgress)}%.`;
+      if (mission20.advanceCounterattack(interactionDelta, inRange)) {
         syncMission20Visuals();
         void sfxManager.play('confirm', 0.55);
         triggerDialogue('m20_counterattack', 'mission20-counterattack');
@@ -7448,13 +8655,15 @@ function updateMission20Systems(delta: number, elapsed: number): void {
       break;
     case 'finalOrbitalWave':
       transientWarning = `ULTIMA OLEADA // ${mission20.readout.hostilesActive} HOSTILES`;
+      missionText.textContent = `Última oleada // ${mission20.readout.hostilesRemaining} hostil(es) restante(s).`;
       if (mission20.arkIntegrityPercent <= 40 && clock.elapsedTime - mission20WarnedAt > 8) {
         mission20WarnedAt = clock.elapsedTime;
         void sfxManager.play('warning', 0.5);
       }
       break;
     case 'stabilizeArk':
-      if (mission20.advanceStabilize(delta, arkDistance <= mission20Tuning.rendezvousRange)) {
+      missionText.textContent = `Integridad del Arca ${Math.round(mission20.arkIntegrityPercent)}% // estabilización ${Math.round(mission20.phaseProgress)}%.`;
+      if (mission20.advanceStabilize(interactionDelta, arkDistance <= mission20Tuning.rendezvousRange)) {
         syncMission20Visuals();
         void sfxManager.play('confirm', 0.5);
         triggerDialogue('m20_stabilized', 'mission20-stabilized');
@@ -7472,6 +8681,7 @@ function updateMission20Systems(delta: number, elapsed: number): void {
         showPhaseBanner('FIRMA DE ESCALA MAYOR', 'Transmision cifrada en curso');
       });
       transientWarning = 'TRANSMISION CIFRADA // ORIGEN DESCONOCIDO';
+      missionText.textContent = `Firma de escala mayor // lectura ${Math.round(mission20.phaseProgress)}%.`;
       if (mission20.advanceCapitalSignature(delta)) {
         syncMission20Visuals();
         coalitionDrones.clearAll();
@@ -7495,21 +8705,49 @@ function getMission20ObjectiveGuidance(): Mission03ObjectiveGuidance {
       nextAction:
         mission20.step === 'locateJammer'
           ? `Señal del interferidor ${r.jammerSignal}%. Acércate.`
-          : `${r.hostilesActive} hostil(es). Fija blanco y dispara.`,
-      key: 'ESPACIO',
-      blockedReason: r.jammed ? 'Interferencia: fijación de blancos bloqueada.' : ''
+          : mission20.step === 'disableJammer' && mission20.jammerExposed
+            ? 'Interferidor expuesto. Destruye su núcleo.'
+            : `Elimina los hostiles: ${r.hostilesRemaining} restante(s).`,
+      key: mission20.step === 'locateJammer' ? 'WASD' : 'ESPACIO',
+      blockedReason: mission20.step === 'locateJammer' && r.jammed
+        ? 'Interferencia: sigue la señal para fijar la posición.'
+        : ''
     };
   }
   if (target === 'ship') {
     return { nextAction: `${getMission20StationLabel()} — ${Math.round(mission20.phaseProgress)}%.`, key: 'F' };
   }
+  if (mission20.step === 'defendEngines' && mission20.damagedEngineIndex < 0) {
+    return {
+      nextAction: `Elimina los hostiles: ${r.hostilesRemaining} restante(s).`,
+      key: 'ESPACIO'
+    };
+  }
+  if (mission20.step === 'protectCivilianModules') {
+    return {
+      nextAction: `Protege los módulos: ${r.hostilesRemaining} hostil(es) restante(s).`,
+      key: 'ESPACIO'
+    };
+  }
+  if (mission20.step === 'stopDataBreach' && mission20.waveKillsRemaining > 0) {
+    return {
+      nextAction: `Elimina las escoltas del acoplamiento: ${r.hostilesRemaining} restante(s).`,
+      key: 'ESPACIO'
+    };
+  }
+  if (mission20.step === 'detectCapitalSignature') {
+    return { nextAction: 'Observa la lectura de largo alcance.' };
+  }
   const distance = ship.position.distanceTo(getMission20StationPosition());
-  const inRange = distance <= mission20Tuning.stationRange;
+  const fallbackRange = mission20.step === 'stabilizeArk'
+    ? mission20Tuning.rendezvousRange
+    : mission20Tuning.stationRange;
+  const inRange = lateMissionStepInRange('mission20', ship.position, distance <= fallbackRange);
   return {
     nextAction: inRange
       ? `${getMission20StationLabel()}: ${Math.round(mission20.phaseProgress)}%.`
       : `${getMission20StationLabel()} a ${Math.round(distance)} m.`,
-    key: inRange ? '' : 'WASD',
+    key: inRange ? 'E' : 'WASD',
     blockedReason: r.jammed ? 'Interferencia activa.' : ''
   };
 }
@@ -7552,9 +8790,10 @@ function getMission21StationLabel(): string {
       return MISSION21_CHANNEL_LABELS[MISSION21_CHANNEL_ORDER[Math.min(index, MISSION21_CHANNEL_ORDER.length - 1)]];
     }
     case 'detectCapitalShip':
-    case 'analyzeSignature':
     case 'receiveUltimatum':
       return 'NAVE CAPITAL DE LA COALICION';
+    case 'analyzeSignature':
+      return 'RED DE SENSORES DEL ARCA';
     case 'chooseResponse':
       return 'RESPUESTA CONJUNTA';
     case 'restoreThreeChannels': {
@@ -7563,10 +8802,8 @@ function getMission21StationLabel(): string {
     }
     case 'witnessDemonstration':
       return 'BALIZA ORBITAL REMOTA';
-    case 'classifyAttackRoutes': {
-      const index = Math.max(0, mission21.activeRouteIndex);
-      return ATTACK_ROUTE_LABELS[ATTACK_ROUTE_ORDER[Math.min(index, ATTACK_ROUTE_ORDER.length - 1)]];
-    }
+    case 'classifyAttackRoutes':
+      return 'RED TACTICA DEL ARCA';
     case 'activatePleyadianNetwork':
       return 'RED PLEYADIANA PARCIAL';
     case 'detectSimultaneousAssault':
@@ -7581,9 +8818,10 @@ function getMission21StationLabel(): string {
 function syncMission21Visuals(): void {
   const ark = mothership.group.position;
   coalitionCapitalPresence.setOrigin(ark.x, ark.y, ark.z);
+  // Same hull-local offsets as M20, so they need the same transform: adding
+  // them to the Ark's position ignores its rotation and lands them off-hull.
   for (let i = 0; i < mission21LinkPositions.length; i += 1) {
-    const offset = arkLinkPoints[i].offset;
-    mission21LinkPositions[i].set(ark.x + offset[0], ark.y + offset[1], ark.z + offset[2]);
+    arkStation(arkLinkPoints[i].offset, mission21LinkPositions[i]);
   }
   for (let i = 0; i < mission21RoutePositions.length; i += 1) {
     const offset = mission21Tuning.attackRouteOffsets[i];
@@ -7677,9 +8915,11 @@ function updateMission21Systems(delta: number, elapsed: number): void {
   }
 
   coalitionCapitalPresence.update(delta, elapsed);
+  const dialogueState = dialogueManager.getState();
   const showResponse =
     mission21.step === 'chooseResponse' &&
     !dialogueManager.current &&
+    dialogueState.queueLength === 0 &&
     !gamePaused &&
     !starMap.active;
   if (mission21ResponsePanel.visible !== showResponse) mission21ResponsePanel.setVisible(showResponse);
@@ -7865,6 +9105,35 @@ function getMission21ObjectiveGuidance(): Mission03ObjectiveGuidance {
   };
 }
 
+function getMission21TargetState(): {
+  step: Mission21DebugState['mission21Step'];
+  targetId: string;
+  targetLabel: string;
+  targetPosition: number[];
+  shipPosition: number[];
+  distance: number;
+  range: number;
+  inRange: boolean;
+  phaseProgress: number;
+} {
+  const target = getMission21StationPosition();
+  const range = mission21.step === 'restoreThreeChannels'
+    ? mission21Tuning.linkRange
+    : mission21Tuning.arkRange;
+  const distance = ship.position.distanceTo(target);
+  return {
+    step: mission21.step,
+    targetId: getSurfaceMapTargetId(),
+    targetLabel: getMission21StationLabel(),
+    targetPosition: target.toArray().map((value) => Number(value.toFixed(2))),
+    shipPosition: ship.position.toArray().map((value) => Number(value.toFixed(2))),
+    distance: Number(distance.toFixed(2)),
+    range,
+    inRange: distance <= range,
+    phaseProgress: Number(mission21.phaseProgress.toFixed(1))
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Mission 22: Frentes rotos
 // ---------------------------------------------------------------------------
@@ -7908,6 +9177,39 @@ function getMission22StationLabel(): string {
   }
 }
 
+function getMission22TargetState(): {
+  step: Mission22Snapshot['mission22Step'];
+  targetId: string;
+  targetLabel: string;
+  targetPosition: [number, number, number];
+  shipPosition: [number, number, number];
+  distance: number;
+  range: number;
+  inRange: boolean;
+  waveRequired: number;
+  waveDestroyed: number;
+  waveRemaining: number;
+} {
+  const target = getMission22StationPosition();
+  const distance = ship.position.distanceTo(target);
+  const range = mission22.step === 'accessCommandTerminal' || mission22.step === 'manageCrossFrontCrisis'
+    ? mission22Tuning.terminalRange
+    : mission22Tuning.commandRange;
+  return {
+    step: mission22.step,
+    targetId: getSurfaceMapTargetId(),
+    targetLabel: getMission22StationLabel(),
+    targetPosition: target.toArray() as [number, number, number],
+    shipPosition: ship.position.toArray() as [number, number, number],
+    distance,
+    range,
+    inRange: distance <= range,
+    waveRequired: mission22.currentWaveRequired,
+    waveDestroyed: mission22.currentWaveDestroyed,
+    waveRemaining: mission22.currentWaveRemaining
+  };
+}
+
 function syncMission22Visuals(): void {
   const ark = mothership.group.position;
   threeFrontCommandNetwork.setOrigin(ark.x, ark.y, ark.z);
@@ -7924,6 +9226,7 @@ function syncMission22Visuals(): void {
     nodesDetected: mission22.state.coordinationNodesDetected,
     finalPressureActive: mission22.step === 'surviveFinalPressure'
   });
+  if (mission22.started) hud.classList.remove('is-interference');
 
   const aurora = auroraStationPosition(auroraSettlementSiteDefinition.position);
   const atlas = mission19StationPosition(nereidaAtlasGate, mission19DefenseScratch);
@@ -7949,6 +9252,8 @@ function commitMission22DebugMutation(clearEncounters = false): Mission22Snapsho
 
 function startMission22IfReady(): boolean {
   if (mission22.started || !mission21.completed) return false;
+  const dialogueState = dialogueManager.getState();
+  if (dialogueManager.current || dialogueState.queueLength > 0) return false;
   if (!mission22.start(mission21.snapshot())) return false;
   mission22AnnouncedBeats.clear();
   mission22DefenseCooldowns.fill(0);
@@ -7998,16 +9303,17 @@ function performMission22Interaction(position: THREE.Vector3): boolean {
   if (mission22.step === 'accessCommandTerminal') {
     if (distance > mission22Tuning.terminalRange) {
       missionText.textContent = `Terminal estratégica a ${Math.round(distance)} m.`;
-      return true;
+      return false;
     }
-    if (mission22.accessCommandTerminal()) {
+    const accessed = mission22.accessCommandTerminal();
+    if (accessed) {
       const tone = mission21.state.coalitionResponseTone === 'none' ? 'strategic' : mission21.state.coalitionResponseTone;
       triggerDialogue(`m22_command_${tone}`, `mission22-command-${tone}`);
       mission22CommandPanel.showInitial(mission22.activeInitialResource ?? 'energy');
       syncMission22Visuals();
       saveProgress();
     }
-    return true;
+    return accessed;
   }
   if (mission22.step === 'assignInitialResources' && mission22.activeInitialResource) {
     mission22CommandPanel.showInitial(mission22.activeInitialResource);
@@ -8041,7 +9347,10 @@ function updateMission22NereidaDefenseSource(index: number, source: THREE.Vector
   mission22DefenseCooldowns[index] = Math.max(0, mission22DefenseCooldowns[index] - delta);
   if (mission22DefenseCooldowns[index] > 0) return;
   mission22DefenseCooldowns[index] = 0.7 + index * 0.08;
-  coalitionBreachDrones.damageNearest(source, mission19Tuning.stationRange * 14, 18);
+  // M22 commands Nereida remotely from orbit. Its existing base and perimeter
+  // beacons are hundreds of metres from Atlas, so the local M19 interaction
+  // radius cannot be reused as their tactical coverage.
+  coalitionBreachDrones.damageNearest(source, Number.POSITIVE_INFINITY, 18);
 }
 
 function updateMission22NereidaDefense(delta: number): void {
@@ -8058,21 +9367,34 @@ function updateMission22OrbitalSupport(delta: number): void {
   coalitionDrones.damageNearest(mothership.group.position, 1450, 7);
 }
 
-function updateMission22AirWave(delta: number, elapsed: number, front: Mission22FrontId): void {
+function updateMission22AirWave(
+  delta: number,
+  elapsed: number,
+  front: Mission22FrontId,
+  defenseTimerDelta = delta
+): void {
+  if (front === 'orbital') coalitionDrones.setNavigationObstacle(mothership.group.position, 155);
+  else coalitionDrones.clearNavigationObstacle();
   coalitionDrones.update(
     delta,
     elapsed,
-    () => undefined,
-    (position) => {
+    () => { mission22.recordCurrentHostileDestroyed(); },
+    (_position, muzzlePosition) => {
       mission22.damageFront(front, front === 'orbital' ? 2.8 : 2.2);
-      if (front === 'aurora') auroraDefenseEffect.registerShieldImpact(position);
+      const target = front === 'aurora' ? auroraTraceNodes.terminalPosition : mothership.group.position;
+      const impactPoint = emitEnemyCombatShot(muzzlePosition, target, front === 'orbital' ? 'heavy' : 'medium', front === 'orbital' ? 36 : 9);
+      if (front === 'aurora') auroraDefenseEffect.registerShieldImpact(impactPoint);
     }
   );
-  if (front === 'aurora') updateMission22AuroraDefense(delta);
-  else updateMission22OrbitalSupport(delta);
+  if (front === 'aurora') updateMission22AuroraDefense(defenseTimerDelta);
+  else updateMission22OrbitalSupport(defenseTimerDelta);
 }
 
 function updateMission22Systems(delta: number, elapsed: number): void {
+  const sequenceDelta = mission22LastElapsed > 0
+    ? Math.min(1, Math.max(0, elapsed - mission22LastElapsed))
+    : delta;
+  mission22LastElapsed = elapsed;
   startMission22IfReady();
   if (!mission22.started) {
     mission22CommandPanel.setVisible(false);
@@ -8092,7 +9414,9 @@ function updateMission22Systems(delta: number, elapsed: number): void {
   threeFrontCommandNetwork.update(delta, elapsed);
   const pressureChanged = mission22.updateStrategicPressure(delta);
   if (pressureChanged) syncMission22Visuals();
-  const showChoice = !dialogueManager.current && !gamePaused && !starMap.active;
+  const dialogueState = dialogueManager.getState();
+  const communicationsClear = !dialogueManager.current && dialogueState.queueLength === 0;
+  const showChoice = communicationsClear && !gamePaused && !starMap.active;
   if (mission22.step === 'assignInitialResources' && mission22.activeInitialResource && showChoice) {
     if (!mission22CommandPanel.visible) mission22CommandPanel.showInitial(mission22.activeInitialResource);
   } else if (mission22.step === 'chooseSupportPriority' && showChoice) {
@@ -8110,7 +9434,7 @@ function updateMission22Systems(delta: number, elapsed: number): void {
   switch (mission22.step) {
     case 'simultaneousAlarm':
       transientWarning = `AURORA ${Math.round(mission22.state.auroraIntegrity)}% // NEREIDA ${Math.round(mission22.state.nereidaIntegrity)}% // ÓRBITA ${Math.round(mission22.state.orbitalIntegrity)}%`;
-      if (mission22.advanceAlarm(delta)) {
+      if (mission22.advanceAlarm(communicationsClear ? sequenceDelta : 0)) {
         showPhaseBanner('CENTRO DE MANDO', 'Accede a la terminal estratégica');
         saveProgress();
       }
@@ -8126,15 +9450,15 @@ function updateMission22Systems(delta: number, elapsed: number): void {
       if (!mission22AnnouncedBeats.has(waveKey)) {
         mission22AnnouncedBeats.add(waveKey);
         syncMission22Visuals();
-        coalitionDrones.launchWave(mission22Tuning.auroraWaveCount);
+        coalitionDrones.launchWave(mission22.currentWaveRemaining);
         showPhaseBanner('FRENTE AURORA', 'Defensas remotas activas');
       }
-      updateMission22AirWave(delta, elapsed, 'aurora');
+      updateMission22AirWave(delta, elapsed, 'aurora', sequenceDelta);
       auroraDefenseEffect.setShieldTest(0.45 + mission22.state.auroraIntegrity / 200);
       auroraDefenseEffect.setAlertLevel(0.72);
       auroraDefenseEffect.update(delta, elapsed);
-      transientWarning = `AURORA ${Math.round(mission22.state.auroraIntegrity)}% // HOSTILES ${coalitionDrones.activeCount}`;
-      if (coalitionDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey) && mission22.completeAuroraFront()) {
+      transientWarning = `AURORA ${Math.round(mission22.state.auroraIntegrity)}% // RESTAN ${mission22.currentWaveRemaining}`;
+      if (mission22.currentWaveRemaining === 0 && coalitionDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey) && mission22.completeAuroraFront()) {
         triggerDialogue('m22_aurora_held', 'mission22-aurora-held');
         coalitionDrones.clearAll();
         mission22DefenseCooldowns.fill(0);
@@ -8148,18 +9472,18 @@ function updateMission22Systems(delta: number, elapsed: number): void {
       if (!mission22AnnouncedBeats.has(waveKey)) {
         mission22AnnouncedBeats.add(waveKey);
         syncMission22Visuals();
-        coalitionBreachDrones.launchWave(mission22Tuning.nereidaWaveCount, true);
+        coalitionBreachDrones.launchWave(mission22.currentWaveRemaining, true);
         showPhaseBanner('FRENTE NEREIDA', 'Compuertas Atlas bajo presión');
       }
       coalitionBreachDrones.update(
         delta,
         elapsed,
-        () => undefined,
+        () => { mission22.recordCurrentHostileDestroyed(); },
         () => mission22.damageFront('nereida', 3.2)
       );
-      updateMission22NereidaDefense(delta);
-      transientWarning = `NEREIDA ${Math.round(mission22.state.nereidaIntegrity)}% // BRECHAS ${coalitionBreachDrones.activeCount}`;
-      if (coalitionBreachDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey) && mission22.completeNereidaFront()) {
+      updateMission22NereidaDefense(sequenceDelta);
+      transientWarning = `NEREIDA ${Math.round(mission22.state.nereidaIntegrity)}% // RESTAN ${mission22.currentWaveRemaining}`;
+      if (mission22.currentWaveRemaining === 0 && coalitionBreachDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey) && mission22.completeNereidaFront()) {
         triggerDialogue('m22_nereida_held', 'mission22-nereida-held');
         coalitionBreachDrones.clearAll();
         mission22DefenseCooldowns.fill(0);
@@ -8173,12 +9497,12 @@ function updateMission22Systems(delta: number, elapsed: number): void {
       if (!mission22AnnouncedBeats.has(waveKey)) {
         mission22AnnouncedBeats.add(waveKey);
         syncMission22Visuals();
-        coalitionDrones.launchWave(mission22Tuning.orbitalWaveCount);
+        coalitionDrones.launchWave(mission22.currentWaveRemaining);
         showPhaseBanner('FRENTE ORBITAL', 'Protege los tres relés');
       }
-      updateMission22AirWave(delta, elapsed, 'orbital');
-      transientWarning = `ÓRBITA ${Math.round(mission22.state.orbitalIntegrity)}% // RELÉS ${mission22.relaysProtected}/3 // HOSTILES ${coalitionDrones.activeCount}`;
-      if (coalitionDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey)) {
+      updateMission22AirWave(delta, elapsed, 'orbital', sequenceDelta);
+      transientWarning = `ÓRBITA ${Math.round(mission22.state.orbitalIntegrity)}% // RELÉS ${mission22.relaysProtected}/3 // RESTAN ${mission22.currentWaveRemaining}`;
+      if (mission22.currentWaveRemaining === 0 && coalitionDrones.activeCount === 0 && mission22AnnouncedBeats.has(waveKey)) {
         for (let index = 0; index < 3; index += 1) mission22.protectOrbitalRelay(index);
         triggerDialogue('m22_relays_held', 'mission22-relays-held');
         triggerDialogue('m22_cross_crisis', 'mission22-cross-crisis', 2.8);
@@ -8193,7 +9517,7 @@ function updateMission22Systems(delta: number, elapsed: number): void {
       transientWarning = nearTerminal
         ? `RECUPERACIÓN CRUZADA ${Math.round(mission22.phaseProgress)}%`
         : `REGRESA AL MANDO // ${Math.round(terminalDistance)} m`;
-      if (mission22.advanceCrossFrontCrisis(delta, nearTerminal)) {
+      if (mission22.advanceCrossFrontCrisis(sequenceDelta, nearTerminal)) {
         showPhaseBanner('TELEMETRÍA ESTABILIZADA', 'Elige el frente prioritario');
         syncMission22Visuals();
         saveProgress();
@@ -8206,7 +9530,7 @@ function updateMission22Systems(delta: number, elapsed: number): void {
       transientWarning = nearArk
         ? `SINCRONIZANDO TRES FRENTES ${Math.round(mission22.phaseProgress)}%`
         : `REGRESA AL ARCA // ${Math.round(arkDistance)} m`;
-      if (mission22.advanceJointNetwork(delta, nearArk)) {
+      if (mission22.advanceJointNetwork(sequenceDelta, nearArk)) {
         triggerDialogue('m22_joint_network', 'mission22-joint-network');
         showPhaseBanner('DEFENSA COORDINADA', 'Aurora // Nereida // Arca');
         void sfxManager.play('defenseNetwork', 0.58);
@@ -8215,7 +9539,7 @@ function updateMission22Systems(delta: number, elapsed: number): void {
       }
       break;
     case 'detectCoordinationNodes': {
-      const detected = mission22.advanceCoordinationNode(delta, nearArk);
+      const detected = mission22.advanceCoordinationNode(sequenceDelta, nearArk);
       transientWarning = nearArk
         ? `ANALIZANDO ${getMission22StationLabel()} // ${Math.round(mission22.phaseProgress)}%`
         : `SENSORES FUERA DE ENLACE // ${Math.round(arkDistance)} m`;
@@ -8236,12 +9560,13 @@ function updateMission22Systems(delta: number, elapsed: number): void {
       if (!mission22AnnouncedBeats.has(waveKey)) {
         mission22AnnouncedBeats.add(waveKey);
         syncMission22Visuals();
-        coalitionDrones.launchWave(mission22Tuning.finalWaveCount);
+        coalitionDrones.launchWave(mission22.currentWaveRemaining);
       }
-      updateMission22AirWave(delta, elapsed, 'orbital');
-      transientWarning = `PRESIÓN FINAL // HOSTILES ${coalitionDrones.activeCount} // RED ${Math.round(mission22.readout.jointLink)}%`;
-      if (mission22.advanceFinalPressure(delta, coalitionDrones.activeCount === 0)) {
+      updateMission22AirWave(delta, elapsed, 'orbital', sequenceDelta);
+      transientWarning = `PRESIÓN FINAL // RESTAN ${mission22.currentWaveRemaining} // RED ${Math.round(mission22.readout.jointLink)}%`;
+      if (mission22.advanceFinalPressure(sequenceDelta, mission22.currentWaveRemaining === 0 && coalitionDrones.activeCount === 0)) {
         coalitionDrones.clearAll();
+        mission22DefenseCooldowns.fill(0);
         triggerDialogue('m22_closing', 'mission22-closing');
         showPhaseBanner('MISIÓN 22 COMPLETA', 'M23 // La contraofensiva desbloqueada');
         missionText.textContent = 'Los tres frentes sobreviven. Los nodos enemigos siguen activos.';
@@ -8273,17 +9598,22 @@ function getMission22Progress(): number {
 
 function getMission22ObjectiveGuidance(): Mission03ObjectiveGuidance {
   if (!mission22.started || mission22.completed) return {};
+  if (mission22.step === 'simultaneousAlarm') {
+    return {
+      nextAction: `Recibiendo telemetría // A ${Math.round(mission22.state.auroraIntegrity)}% // N ${Math.round(mission22.state.nereidaIntegrity)}% // O ${Math.round(mission22.state.orbitalIntegrity)}%.`,
+      key: ''
+    };
+  }
   if (mission22.step === 'assignInitialResources' || mission22.step === 'chooseSupportPriority') {
     return { nextAction: mission22.stepDefinition.nextAction, key: '' };
   }
   if (mission22.step === 'defendAuroraFront' || mission22.step === 'defendNereidaFront') {
-    const hostiles = mission22.step === 'defendAuroraFront' ? coalitionDrones.activeCount : coalitionBreachDrones.activeCount;
-    return { nextAction: `${getMission22StationLabel()} // ${hostiles} hostil(es). Defensas remotas activas.`, key: '' };
+    return { nextAction: `${getMission22StationLabel()} // ${mission22.currentWaveRemaining} hostil(es) pendiente(s). Defensas remotas activas.`, key: '' };
   }
   if (mission22.step === 'defendOrbitalFront' || mission22.step === 'surviveFinalPressure') {
     return {
-      nextAction: `${coalitionDrones.activeCount} hostil(es). Protege la red orbital con la nave.`,
-      key: 'ESPACIO',
+      nextAction: `${mission22.currentWaveRemaining} hostil(es). Protege la red orbital con la nave.`,
+      key: playerModeSystem.insideShip ? 'ESPACIO' : 'F',
       blockedReason: playerModeSystem.insideShip ? '' : 'Debes volver a la nave con F.'
     };
   }
@@ -8418,6 +9748,8 @@ function commitMission23DebugMutation(clearEncounter = false): Mission23Snapshot
 
 function startMission23IfReady(): boolean {
   if (mission23.started || !mission22.completed) return false;
+  const dialogueState = dialogueManager.getState();
+  if (dialogueManager.current || dialogueState.queueLength > 0) return false;
   if (!mission23.start(mission22.snapshot())) return false;
   mission23AnnouncedBeats.clear();
   clearMission23Encounter();
@@ -8456,16 +9788,17 @@ function performMission23Interaction(position: THREE.Vector3): boolean {
   if (!mission23.started || mission23.completed) return false;
   if (playerModeSystem.onFootActive) {
     missionText.textContent = 'Vuelve a la nave con F para continuar la contraofensiva orbital.';
-    return true;
+    return false;
   }
   const distance = position.distanceTo(getMission23StationPosition());
   if (mission23.step === 'approachJammerNode') {
     if (distance > mission23Tuning.triangulationRange) {
       missionText.textContent = `Lectura ${mission23.readingsCount + 1}/3 a ${Math.round(distance)} m.`;
-      return true;
+      return false;
     }
     const reading = mission23.activeReadingIndex;
-    if (reading >= 0 && mission23.recordJammerReading(reading)) {
+    const recorded = reading >= 0 && mission23.recordJammerReading(reading);
+    if (recorded) {
       void sfxManager.play('scanner', 0.48);
       triggerDialogue('m23_jammer_reading', `mission23-jammer-reading-${reading + 1}`);
       scannerPulse.trigger(ship.position, true);
@@ -8476,7 +9809,7 @@ function performMission23Interaction(position: THREE.Vector3): boolean {
       saveProgress();
       updateStarMap();
     }
-    return true;
+    return recorded;
   }
   if (mission23.step === 'chooseTargetOrder') {
     mission23ChoicePanel.showOrder();
@@ -8487,7 +9820,8 @@ function performMission23Interaction(position: THREE.Vector3): boolean {
     return true;
   }
   if (mission23.step === 'recoverEnemyRoute') {
-    if (mission23.recoverEnemyRoute()) {
+    const recovered = mission23.recoverEnemyRoute();
+    if (recovered) {
       triggerDialogue('m23_route_recovered', 'mission23-route-recovered');
       showPhaseBanner('RUTA ENEMIGA RECUPERADA', 'Regresa al Arca');
       void sfxManager.play('confirm', 0.52);
@@ -8495,15 +9829,16 @@ function performMission23Interaction(position: THREE.Vector3): boolean {
       saveProgress();
       updateStarMap();
     }
-    return true;
+    return recovered;
   }
   if (mission23.step === 'confirmReturnToArk') {
     const arkDistance = position.distanceTo(mothership.group.position);
     if (arkDistance > mission23Tuning.commandRange) {
       missionText.textContent = `Arca Epsilon a ${Math.round(arkDistance)} m.`;
-      return true;
+      return false;
     }
-    if (mission23.confirmReturnToArk()) {
+    const confirmed = mission23.confirmReturnToArk();
+    if (confirmed) {
       clearMission23Encounter();
       syncMission23Visuals();
       triggerDialogue('m23_closing', 'mission23-closing');
@@ -8513,18 +9848,21 @@ function performMission23Interaction(position: THREE.Vector3): boolean {
       saveProgress();
       updateStarMap();
     }
-    return true;
+    return confirmed;
   }
   missionText.textContent = distance <= mission23Tuning.approachRange
     ? `${getMission23StationLabel()}: ${Math.round(mission23.phaseProgress)}%.`
     : `${getMission23StationLabel()} a ${Math.round(distance)} m.`;
-  return true;
+  return false;
 }
 
-function handleMission23DroneImpact(position: THREE.Vector3): void {
+function handleMission23DroneImpact(_position: THREE.Vector3, muzzlePosition: THREE.Vector3): void {
+  const impactPoint = emitEnemyCombatShot(muzzlePosition, ship.position, 'medium', 5.5);
   resources.energy = clampResource(resources.energy - 1.8);
-  shieldEffect.registerImpact();
-  auroraDefenseEffect.registerShieldImpact(position);
+  shieldEffect.registerImpact(impactPoint);
+  combatCameraImpulse.triggerReceived(impactPoint, ship.position, camera);
+  flightCombatHud.registerDamageDirection(impactPoint, ship.position, camera);
+  auroraDefenseEffect.registerShieldImpact(impactPoint);
 }
 
 function ignoreMission23DroneExit(): void {}
@@ -8541,6 +9879,13 @@ function handleMission23JammerDestroyed(): void {
 
 function updateMission23Drones(delta: number, elapsed: number): void {
   if (coalitionDrones.activeCount <= 0) return;
+  if (mission23StepUsesPlatform()) {
+    coalitionDrones.setNavigationObstacle(coalitionLogisticsPlatform.group.position, 94);
+  } else if (mission23.step === 'disableBeaconAnchors' || mission23.step === 'collapseJumpBeacon') {
+    coalitionDrones.setNavigationObstacle(coalitionJumpBeacon.group.position, 72);
+  } else {
+    coalitionDrones.clearNavigationObstacle();
+  }
   coalitionDrones.update(delta, elapsed, ignoreMission23DroneExit, handleMission23DroneImpact);
 }
 
@@ -8792,6 +10137,8 @@ function getMission23ObjectiveGuidance(): Mission03ObjectiveGuidance {
   if (playerModeSystem.onFootActive) {
     return setMission23Guidance('Vuelve a la nave con F.', 'F', 'La contraofensiva requiere vuelo orbital.');
   }
+  const target = getMission23StationPosition();
+  const distance = ship.position.distanceTo(target);
   if (mission23.step === 'chooseTargetOrder') return setMission23Guidance(mission23.stepDefinition.nextAction);
   if (mission23.step === 'destroyLogisticsCore' && mission23.state.mission23PlatformMethod === 'none') {
     return setMission23Guidance('Elige el metodo contra el nucleo logistico.');
@@ -8799,9 +10146,13 @@ function getMission23ObjectiveGuidance(): Mission03ObjectiveGuidance {
   if (mission23.step === 'counteroffensiveCouncil') {
     return setMission23Guidance(`Consejo conjunto // ${Math.round(mission23.phaseProgress)}%.`);
   }
-  if (mission23.step === 'recoverEnemyRoute') return setMission23Guidance('Recupera los datos de ruta con E.', 'E');
-  const target = getMission23StationPosition();
-  const distance = ship.position.distanceTo(target);
+  if (mission23.step === 'recoverEnemyRoute') {
+    const inRange = lateMissionStepInRange('mission23', ship.position, false);
+    return setMission23Guidance(
+      inRange ? 'Recupera los datos de ruta con E.' : `Acercate a los datos de ruta (${Math.round(distance)} m).`,
+      inRange ? 'E' : 'WASD'
+    );
+  }
   if (mission23.step === 'synchronizeJointForces') {
     const inRange = distance <= mission23Tuning.commandRange;
     return setMission23Guidance(
@@ -8811,7 +10162,7 @@ function getMission23ObjectiveGuidance(): Mission03ObjectiveGuidance {
     );
   }
   if (mission23.step === 'approachJammerNode') {
-    const inRange = distance <= mission23Tuning.triangulationRange;
+    const inRange = lateMissionStepInRange('mission23', ship.position, distance <= mission23Tuning.triangulationRange);
     return setMission23Guidance(
       inRange ? `Registra lectura ${mission23.readingsCount + 1}/3 con E.` : `Acercate a la lectura ${mission23.readingsCount + 1}/3 (${Math.round(distance)} m).`,
       inRange ? 'E' : 'WASD',
@@ -8855,7 +10206,7 @@ function getMission23ObjectiveGuidance(): Mission03ObjectiveGuidance {
     return setMission23Guidance(`Alejate de la distorsion: ${Math.round(escaped)}/${mission23Tuning.escapeSafeDistance} m.`, 'WASD');
   }
   if (mission23.step === 'confirmReturnToArk') {
-    const inRange = distance <= mission23Tuning.commandRange;
+    const inRange = lateMissionStepInRange('mission23', ship.position, distance <= mission23Tuning.commandRange);
     return setMission23Guidance(inRange ? 'Confirma la ruta con E.' : `Regresa al Arca (${Math.round(distance)} m).`, inRange ? 'E' : 'WASD');
   }
   return setMission23Guidance(mission23.stepDefinition.nextAction);
@@ -8863,6 +10214,13 @@ function getMission23ObjectiveGuidance(): Mission03ObjectiveGuidance {
 
 function mission24StepAtLeast(step: Mission24StepId): boolean {
   return MISSION24_STEP_ORDER.indexOf(mission24.step) >= MISSION24_STEP_ORDER.indexOf(step);
+}
+
+function getMission24ArkApproachPosition(): THREE.Vector3 {
+  mission24ApproachOutward.copy(ship.position).sub(mothership.group.position);
+  if (mission24ApproachOutward.lengthSq() < 0.001) mission24ApproachOutward.set(0, 0, 1);
+  else mission24ApproachOutward.normalize();
+  return mission24Scratch.copy(mothership.group.position).addScaledVector(mission24ApproachOutward, 30);
 }
 
 function getMission24StationPosition(): THREE.Vector3 {
@@ -8884,7 +10242,7 @@ function getMission24StationPosition(): THREE.Vector3 {
       return mission24Scratch.set(ship.position.x, ship.position.y, ship.position.z - 220);
     case 'approachArk':
     case 'arriveAtOrigin':
-      return mothership.group.position;
+      return getMission24ArkApproachPosition();
     case 'assessArkDamage':
       return arkFinalPreparationNetwork.systemPositions[Math.max(0, mission24.activeArkSystemIndex)];
     case 'restoreEnclaveLinks':
@@ -8981,9 +10339,21 @@ function startMission24IfReady(): boolean {
   return true;
 }
 
-function enterMission24OrbitalEnvironment(): void {
+/**
+ * Switches the world over to the orbital environment.
+ *
+ * Written for M24 and now shared with M20's ascent — the same vacuum, the same
+ * Ark. The guard keeps it idempotent, so whichever mission arrives first builds
+ * it and the other simply finds it already up.
+ */
+function enterOrbitalEnvironment(): void {
   if (mission24OrbitalEnvironmentActive) return;
   mission24OrbitalEnvironmentActive = true;
+  // M20 reaches this shared orbital world directly from M19, before M24 has
+  // had a chance to retire the surface campaign's decorative entities. Those
+  // hidden-but-active groups were the beige Aurora terrain crossing the battle
+  // frame and hundreds of needless orbital draw calls.
+  sleepMission24LegacyVisuals();
   inSurfacePhase = false;
   inBasin = false;
   planetaryWorld.deactivate();
@@ -9028,114 +10398,125 @@ function performMission24Interaction(position: THREE.Vector3): boolean {
   if (mission24.step === 'decodeReturnRoute') {
     if (distance > mission24Tuning.baseRange) {
       missionText.textContent = `Comunicaciones de Base Nereida a ${Math.round(distance)} m.`;
-      return true;
+      return false;
     }
-    if (mission24.decodeReturnRoute()) {
+    const decoded = mission24.decodeReturnRoute();
+    if (decoded) {
       scannerPulse.trigger(position, true);
       commitMission24Step('m24_route_decoded', 'RUTA AL ORIGEN DECODIFICADA', 'Coincidencia con el sector inicial del Arca');
       missionText.textContent = 'Aterriza junto a la base, desciende con F e inspecciona la nave con E.';
     }
-    return true;
+    return decoded;
   }
   if (mission24.step === 'prepareLaunch') {
     if (!playerModeSystem.onFootActive) {
       missionText.textContent = 'Estaciona la nave y desciende fisicamente con F para inspeccionarla.';
-      return true;
+      return false;
     }
     if (distance > mission24Tuning.shipPreparationRange) {
       missionText.textContent = `Nave a ${Math.round(distance)} m. Acercate para preparar el ascenso.`;
-      return true;
+      return false;
     }
-    if (mission24.prepareLaunch()) {
+    const prepared = mission24.prepareLaunch();
+    if (prepared) {
       scannerPulse.trigger(ship.position, true);
       commitMission24Step('m24_launch_prepared', 'NAVE PREPARADA', 'Motores // escudo termico // navegacion // comunicaciones');
       missionText.textContent = 'Todos los sistemas responden. Vuelve a la nave con F.';
     }
-    return true;
+    return prepared;
   }
   if (mission24.step === 'boardShip') {
     missionText.textContent = 'Vuelve a la nave con F para iniciar el lanzamiento.';
-    return true;
+    return false;
   }
   if (mission24.step === 'ignitionSequence') {
     if (!playerModeSystem.insideShip || playerModeSystem.transitionActive) {
       missionText.textContent = 'Completa el embarque antes de iniciar el encendido.';
-      return true;
+      return false;
     }
-    if (mission24.armIgnition()) {
+    const armed = mission24.armIgnition();
+    if (armed) {
       void sfxManager.play('shipEngine', 0.72);
       triggerDialogue('m24_countdown', 'mission24-countdown');
       missionText.textContent = 'Secuencia de lanzamiento iniciada: 5...';
     }
-    return true;
+    return armed;
   }
   if (mission24.step === 'arriveAtOrigin') {
     if (distance > mission24Tuning.arkInteractionRange) {
       missionText.textContent = `Arca Epsilon a ${Math.round(distance)} m.`;
-      return true;
+      return false;
     }
-    if (mission24.confirmArrival()) {
+    const arrived = mission24.confirmArrival();
+    if (arrived) {
       commitMission24Step('m24_ark_arrival', 'REGRESO AL ORIGEN', 'La Arca Epsilon conserva su posicion y estructura original');
       missionText.textContent = 'Escanea los cinco sistemas exteriores marcados con E.';
     }
-    return true;
+    return arrived;
   }
   if (distance > mission24Tuning.stationRange) {
     missionText.textContent = `${getMission24StationLabel()} a ${Math.round(distance)} m.`;
-    return true;
+    return false;
   }
   if (mission24.step === 'assessArkDamage') {
     const index = mission24.activeArkSystemIndex;
-    if (index >= 0 && mission24.assessArkSystem(index)) {
+    const assessed = index >= 0 && mission24.assessArkSystem(index);
+    if (assessed) {
       scannerPulse.trigger(target, true);
       if (mission24.state.arkDamageAssessed) commitMission24Step('m24_ark_assessed', 'EVALUACION COMPLETA', 'Cinco sistemas diagnosticados');
       else saveProgress();
     }
-    return true;
+    return assessed;
   }
   if (mission24.step === 'restoreEnclaveLinks') {
     const index = mission24.activeEnclaveLinkIndex;
-    if (index >= 0 && mission24.restoreEnclaveLink(index)) {
+    const restored = index >= 0 && mission24.restoreEnclaveLink(index);
+    if (restored) {
       scannerPulse.trigger(target, true);
       if (mission24.state.allEnclaveLinksRestored) commitMission24Step('m24_links_restored', 'ENLACES RESTAURADOS', 'Aurora // Nereida // Arca // red Pleyadiana');
       else saveProgress();
     }
-    return true;
+    return restored;
   }
   if (mission24.step === 'prepareArkSystems') {
     const index = mission24.activeArkPreparationIndex;
-    if (index >= 0 && mission24.prepareArkSystem(index)) {
+    const prepared = index >= 0 && mission24.prepareArkSystem(index);
+    if (prepared) {
       scannerPulse.trigger(target, true);
       if (mission24.state.allArkSystemsPrepared) commitMission24Step('m24_ark_prepared', 'ARCA PREPARADA', 'Escudo // motores // bateria principal');
       else saveProgress();
     }
-    return true;
+    return prepared;
   }
   if (mission24.step === 'integratePleyadianNetwork') {
     const index = mission24.activePleyadianNodeIndex;
-    if (index >= 0 && mission24.integratePleyadianNode(index)) {
+    const integrated = index >= 0 && mission24.integratePleyadianNode(index);
+    if (integrated) {
       scannerPulse.trigger(target, true);
       if (mission24.state.pleyadianNetworkIntegrated) commitMission24Step('m24_pleyadian_integrated', 'RED PLEYADIANA INTEGRADA', 'Pulso final bloqueado hasta M25');
       else saveProgress();
     }
-    return true;
+    return integrated;
   }
-  if (mission24.step === 'prepareCivilianShelters' && mission24.prepareCivilianShelters()) {
-    commitMission24Step('m24_shelters_ready', 'REFUGIOS PREPARADOS', 'Sectores sellados // soporte vital // evacuacion');
-    return true;
+  if (mission24.step === 'prepareCivilianShelters') {
+    const prepared = mission24.prepareCivilianShelters();
+    if (prepared) commitMission24Step('m24_shelters_ready', 'REFUGIOS PREPARADOS', 'Sectores sellados // soporte vital // evacuacion');
+    return prepared;
   }
-  if (mission24.step === 'assembleAlliedForces' && mission24.assembleAlliedForces()) {
-    commitMission24Step('m24_allies_assembled', 'FUERZAS ALIADAS REUNIDAS', 'Aurora // Nereida // Arca // Pleyadianos');
-    return true;
+  if (mission24.step === 'assembleAlliedForces') {
+    const assembled = mission24.assembleAlliedForces();
+    if (assembled) commitMission24Step('m24_allies_assembled', 'FUERZAS ALIADAS REUNIDAS', 'Aurora // Nereida // Arca // Pleyadianos');
+    return assembled;
   }
   if (mission24.step === 'revisitStartingSector') {
     const index = mission24.activeStartingSectorIndex;
-    if (index >= 0 && mission24.visitStartingSectorPoint(index)) {
+    const visited = index >= 0 && mission24.visitStartingSectorPoint(index);
+    if (visited) {
       scannerPulse.trigger(target, true);
       if (mission24.state.startingSectorRevisited) commitMission24Step('m24_sector_revisited', 'RECORRIDO COMPLETADO', 'El lugar donde comenzo la expedicion');
       else saveProgress();
     }
-    return true;
+    return visited;
   }
   if (mission24.step === 'runDefenseRehearsal') {
     mission24RehearsalEngaged = true;
@@ -9143,16 +10524,20 @@ function performMission24Interaction(position: THREE.Vector3): boolean {
     missionText.textContent = `Ensayo defensivo ${Math.round(mission24.rehearsalProgress)}%. Mantiene posicion.`;
     return true;
   }
-  if (mission24.step === 'detectFinalFleet' && mission24.detectFinalFleet()) {
-    commitMission24Step('m24_final_fleet', 'FLOTA ENEMIGA DETECTADA', 'Firma distante // no atacable // sin combate');
-    return true;
+  if (mission24.step === 'detectFinalFleet') {
+    const detected = mission24.detectFinalFleet();
+    if (detected) {
+      commitMission24Step('m24_final_fleet', 'FLOTA ENEMIGA DETECTADA', 'Firma distante // no atacable // sin combate');
+    }
+    return detected;
   }
   if (mission24.step === 'enterFinalFormation') {
     if (distance > mission24Tuning.formationRange) {
       missionText.textContent = `Posicion de formacion a ${Math.round(distance)} m.`;
-      return true;
+      return false;
     }
-    if (mission24.enterFinalFormation()) {
+    const formed = mission24.enterFinalFormation();
+    if (formed) {
       syncMission24Visuals();
       triggerDialogue('m24_final_line', 'mission24-final-line');
       showPhaseBanner('MISION 24 COMPLETADA', 'M25 desbloqueada // no iniciada');
@@ -9160,9 +10545,9 @@ function performMission24Interaction(position: THREE.Vector3): boolean {
       saveProgress();
       updateStarMap();
     }
-    return true;
+    return formed;
   }
-  return true;
+  return false;
 }
 
 function updateMission24Systems(delta: number, elapsed: number): void {
@@ -9172,6 +10557,8 @@ function updateMission24Systems(delta: number, elapsed: number): void {
   mission24LastSequenceElapsed = elapsed;
   startMission24IfReady();
   if (!mission24.started) return;
+  if (!mission24.completed) mission25ResourcesReleased = false;
+  if (mission24.completed && mission25ResourcesReleased) return;
   syncMission24Visuals();
   arkFinalPreparationNetwork.update(delta, elapsed);
   mission24AscentHud.setVisible(mission24.ascentActive || mission24.step === 'stabilizeOrbit');
@@ -9225,7 +10612,7 @@ function updateMission24Systems(delta: number, elapsed: number): void {
   } else if (mission24.step === 'upperAtmosphereAscent' && clearance >= mission24Tuning.upperAtmosphereTop && mission24.completeAscentPhase('upperAtmosphereAscent')) {
     commitMission24Step('', 'LIMITE ATMOSFERICO', 'Mantiene el vector hasta el vacio');
   } else if (mission24.step === 'vacuumTransition' && clearance >= mission24Tuning.vacuumAltitude && mission24.completeAscentPhase('vacuumTransition')) {
-    enterMission24OrbitalEnvironment();
+    enterOrbitalEnvironment();
     void sfxManager.play('confirm', 0.58);
     triggerDialogue('m24_vacuum', 'mission24-vacuum');
     showPhaseBanner('VACIO CONFIRMADO', 'Usa W para completar la insercion orbital');
@@ -9289,14 +10676,16 @@ function setMission24Guidance(nextAction: string, key = '', blockedReason = ''):
 
 function getMission24ObjectiveGuidance(): Mission03ObjectiveGuidance {
   if (!mission24.started || mission24.completed) return setMission24Guidance('');
-  const distance = getActivePlayerPosition().distanceTo(getMission24StationPosition());
-  if (mission24.step === 'decodeReturnRoute') return setMission24Guidance(distance <= mission24Tuning.baseRange ? 'Decodifica la ruta con E.' : `Regresa a Base Nereida (${Math.round(distance)} m).`, distance <= mission24Tuning.baseRange ? 'E' : 'WASD');
+  const activePosition = getActivePlayerPosition();
+  const distance = activePosition.distanceTo(getMission24StationPosition());
+  const interactionReady = lateMissionStepInRange('mission24', activePosition, false);
+  if (mission24.step === 'decodeReturnRoute') return setMission24Guidance(interactionReady ? 'Decodifica la ruta con E.' : `Regresa a Base Nereida (${Math.round(distance)} m).`, interactionReady ? 'E' : 'WASD');
   if (mission24.step === 'prepareLaunch') {
     if (!playerModeSystem.onFootActive) return setMission24Guidance('Estaciona y desciende con F.', 'F', velocity.length() >= 2.2 ? 'Deten la nave antes de abrir el elevador.' : 'Inspeccion exterior requerida.');
-    return setMission24Guidance(distance <= mission24Tuning.shipPreparationRange ? 'Prepara la nave con E.' : `Acercate a la nave (${Math.round(distance)} m).`, distance <= mission24Tuning.shipPreparationRange ? 'E' : 'WASD');
+    return setMission24Guidance(interactionReady ? 'Prepara la nave con E.' : `Acercate a la nave (${Math.round(distance)} m).`, interactionReady ? 'E' : 'WASD');
   }
   if (mission24.step === 'boardShip') return setMission24Guidance('Vuelve a la nave con F.', 'F');
-  if (mission24.step === 'ignitionSequence') return setMission24Guidance(mission24.ignitionProgress > 0 ? `Cuenta regresiva ${Math.round(mission24.ignitionProgress)}%.` : 'Inicia la secuencia con E.', mission24.ignitionProgress > 0 ? '' : 'E');
+  if (mission24.step === 'ignitionSequence') return setMission24Guidance(mission24.ignitionProgress > 0 ? `Cuenta regresiva ${Math.round(mission24.ignitionProgress)}%.` : interactionReady ? 'Inicia la secuencia con E.' : 'Completa el embarque.', mission24.ignitionProgress > 0 ? '' : interactionReady ? 'E' : 'F');
   if (mission24.atmosphericAscentActive) return setMission24Guidance(`${mission24.stepDefinition.nextAction} Altitud ${atmosphericAscent.metrics.altitude} m.`, mission24.step === 'midAtmosphereAscent' || mission24.step === 'upperAtmosphereAscent' ? 'SPACE + W' : 'SPACE');
   if (mission24.step === 'orbitalInsertion') return setMission24Guidance(
     `Gana velocidad horizontal: ${atmosphericAscent.metrics.horizontalSpeed} m/s. Suelta Space para estabilizar el vector vertical.`,
@@ -9305,11 +10694,11 @@ function getMission24ObjectiveGuidance(): Mission03ObjectiveGuidance {
   if (mission24.step === 'stabilizeOrbit') return setMission24Guidance(`Estabilidad orbital ${atmosphericAscent.metrics.orbitalStability}%.`, 'WASD');
   if (mission24.step === 'approachArk') return setMission24Guidance(`Regresa al Arca (${Math.round(distance)} m).`, 'WASD');
   if (mission24.step === 'runDefenseRehearsal' && mission24RehearsalEngaged) return setMission24Guidance(`Mantiene posicion: ensayo ${Math.round(mission24.rehearsalProgress)}%.`, '');
-  return setMission24Guidance(distance <= mission24Tuning.stationRange ? mission24.stepDefinition.nextAction : `${mission24.stepDefinition.nextAction} ${Math.round(distance)} m.`, distance <= mission24Tuning.stationRange ? 'E' : 'WASD');
+  return setMission24Guidance(interactionReady ? mission24.stepDefinition.nextAction : `${mission24.stepDefinition.nextAction} ${Math.round(distance)} m.`, interactionReady ? 'E' : 'WASD');
 }
 
 function commitMission24DebugMutation(): Mission24Snapshot {
-  if (mission24StepAtLeast('orbitalInsertion')) enterMission24OrbitalEnvironment();
+  if (mission24StepAtLeast('orbitalInsertion')) enterOrbitalEnvironment();
   if (mission24StepAtLeast('approachArk')) mothership.group.visible = true;
   syncMission24Visuals();
   saveProgress();
@@ -9329,6 +10718,467 @@ function restoreMission24DebugCheckpoint(step: Mission24StepId): Mission24Snapsh
   }
   requestCameraFollowSync('mission24-debug-checkpoint');
   return commitMission24DebugMutation();
+}
+
+function mission25StepAtLeast(step: Mission25StateId): boolean {
+  return MISSION25_STATE_ORDER.indexOf(mission25.step) >= MISSION25_STATE_ORDER.indexOf(step);
+}
+
+function releaseMission24ResourcesForM25(): void {
+  if (mission25ResourcesReleased) return;
+  mission24AscentHud.setVisible(false);
+  arkFinalPreparationNetwork.dispose();
+  atmosphericAscentEffect.hideAtmosphere();
+  mission24RehearsalEngaged = false;
+  mission25ResourcesReleased = true;
+}
+
+function getMission25TargetPosition(): THREE.Vector3 {
+  if (mission25.waveActive) {
+    for (let index = 0; index < coalitionDrones.targets.length; index += 1) {
+      const target = coalitionDrones.targets[index];
+      if (target.health > 0) return target.object.position;
+    }
+    if (mission25.step === 'arkSystemsUnderAttack') return arkFinalDefenseNetwork.systemPositions[mission25.activeSystemIndex];
+    return mothership.group.position;
+  }
+  if (mission25.step === 'threatDetected') {
+    return mission25Scratch.set(0, 210, -1180).applyQuaternion(mothership.group.quaternion).add(mothership.group.position);
+  }
+  if (
+    mission25.step === 'commandTargetLocated' || mission25.step === 'commandTargetProtected' ||
+    mission25.step === 'commandTargetExposed' || mission25.step === 'finalAssault' || mission25.step === 'threatCollapse'
+  ) {
+    return coalitionSiegeCommand.position;
+  }
+  return mothership.group.position;
+}
+
+function getMission25TargetLabel(): string {
+  if (mission25.step === 'threatDetected') return 'CONTACTOS HOSTILES';
+  if (mission25.waveActive) {
+    if (mission25.step === 'arkSystemsUnderAttack') return MISSION25_SYSTEM_LABELS[mission25.activeSystemIndex];
+    if (mission25.step === 'relayDefense') return 'RELES DE COORDINACION';
+    return 'FORMACION HOSTIL';
+  }
+  if (mission25.step === 'commandTargetProtected') return `NODO DE PROTECCION ${Math.min(3, mission25.destroyedNodeCount + 1)}`;
+  if (mission25.step === 'commandTargetLocated' || mission25.step === 'threatCollapse') return 'MATRIZ DE MANDO ENEMIGA';
+  if (mission25.step === 'commandTargetExposed' || mission25.step === 'finalAssault') return 'NUCLEO DE COORDINACION';
+  return 'ARCA EPSILON';
+}
+
+function syncMission25Visuals(updateHudReadout = true): void {
+  if (!mission25.started || mission25.completed) return;
+  mothership.group.visible = true;
+  arkFinalDefenseNetwork.setArkTransform(mothership.group.position, mothership.group.quaternion);
+  arkFinalDefenseNetwork.setState({
+    integrities: mission25.state.mission25SystemIntegrities,
+    arkIntegrity: mission25.state.mission25ArkIntegrity,
+    pressureActive: mission25.waveActive,
+    relaysActive: mission25StepAtLeast('relayDefense'),
+    alliedSupportActive: mission25.state.mission25InheritedM23Support,
+    stabilizing: mission25.step === 'arkStabilization' || mission25.step === 'chapterResolution',
+    contactSignaturesActive: mission25.step === 'threatDetected'
+  });
+  coalitionSiegeCommand.setArkRelativeTransform(mothership.group.position, mothership.group.quaternion);
+  coalitionSiegeCommand.setState(
+    mission25.step,
+    mission25.state.mission25CommandNodesDestroyed,
+    mission25.state.mission25CommandCoreIntegrity,
+    mission25.state.mission25InheritedM23Support || mission25.state.mission25InheritedM22Priority === 'orbital'
+  );
+  mission25Hud.setVisible(true);
+  if (!updateHudReadout) return;
+  mission25Hud.update({
+    step: mission25.step,
+    objective: mission25.stepDefinition.objective,
+    arkIntegrity: mission25.state.mission25ArkIntegrity,
+    systemIntegrities: mission25.state.mission25SystemIntegrities,
+    activeEnemies: coalitionDrones.activeCount,
+    wave: mission25.state.mission25Wave,
+    nodesDestroyed: mission25.destroyedNodeCount,
+    coreIntegrity: mission25.state.mission25CommandCoreIntegrity,
+    coreExposed: mission25.state.mission25CommandTargetExposed,
+    stabilizationProgress: mission25.stabilizationProgress
+  });
+}
+
+function cleanupMission25Combat(releaseNetwork: boolean): void {
+  coalitionDrones.clearAll();
+  coalitionDrones.clearNavigationObstacle();
+  coalitionJammer.clear();
+  weaponSystem.clearTransient();
+  combatCameraImpulse.reset();
+  playerShip.clearWeaponResponse();
+  sfxManager.stopLoop('playerTorpedoEngine', 0.04);
+  coalitionSiegeCommand.dispose();
+  mission25WaveLaunched = false;
+  if (releaseNetwork) {
+    arkFinalDefenseNetwork.dispose();
+    mission25Hud.dispose();
+  }
+}
+
+function showChapterEndScreenOnce(): void {
+  if (!mission25.completed || !mission25.markChapterEndShown()) return;
+  cleanupMission25Combat(true);
+  saveProgress();
+  chapterEndScreen.show({
+    enemiesNeutralized: mission25.state.mission25EnemiesDestroyed,
+    arkIntegrity: mission25.state.mission25ArkIntegrity,
+    m22Priority: MISSION25_PRIORITY_LABELS[mission25.state.mission25InheritedM22Priority],
+    m23Support: mission25.state.mission25InheritedM23Support ? 'RED CONJUNTA ACTIVA' : 'APOYO LIMITADO'
+  });
+  setGamePaused(true);
+  pauseMenu.setOpen(false);
+}
+
+function continueExploringAfterChapter(): void {
+  chapterEndScreen.hide();
+  mission25.dismissChapterEnd();
+  saveProgress();
+  setGamePaused(false);
+  missionText.textContent = 'Orbita asegurada. El Arca y el corredor a E-01 permanecen disponibles.';
+}
+
+function returnToChapterMenu(): void {
+  chapterEndScreen.hide();
+  mission25.dismissChapterEnd();
+  saveProgress();
+  returnToMainMenu();
+}
+
+function startMission25IfReady(delta: number): boolean {
+  if (!mission24.completed) return false;
+  const unlockedNow = mission25.unlockFrom(mission24.snapshot(), mission22.snapshot(), mission23.snapshot());
+  if (!unlockedNow) return false;
+  releaseMission24ResourcesForM25();
+  if (mission25.started || mission25.completed) return false;
+  const nearArk = ship.position.distanceTo(mothership.group.position) <= mission25Tuning.arkSectorRange;
+  const ready = nearArk && !playerModeSystem.transitionActive &&
+    !mission24.atmosphericAscentActive && mission24.step !== 'orbitalInsertion' && !dialogueManager.current;
+  if (!ready) {
+    mission25TransitionElapsed = 0;
+    mission25TransitionStartedAt = 0;
+  } else {
+    if (mission25TransitionStartedAt <= 0) mission25TransitionStartedAt = performance.now();
+    mission25TransitionElapsed = Math.max(0, (performance.now() - mission25TransitionStartedAt) / 1000);
+  }
+  if (!ready || mission25TransitionElapsed < mission25Tuning.triggerDelaySeconds) return false;
+  let mothershipCount = 0;
+  for (let index = 0; index < scene.children.length; index += 1) {
+    if (scene.children[index] === mothership.group) mothershipCount += 1;
+  }
+  if (mothershipCount !== 1) return false;
+  if (!mission25.start(mission24.snapshot(), mission22.snapshot(), mission23.snapshot())) return false;
+  mission25TransitionElapsed = 0;
+  mission25TransitionStartedAt = 0;
+  mission25AnnouncedBeats.clear();
+  mission25WaveLaunched = false;
+  mission25LastSavedStep = mission25.step;
+  syncMission25Visuals();
+  triggerDialogue('m25_start', 'mission25-start');
+  showPhaseBanner('MISION 25: LA ULTIMA ORBITA', 'Defensa final del Arca Epsilon');
+  missionText.textContent = 'Acercate al Arca y confirma el briefing con E.';
+  saveProgress();
+  updateStarMap();
+  return true;
+}
+
+function launchMission25Wave(): void {
+  if (!mission25.waveActive || mission25WaveLaunched || coalitionDrones.activeCount > 0) return;
+  const offset = mission25Tuning.waveOriginOffsets[Math.max(0, Math.min(3, mission25.state.mission25Wave - 1))];
+  mission25WaveOrigin.set(offset[0], offset[1], offset[2]).applyQuaternion(mothership.group.quaternion).add(mothership.group.position);
+  coalitionDrones.setOrigin(mission25WaveOrigin.x, mission25WaveOrigin.y, mission25WaveOrigin.z);
+  coalitionDrones.setNavigationObstacle(mothership.group.position, 155);
+  coalitionDrones.launchWave(mission25.activeWaveTarget);
+  mission25WaveLaunched = true;
+  showPhaseBanner(`OLEADA ${mission25.state.mission25Wave}`, `${mission25.activeWaveTarget} contactos // protege el Arca`);
+  void sfxManager.play('warning', 0.5);
+}
+
+function announceMission25WaveTransition(): void {
+  if (mission25.step === 'arkSystemsUnderAttack') {
+    triggerDialogue('m25_systems_under_attack', 'mission25-systems-under-attack');
+    showPhaseBanner('SISTEMAS BAJO ATAQUE', 'Motores // comunicaciones // energia');
+  } else if (mission25.step === 'relayDefense') {
+    triggerDialogue('m25_joint_support', 'mission25-joint-support');
+    showPhaseBanner('RED CONJUNTA ACTIVA', 'Aurora // Nereida // Pleyadianos');
+  } else if (mission25.step === 'arkUnderPressure') {
+    showPhaseBanner('ARCA BAJO PRESION', 'Ultimo empuje sobre el perimetro');
+  } else if (mission25.step === 'counterattackPreparation') {
+    triggerDialogue('m25_counterattack', 'mission25-counterattack');
+    showPhaseBanner('VENTANA DE CONTRAATAQUE', 'Sincroniza la bateria principal');
+  }
+  mission25WaveLaunched = false;
+  syncMission25Visuals();
+  saveProgress();
+  updateStarMap();
+}
+
+function handleMission25DroneDestroyed(): void {
+  if (!mission25.reportEnemyDestroyed()) return;
+  coalitionDrones.clearAll();
+  if (mission25.completeCurrentWave()) announceMission25WaveTransition();
+}
+
+function handleMission25DroneImpact(_position: THREE.Vector3, muzzlePosition: THREE.Vector3): void {
+  const systemIndex = mission25.activeSystemIndex;
+  const impactPoint = emitEnemyCombatShot(
+    muzzlePosition,
+    arkFinalDefenseNetwork.systemPositions[systemIndex],
+    mission25.state.mission25Wave >= 3 ? 'heavy' : 'medium',
+    24
+  );
+  if (mission25.damageSystem(systemIndex, mission25Tuning.systemDamagePerPass)) {
+    arkFinalDefenseNetwork.registerImpact(systemIndex);
+    shieldEffect.registerImpact(impactPoint);
+    combatCameraImpulse.triggerReceived(impactPoint, ship.position, camera);
+    flightCombatHud.registerDamageDirection(impactPoint, ship.position, camera);
+    auroraDefenseEffect.registerShieldImpact(impactPoint);
+    cameraShake = Math.max(cameraShake, 0.055);
+  }
+}
+
+function updateMission25SupportFire(delta: number): void {
+  mission23SupportCooldown = Math.max(0, mission23SupportCooldown - delta);
+  if (!mission25.waveActive || coalitionDrones.activeCount <= 0 || mission23SupportCooldown > 0) return;
+  const orbitalPriority = mission25.state.mission25InheritedM22Priority === 'orbital';
+  const jointSupport = mission25.state.mission25InheritedM23Support;
+  if (!orbitalPriority && !jointSupport) return;
+  mission23SupportCooldown = orbitalPriority && jointSupport ? 1.15 : 1.7;
+  coalitionDrones.damageNearest(mothership.group.position, 1500, orbitalPriority ? 8 : 5);
+}
+
+function updateMission25CommandDamage(): void {
+  let destroyed = coalitionSiegeCommand.nextDestroyedNode(mission25.state.mission25CommandNodesDestroyed);
+  while (destroyed >= 0) {
+    mission25.destroyCommandNode(destroyed);
+    void sfxManager.play('confirm', 0.45);
+    destroyed = coalitionSiegeCommand.nextDestroyedNode(mission25.state.mission25CommandNodesDestroyed);
+  }
+  if (mission25.step === 'commandTargetExposed' && !mission25AnnouncedBeats.has('core-exposed')) {
+    mission25AnnouncedBeats.add('core-exposed');
+    triggerDialogue('m25_core_exposed', 'mission25-core-exposed');
+    showPhaseBanner('NUCLEO EXPUESTO', 'Entra en rango y confirma el ataque con E');
+    saveProgress();
+  }
+  if (mission25.step !== 'finalAssault') return;
+  const coreIntegrity = coalitionSiegeCommand.coreIntegrityPercent;
+  if (mission25.setCoreIntegrity(coreIntegrity)) {
+    coalitionDrones.clearAll();
+    weaponSystem.clearTransient();
+    combatCameraImpulse.reset();
+    playerShip.clearWeaponResponse();
+    sfxManager.stopLoop('playerTorpedoEngine', 0.04);
+    mission25WaveLaunched = false;
+    triggerDialogue('m25_threat_collapse', 'mission25-threat-collapse');
+    showPhaseBanner('CENTRO DE MANDO NEUTRALIZADO', 'La fuerza de asedio pierde coordinacion');
+    musicManager.playSting('resolution', clock.elapsedTime);
+    saveProgress();
+    updateStarMap();
+  }
+}
+
+function performMission25Interaction(position: THREE.Vector3): boolean {
+  if (!mission25.started || mission25.completed) return false;
+  const target = getMission25TargetPosition();
+  const distance = position.distanceTo(target);
+  if (mission25.step === 'finalBriefing') {
+    if (distance > mission25Tuning.interactionRange) {
+      missionText.textContent = `Arca Epsilon a ${Math.round(distance)} m. Acercate para recibir el briefing.`;
+      return false;
+    }
+    const briefed = mission25.completeBriefing();
+    if (briefed) {
+      missionText.textContent = 'Las firmas entrantes estan marcadas. Orienta la nave y escanealas con E.';
+      saveProgress();
+      updateStarMap();
+    }
+    return briefed;
+  }
+  if (mission25.step === 'threatDetected') {
+    if (distance > mission25Tuning.commandScanRange) {
+      missionText.textContent = `Contactos hostiles a ${Math.round(distance)} m. Aproximata para identificarlos.`;
+      return false;
+    }
+    const threatConfirmed = mission25.confirmThreat();
+    if (threatConfirmed) {
+      scannerPulse.trigger(target, true);
+      triggerDialogue('m25_threat_detected', 'mission25-threat-detected');
+      showPhaseBanner('CONTACTOS HOSTILES', 'DEFENDE EL PERIMETRO DEL ARCA');
+      mission25WaveLaunched = false;
+      saveProgress();
+      updateStarMap();
+    }
+    return threatConfirmed;
+  }
+  if (mission25.waveActive) {
+    missionText.textContent = `Oleada ${mission25.state.mission25Wave}: ${coalitionDrones.activeCount} contactos. Usa laser y misiles.`;
+    return false;
+  }
+  if (mission25.step === 'counterattackPreparation') {
+    if (distance > mission25Tuning.interactionRange) {
+      missionText.textContent = `Bateria principal del Arca a ${Math.round(distance)} m.`;
+      return false;
+    }
+    const prepared = mission25.prepareCounterattack();
+    if (prepared) {
+      scannerPulse.trigger(mothership.group.position, true);
+      missionText.textContent = 'Matriz enemiga localizada. Aproximata y analiza su proteccion con E.';
+      saveProgress();
+      updateStarMap();
+    }
+    return prepared;
+  }
+  if (mission25.step === 'commandTargetLocated') {
+    if (distance > mission25Tuning.commandScanRange) {
+      missionText.textContent = `Matriz de mando a ${Math.round(distance)} m. Entra en alcance de analisis.`;
+      return false;
+    }
+    const located = mission25.locateCommandTarget();
+    if (located) {
+      scannerPulse.trigger(target, true);
+      showPhaseBanner('PROTECCION MODULAR', 'Destruye los tres nodos // nucleo invulnerable');
+      saveProgress();
+      updateStarMap();
+    }
+    return located;
+  }
+  if (mission25.step === 'commandTargetProtected') {
+    missionText.textContent = `Nodos destruidos ${mission25.destroyedNodeCount}/3. El nucleo permanece protegido.`;
+    return false;
+  }
+  if (mission25.step === 'commandTargetExposed') {
+    if (distance > mission25Tuning.finalAssaultRange) {
+      missionText.textContent = `Nucleo expuesto a ${Math.round(distance)} m. Entra en la ventana de ataque.`;
+      return false;
+    }
+    const assaultStarted = mission25.beginFinalAssault();
+    if (assaultStarted) {
+      showPhaseBanner('ATAQUE FINAL', 'Concentra el fuego sobre el nucleo');
+      saveProgress();
+      updateStarMap();
+    }
+    return assaultStarted;
+  }
+  if (mission25.step === 'finalAssault') {
+    missionText.textContent = `Nucleo de coordinacion ${Math.round(mission25.state.mission25CommandCoreIntegrity)}%.`;
+    return false;
+  }
+  if (mission25.step === 'arkStabilization') {
+    missionText.textContent = distance <= mission25Tuning.interactionRange
+      ? `Estabilizacion ${Math.round(mission25.stabilizationProgress)}%. Mantene posicion.`
+      : `Regresa al Arca (${Math.round(distance)} m).`;
+    return false;
+  }
+  if (mission25.step === 'chapterResolution') {
+    if (distance > mission25Tuning.interactionRange) {
+      missionText.textContent = `Regresa al Arca para cerrar el informe (${Math.round(distance)} m).`;
+      return false;
+    }
+    const resolved = mission25.completeChapterResolution();
+    if (resolved) {
+      triggerDialogue('m25_final', 'mission25-final');
+      showPhaseBanner('ARCA EPSILON // CAPITULO I', 'EL MUNDO SEMILLA');
+      missionText.textContent = 'E-01 ha sido asegurado. La colonizacion puede comenzar.';
+      saveProgress();
+      showChapterEndScreenOnce();
+    }
+    return resolved;
+  }
+  return false;
+}
+
+function updateMission25Systems(delta: number, elapsed: number): void {
+  startMission25IfReady(delta);
+  if (!mission25.started) return;
+  if (mission25.completed) {
+    if (!mission25.state.mission25ChapterEndShown) showChapterEndScreenOnce();
+    return;
+  }
+  updateMission25CommandDamage();
+  mission25HudUpdateAccumulator += delta;
+  const refreshMission25Hud = mission25HudUpdateAccumulator >= 0.1;
+  if (refreshMission25Hud) mission25HudUpdateAccumulator = 0;
+  syncMission25Visuals(refreshMission25Hud);
+  arkFinalDefenseNetwork.update(delta, elapsed);
+  coalitionSiegeCommand.update(delta, elapsed);
+
+  if (mission25.waveActive) {
+    launchMission25Wave();
+    coalitionDrones.update(delta, elapsed, handleMission25DroneDestroyed, handleMission25DroneImpact);
+    updateMission25SupportFire(delta);
+    transientWarning = `INTEGRIDAD DEL ARCA ${Math.round(mission25.state.mission25ArkIntegrity)}% // CONTACTOS ${coalitionDrones.activeCount}`;
+  } else if (mission25.step === 'finalAssault') {
+    transientWarning = `NUCLEO EXPUESTO // ${Math.round(mission25.state.mission25CommandCoreIntegrity)}%`;
+  } else if (mission25.step === 'threatCollapse') {
+    transientWarning = `COLAPSO DE MANDO // ${Math.round(mission25.collapseProgress)}%`;
+    cameraShake = Math.max(cameraShake, 0.04 + mission25.collapseProgress * 0.0005);
+    if (mission25.updateThreatCollapse(delta)) {
+      coalitionSiegeCommand.dispose();
+      triggerDialogue('m25_residual_signal', 'mission25-residual-signal');
+      showPhaseBanner('FUERZA DE ASEDIO EN RETIRADA', 'Regresa al Arca y estabiliza la red');
+      saveProgress();
+      updateStarMap();
+    }
+  } else if (mission25.step === 'arkStabilization') {
+    const nearArk = ship.position.distanceTo(mothership.group.position) <= mission25Tuning.interactionRange;
+    transientWarning = nearArk
+      ? `ESTABILIZANDO ARCA // ${Math.round(mission25.stabilizationProgress)}%`
+      : `REGRESA AL ARCA // ${Math.round(ship.position.distanceTo(mothership.group.position))} m`;
+    if (mission25.updateArkStabilization(delta, nearArk)) {
+      triggerDialogue('m25_final', 'mission25-resolution-ready');
+      showPhaseBanner('PERIMETRO ASEGURADO', 'El Arca sigue en pie // E-01 permanece viable');
+      saveProgress();
+      updateStarMap();
+    }
+  }
+
+  if (mission25.step !== mission25LastSavedStep) {
+    mission25LastSavedStep = mission25.step;
+    saveProgress();
+  }
+}
+
+function getMission25Progress(): number {
+  if (!mission25.unlocked) return 0;
+  if (mission25.completed) return 100;
+  return Math.min(99, mission25.stepNumber / (MISSION25_STATE_ORDER.length - 1) * 100);
+}
+
+function setMission25Guidance(nextAction: string, key = '', blockedReason = ''): Mission03ObjectiveGuidance {
+  mission25ObjectiveGuidance.nextAction = nextAction;
+  mission25ObjectiveGuidance.key = key;
+  mission25ObjectiveGuidance.blockedReason = blockedReason;
+  return mission25ObjectiveGuidance;
+}
+
+function getMission25ObjectiveGuidance(): Mission03ObjectiveGuidance {
+  if (!mission25.started || mission25.completed) return setMission25Guidance('');
+  const distance = ship.position.distanceTo(getMission25TargetPosition());
+  const interactionReady = lateMissionStepInRange('mission25', ship.position, false);
+  if (mission25.waveActive) return setMission25Guidance(`Defende el Arca: ${coalitionDrones.activeCount} contactos activos.`, 'SPACE / R');
+  if (mission25.step === 'commandTargetProtected') return setMission25Guidance(`Destruye los nodos marcados (${mission25.destroyedNodeCount}/3).`, 'SPACE / R', 'El nucleo permanece protegido.');
+  if (mission25.step === 'finalAssault') return setMission25Guidance(`Ataca el nucleo expuesto (${Math.round(mission25.state.mission25CommandCoreIntegrity)}%).`, 'SPACE / R');
+  if (mission25.step === 'threatCollapse') return setMission25Guidance('Alejate del nucleo y observa la retirada.', 'WASD');
+  if (mission25.step === 'arkStabilization') return setMission25Guidance(
+    distance <= mission25Tuning.interactionRange ? `Mantene posicion: ${Math.round(mission25.stabilizationProgress)}%.` : `Regresa al Arca (${Math.round(distance)} m).`,
+    distance <= mission25Tuning.interactionRange ? '' : 'WASD'
+  );
+  return setMission25Guidance(
+    interactionReady ? mission25.stepDefinition.nextAction : `${mission25.stepDefinition.nextAction} ${Math.round(distance)} m.`,
+    interactionReady ? 'E' : 'WASD'
+  );
+}
+
+function commitMission25DebugMutation(): Mission25Snapshot {
+  cleanupMission25Combat(false);
+  syncMission25Visuals();
+  saveProgress();
+  updateHud(Number.POSITIVE_INFINITY);
+  updateStarMap();
+  return mission25.snapshot();
 }
 
 function isPlayerInRelayRange(): boolean {
@@ -9358,12 +11208,14 @@ function getNearestOnFootInteraction(): OnFootInteraction | undefined {
     });
   }
   const boardingProximity = getBoardingProximity();
-  interactions.push({
-    id: 'surface-scout-ship',
-    label: 'SUBIR A LA NAVE',
-    kind: 'ship',
-    distance: boardingProximity.horizontal
-  });
+  if (boardingProximity.available) {
+    interactions.push({
+      id: 'surface-scout-ship',
+      label: 'SUBIR A LA NAVE',
+      kind: 'ship',
+      distance: boardingProximity.horizontal
+    });
+  }
 
   if (!colonyManager.state.habitatOnline) {
     interactions.push({
@@ -9463,6 +11315,38 @@ function getNearestOnFootInteraction(): OnFootInteraction | undefined {
         distance: playerPosition.distanceTo(auroraHabitatModule.interactionPosition)
       });
     }
+  }
+
+  // Mission 17: the prompt uses the same hardware id and world position as the
+  // state machine, including the next sensor after each deployment.
+  if (mission17.started && !mission17.completed) {
+    const sensorIndex = mission17.activeSensorIndex;
+    const emitterIndex = mission17.activeEmitterIndex;
+    const sensor = sensorIndex >= 0 ? defenseSensorDefinitions[sensorIndex] : undefined;
+    const emitter = emitterIndex >= 0 ? shieldEmitterDefinitions[emitterIndex] : undefined;
+    interactions.push({
+      id: sensor?.id ?? emitter?.id ?? `mission17-${mission17.step}`,
+      label: sensor
+        ? `desplegar ${sensor.shortName}`
+        : emitter
+          ? `instalar ${emitter.shortName}`
+          : mission17.stepDefinition.nextAction,
+      kind: 'auroraDefense',
+      distance: playerPosition.distanceTo(getMission17StationPosition())
+    });
+  }
+
+  // Mission 16: use the exact station/node that the mission state machine
+  // consumes, so the prompt and the world objective cannot diverge.
+  if (mission16.started && !mission16.completed && !mission17.started) {
+    const activeNodeIndex = mission16.activeNodeIndex;
+    const activeNode = activeNodeIndex >= 0 ? pleyadianNodeDefinitions[activeNodeIndex] : undefined;
+    interactions.push({
+      id: activeNode?.id ?? `mission16-${mission16.step}`,
+      label: activeNode ? `alinear ${activeNode.shortName}` : mission16.stepDefinition.nextAction,
+      kind: 'pleyadian',
+      distance: playerPosition.distanceTo(getMission16StationPosition())
+    });
   }
 
   // Mission 15: one sabotage station at a time, matching the current step.
@@ -9627,6 +11511,442 @@ function getNearestOnFootInteraction(): OnFootInteraction | undefined {
   return interactions.sort((a, b) => a.distance - b.distance)[0];
 }
 
+type LateMissionInteractionId =
+  | 'mission17'
+  | 'mission18'
+  | 'mission19'
+  | 'mission20'
+  | 'mission21'
+  | 'mission22'
+  | 'mission23'
+  | 'mission24'
+  | 'mission25';
+
+type LateMissionInteractionMode = 'any' | 'onFoot' | 'ship';
+
+type LateMissionInteraction = {
+  missionId: LateMissionInteractionId;
+  step: string;
+  id: string;
+  label: string;
+  position: THREE.Vector3;
+  horizontalRange: number;
+  verticalRange: number;
+  mode: LateMissionInteractionMode;
+  progressSeconds: number;
+};
+
+const lateMissionInteractionScratch: LateMissionInteraction = {
+  missionId: 'mission17',
+  step: '',
+  id: '',
+  label: '',
+  position: new THREE.Vector3(),
+  horizontalRange: 0,
+  verticalRange: 0,
+  mode: 'any',
+  progressSeconds: 0
+};
+
+function setLateMissionInteraction(
+  missionId: LateMissionInteractionId,
+  step: string,
+  id: string,
+  label: string,
+  position: THREE.Vector3,
+  horizontalRange: number,
+  verticalRange: number,
+  mode: LateMissionInteractionMode,
+  progressSeconds = 0
+): LateMissionInteraction {
+  lateMissionInteractionScratch.missionId = missionId;
+  lateMissionInteractionScratch.step = step;
+  lateMissionInteractionScratch.id = id;
+  lateMissionInteractionScratch.label = label;
+  lateMissionInteractionScratch.position.copy(position);
+  lateMissionInteractionScratch.horizontalRange = horizontalRange;
+  lateMissionInteractionScratch.verticalRange = verticalRange;
+  lateMissionInteractionScratch.mode = mode;
+  lateMissionInteractionScratch.progressSeconds = progressSeconds;
+  return lateMissionInteractionScratch;
+}
+
+function getActiveLateMissionId(): LateMissionInteractionId | undefined {
+  if (mission25.started && !mission25.completed) return 'mission25';
+  if (mission24.started && !mission24.completed) return 'mission24';
+  if (mission23.started && !mission23.completed) return 'mission23';
+  if (mission22.started && !mission22.completed) return 'mission22';
+  if (mission21.started && !mission21.completed) return 'mission21';
+  if (mission20.started && !mission20.completed) return 'mission20';
+  if (mission19.started && !mission19.completed) return 'mission19';
+  if (mission18.started && !mission18.completed) return 'mission18';
+  if (mission17.started && !mission17.completed) return 'mission17';
+  return undefined;
+}
+
+function getLateMissionStep(missionId: LateMissionInteractionId): string {
+  switch (missionId) {
+    case 'mission17': return mission17.step;
+    case 'mission18': return mission18.step;
+    case 'mission19': return mission19.step;
+    case 'mission20': return mission20.step;
+    case 'mission21': return mission21.step;
+    case 'mission22': return mission22.step;
+    case 'mission23': return mission23.step;
+    case 'mission24': return mission24.step;
+    case 'mission25': return mission25.step;
+  }
+  return '';
+}
+
+function getLateMissionInteraction(): LateMissionInteraction | undefined {
+  const missionId = getActiveLateMissionId();
+  if (!missionId) return undefined;
+
+  if (missionId === 'mission17') {
+    if (mission17.step === 'detectIncomingSignatures') return undefined;
+    const sensorIndex = mission17.activeSensorIndex;
+    const emitterIndex = mission17.activeEmitterIndex;
+    const sensor = sensorIndex >= 0 ? defenseSensorDefinitions[sensorIndex] : undefined;
+    const emitter = emitterIndex >= 0 ? shieldEmitterDefinitions[emitterIndex] : undefined;
+    let progressSeconds = 0;
+    switch (mission17.step) {
+      case 'emergencyCouncil': progressSeconds = mission17Tuning.councilSeconds; break;
+      case 'installEnergyReserve': progressSeconds = mission17Tuning.circuitSeconds; break;
+      case 'calibrateDetection': progressSeconds = mission17Tuning.calibrationSeconds; break;
+      case 'installShieldEmitters': progressSeconds = mission17Tuning.emitterSeconds; break;
+      case 'establishAlertNetwork': progressSeconds = mission17Tuning.alertChannelSeconds; break;
+      case 'markEvacuationRoutes': progressSeconds = mission17Tuning.evacMarkerSeconds; break;
+      case 'runDefenseDrill': progressSeconds = mission17Tuning.drillSeconds; break;
+      case 'stabilizeOverload': progressSeconds = mission17Tuning.overloadStart / mission17Tuning.overloadVentPerSecond; break;
+      default: break;
+    }
+    return setLateMissionInteraction(
+      missionId,
+      mission17.step,
+      sensor?.id ?? emitter?.id ?? `mission17-${mission17.step}`,
+      sensor ? `desplegar ${sensor.shortName}` : emitter ? `instalar ${emitter.shortName}` : mission17.stepDefinition.nextAction,
+      getMission17StationPosition(),
+      mission17StepRange() + 2,
+      8,
+      'any',
+      progressSeconds
+    );
+  }
+
+  if (missionId === 'mission18') {
+    let progressSeconds = 0;
+    switch (mission18.step) {
+      case 'realAlert': progressSeconds = mission18Tuning.alertSeconds; break;
+      case 'identifyHostiles': progressSeconds = mission18Tuning.identifySeconds; break;
+      case 'authorizeDefenseWeapons': progressSeconds = mission18Tuning.authorizeSeconds; break;
+      case 'defendCriticalSystem': progressSeconds = mission18Tuning.repairSeconds; break;
+      case 'recoverWreckage': progressSeconds = mission18Tuning.wreckageScanSeconds; break;
+      case 'confirmNereidaTarget': progressSeconds = mission18Tuning.confirmSeconds; break;
+      default: return undefined;
+    }
+    return setLateMissionInteraction(
+      missionId,
+      mission18.step,
+      `mission18-${mission18.step}`,
+      mission18.stepDefinition.nextAction,
+      getMission18StationPosition(),
+      mission18StepRange() + 2,
+      10,
+      'any',
+      progressSeconds
+    );
+  }
+
+  if (missionId === 'mission19') {
+    const directChoice = mission19.step === 'chooseOperationalPriority';
+    let progressSeconds = 0;
+    switch (mission19.step) {
+      case 'emergencyTransmission': progressSeconds = mission19Tuning.transmissionSeconds; break;
+      case 'restoreDefenses': progressSeconds = mission19Tuning.defenseSeconds; break;
+      case 'protectAtlas': progressSeconds = mission19Tuning.gateSealSeconds; break;
+      case 'activateCounterattack': progressSeconds = mission19Tuning.batterySeconds; break;
+      case 'recoverEnemyWreckage': progressSeconds = mission19Tuning.wreckageScanSeconds; break;
+      case 'confirmArkTarget': progressSeconds = mission19Tuning.confirmSeconds; break;
+      default: if (!directChoice) return undefined;
+    }
+    return setLateMissionInteraction(
+      missionId,
+      mission19.step,
+      `mission19-${mission19.step}`,
+      mission19.stepDefinition.nextAction,
+      getMission19StationPosition(),
+      mission19StepRange() + 3,
+      12,
+      'any',
+      progressSeconds
+    );
+  }
+
+  if (missionId === 'mission20') {
+    let progressSeconds = 0;
+    switch (mission20.step) {
+      case 'restoreArkLink': progressSeconds = mission20Tuning.linkSeconds; break;
+      case 'defendEngines':
+        if (mission20.damagedEngineIndex < 0) return undefined;
+        progressSeconds = mission20Tuning.engineRepairSeconds;
+        break;
+      case 'stopDataBreach':
+        if (mission20.waveKillsRemaining > 0) return undefined;
+        progressSeconds = mission20Tuning.breachCutSeconds;
+        break;
+      case 'activateArkCounterattack': progressSeconds = mission20Tuning.batterySeconds; break;
+      case 'stabilizeArk': progressSeconds = mission20Tuning.stabilizeSeconds; break;
+      default: return undefined;
+    }
+    const interactionRange = mission20.step === 'stabilizeArk'
+      ? mission20Tuning.rendezvousRange
+      : mission20Tuning.stationRange + 15;
+    return setLateMissionInteraction(
+      missionId,
+      mission20.step,
+      `mission20-${mission20.step}`,
+      mission20.stepDefinition.nextAction,
+      getMission20StationPosition(),
+      interactionRange,
+      interactionRange,
+      'ship',
+      progressSeconds
+    );
+  }
+
+  if (missionId === 'mission21') {
+    if (mission21.step !== 'chooseResponse') return undefined;
+    return setLateMissionInteraction(
+      missionId,
+      mission21.step,
+      'mission21-response',
+      mission21.stepDefinition.nextAction,
+      ship.position,
+      1_000_000,
+      1_000_000,
+      'ship'
+    );
+  }
+
+  if (missionId === 'mission22') {
+    if (mission22.step !== 'accessCommandTerminal' && mission22.step !== 'assignInitialResources' && mission22.step !== 'chooseSupportPriority') {
+      return undefined;
+    }
+    return setLateMissionInteraction(
+      missionId,
+      mission22.step,
+      `mission22-${mission22.step}`,
+      mission22.stepDefinition.nextAction,
+      getMission22StationPosition(),
+      mission22.step === 'accessCommandTerminal' ? mission22Tuning.terminalRange + 20 : mission22Tuning.commandRange,
+      mission22Tuning.terminalRange + 20,
+      'ship'
+    );
+  }
+
+  if (missionId === 'mission23') {
+    const actionable =
+      mission23.step === 'approachJammerNode' ||
+      mission23.step === 'chooseTargetOrder' ||
+      (mission23.step === 'destroyLogisticsCore' && mission23.state.mission23PlatformMethod === 'none') ||
+      mission23.step === 'recoverEnemyRoute' ||
+      mission23.step === 'confirmReturnToArk';
+    if (!actionable) return undefined;
+    const horizontalRange = mission23.step === 'approachJammerNode'
+      ? mission23Tuning.triangulationRange + 30
+      : mission23.step === 'confirmReturnToArk' || mission23.step === 'chooseTargetOrder'
+        ? mission23Tuning.commandRange + 20
+        : mission23Tuning.approachRange + 20;
+    return setLateMissionInteraction(
+      missionId,
+      mission23.step,
+      `mission23-${mission23.step}`,
+      mission23.stepDefinition.nextAction,
+      getMission23StationPosition(),
+      horizontalRange,
+      horizontalRange,
+      'ship'
+    );
+  }
+
+  if (missionId === 'mission24') {
+    const actionable =
+      mission24.step === 'decodeReturnRoute' ||
+      mission24.step === 'prepareLaunch' ||
+      mission24.step === 'ignitionSequence' ||
+      mission24.step === 'arriveAtOrigin' ||
+      mission24.step === 'assessArkDamage' ||
+      mission24.step === 'restoreEnclaveLinks' ||
+      mission24.step === 'prepareArkSystems' ||
+      mission24.step === 'integratePleyadianNetwork' ||
+      mission24.step === 'prepareCivilianShelters' ||
+      mission24.step === 'assembleAlliedForces' ||
+      mission24.step === 'revisitStartingSector' ||
+      mission24.step === 'runDefenseRehearsal' ||
+      mission24.step === 'detectFinalFleet' ||
+      mission24.step === 'enterFinalFormation';
+    if (!actionable) return undefined;
+    const mode: LateMissionInteractionMode = mission24.step === 'prepareLaunch' ? 'onFoot' : 'ship';
+    const horizontalRange = mission24.step === 'decodeReturnRoute'
+      ? mission24Tuning.baseRange + 5
+      : mission24.step === 'prepareLaunch'
+        ? mission24Tuning.shipPreparationRange + 2
+        : mission24.step === 'arriveAtOrigin'
+          ? mission24Tuning.arkInteractionRange + 12
+          : mission24.step === 'enterFinalFormation'
+            ? mission24Tuning.formationRange + 12
+            : mission24Tuning.stationRange + 12;
+    return setLateMissionInteraction(
+      missionId,
+      mission24.step,
+      `mission24-${mission24.step}`,
+      mission24.stepDefinition.nextAction,
+      getMission24StationPosition(),
+      horizontalRange,
+      mode === 'onFoot' ? 7 : horizontalRange,
+      mode
+    );
+  }
+
+  const actionable =
+    mission25.step === 'finalBriefing' ||
+    mission25.step === 'threatDetected' ||
+    mission25.step === 'counterattackPreparation' ||
+    mission25.step === 'commandTargetLocated' ||
+    mission25.step === 'commandTargetExposed' ||
+    mission25.step === 'chapterResolution';
+  if (!actionable) return undefined;
+  const horizontalRange = mission25.step === 'threatDetected' || mission25.step === 'commandTargetLocated'
+    ? mission25Tuning.commandScanRange + 25
+    : mission25.step === 'commandTargetExposed'
+      ? mission25Tuning.finalAssaultRange + 25
+      : mission25Tuning.interactionRange + 15;
+  return setLateMissionInteraction(
+    missionId,
+    mission25.step,
+    `mission25-${mission25.step}`,
+    mission25.stepDefinition.nextAction,
+    getMission25TargetPosition(),
+    horizontalRange,
+    horizontalRange,
+    'ship'
+  );
+}
+
+function lateMissionInteractionModeReady(interaction: LateMissionInteraction): boolean {
+  if (playerModeSystem.transitionActive) return false;
+  if (interaction.mode === 'onFoot') return playerModeSystem.onFootActive;
+  if (interaction.mode === 'ship') return playerModeSystem.insideShip;
+  return playerModeSystem.onFootActive || playerModeSystem.insideShip;
+}
+
+function lateMissionInteractionInRange(interaction: LateMissionInteraction, position = getActivePlayerPosition()): boolean {
+  const dx = position.x - interaction.position.x;
+  const dz = position.z - interaction.position.z;
+  const horizontalDistance = Math.hypot(dx, dz);
+  const verticalDistance = Math.abs(position.y - interaction.position.y);
+  return horizontalDistance <= interaction.horizontalRange && verticalDistance <= interaction.verticalRange;
+}
+
+function lateMissionStepInRange(
+  missionId: LateMissionInteractionId,
+  position: THREE.Vector3,
+  fallback: boolean
+): boolean {
+  const interaction = getLateMissionInteraction();
+  if (!interaction || interaction.missionId !== missionId) return fallback;
+  return lateMissionInteractionModeReady(interaction) && lateMissionInteractionInRange(interaction, position);
+}
+
+function queueLateMissionProgress(interaction: LateMissionInteraction): void {
+  if (interaction.progressSeconds <= 0) return;
+  queuedLateInteractionMission = interaction.missionId;
+  queuedLateInteractionStep = interaction.step;
+  queuedLateInteractionDelta = interaction.progressSeconds;
+}
+
+function consumeLateMissionInteractionDelta(missionId: LateMissionInteractionId, step: string, delta: number): number {
+  if (queuedLateInteractionMission !== missionId || queuedLateInteractionStep !== step) return 0;
+  const interactionDelta = Math.max(delta, queuedLateInteractionDelta);
+  queuedLateInteractionMission = '';
+  queuedLateInteractionStep = '';
+  queuedLateInteractionDelta = 0;
+  return interactionDelta;
+}
+
+function executeLateMissionInteraction(): boolean {
+  const interaction = getLateMissionInteraction();
+  if (!interaction || !lateMissionInteractionModeReady(interaction) || !lateMissionInteractionInRange(interaction)) return false;
+  const missionId = interaction.missionId;
+  const step = interaction.step;
+  const target = interaction.position;
+  let handled = false;
+  switch (missionId) {
+    case 'mission17': handled = performMission17Interaction(target); break;
+    case 'mission18': handled = performMission18Interaction(target); break;
+    case 'mission19': handled = performMission19Interaction(target); break;
+    case 'mission20': handled = performMission20Interaction(target); break;
+    case 'mission21': handled = performMission21Interaction(target); break;
+    case 'mission22': handled = performMission22Interaction(target); break;
+    case 'mission23': handled = performMission23Interaction(target); break;
+    case 'mission24': handled = performMission24Interaction(target); break;
+    case 'mission25': handled = performMission25Interaction(target); break;
+  }
+  if (!handled) return false;
+  if (getLateMissionStep(missionId) === step) queueLateMissionProgress(interaction);
+  return true;
+}
+
+function commitLateMissionInteraction(): void {
+  lastLateInteractionAt = clock.elapsedTime;
+  pendingLateInteractionUntil = -Infinity;
+  pendingLateInteractionMission = '';
+  pendingLateInteractionStep = '';
+  tutorialManager.recordActivity();
+  void sfxManager.play('scanner', 0.48);
+}
+
+function bufferLateMissionInteraction(now: number): void {
+  const interaction = getLateMissionInteraction();
+  if (!interaction) return;
+  pendingLateInteractionUntil = now + LATE_INTERACTION_BUFFER_SECONDS;
+  pendingLateInteractionMission = interaction.missionId;
+  pendingLateInteractionStep = interaction.step;
+}
+
+function requestLateMissionInteraction(): boolean {
+  const now = clock.elapsedTime;
+  if (now - lastLateInteractionAt < LATE_INTERACTION_COOLDOWN_SECONDS) {
+    bufferLateMissionInteraction(now);
+    return false;
+  }
+  if (executeLateMissionInteraction()) {
+    commitLateMissionInteraction();
+    return true;
+  }
+  bufferLateMissionInteraction(now);
+  return false;
+}
+
+function updateBufferedLateMissionInteraction(): void {
+  if (pendingLateInteractionUntil < clock.elapsedTime) {
+    pendingLateInteractionUntil = -Infinity;
+    pendingLateInteractionMission = '';
+    pendingLateInteractionStep = '';
+    return;
+  }
+  const activeMission = getActiveLateMissionId();
+  if (!activeMission || activeMission !== pendingLateInteractionMission || getLateMissionStep(activeMission) !== pendingLateInteractionStep) {
+    pendingLateInteractionUntil = -Infinity;
+    pendingLateInteractionMission = '';
+    pendingLateInteractionStep = '';
+    return;
+  }
+  if (clock.elapsedTime - lastLateInteractionAt < LATE_INTERACTION_COOLDOWN_SECONDS) return;
+  if (executeLateMissionInteraction()) commitLateMissionInteraction();
+}
+
 /**
  * Prompt contextual de interacción: aparece solo cuando pulsar E hará algo
  * concreto aquí y ahora, con la acción nombrada.
@@ -9638,14 +11958,25 @@ function updateInteractPrompt(): void {
   nearestInteractionDistance = Number.POSITIVE_INFINITY;
   nearestInteractionAction = 'none';
 
-  if (inSurfacePhase) {
+  const activeLateMission = getActiveLateMissionId();
+  const lateInteraction = activeLateMission ? getLateMissionInteraction() : undefined;
+  if (activeLateMission) {
+    if (lateInteraction && lateMissionInteractionModeReady(lateInteraction)) {
+      nearestInteractionTarget = lateInteraction.id;
+      nearestInteractionDistance = getActivePlayerPosition().distanceTo(lateInteraction.position);
+      if (lateMissionInteractionInRange(lateInteraction)) {
+        nearestInteractionAction = 'scan';
+        label = lateInteraction.label;
+      }
+    }
+  } else if (inSurfacePhase) {
     if (playerModeSystem.onFootActive) {
       const nearestInteraction = getNearestOnFootInteraction();
       if (nearestInteraction) {
         nearestInteractionTarget = nearestInteraction.id;
         nearestInteractionDistance = nearestInteraction.distance;
         nearestInteractionAction = nearestInteraction.kind === 'ship' ? 'shipAccess' : 'scan';
-        const interactionRange = nearestInteraction.kind === 'ship' ? BOARDING_HORIZONTAL_RANGE : nearestInteraction.kind === 'landing' ? 10 : nearestInteraction.kind === 'resource' ? 12 : nearestInteraction.kind === 'relay' ? MISSION03_RELAY_INTERACTION_RANGE : nearestInteraction.kind === 'defense' ? mission04Tuning.beaconInteractionRange : nearestInteraction.kind === 'atlas' && nearestInteraction.id === atlasSeedArchiveDefinition.id ? mission07Tuning.archiveActivationRange : nearestInteraction.kind === 'atlas' ? mission07Tuning.nodeScanRange : 6.5;
+        const interactionRange = nearestInteraction.kind === 'ship' ? BOARDING_HORIZONTAL_RANGE : nearestInteraction.kind === 'landing' ? 10 : nearestInteraction.kind === 'resource' ? 12 : nearestInteraction.kind === 'relay' ? MISSION03_RELAY_INTERACTION_RANGE : nearestInteraction.kind === 'defense' ? mission04Tuning.beaconInteractionRange : nearestInteraction.kind === 'atlas' && nearestInteraction.id === atlasSeedArchiveDefinition.id ? mission07Tuning.archiveActivationRange : nearestInteraction.kind === 'atlas' ? mission07Tuning.nodeScanRange : nearestInteraction.kind === 'auroraDefense' ? mission17StepRange() : nearestInteraction.kind === 'pleyadian' ? (mission16.step === 'synchronizeNodes' ? mission16Tuning.nodeRange : mission16Tuning.stationRange) : 6.5;
         if (nearestInteraction.distance <= interactionRange) {
           label = nearestInteraction.label;
           key = nearestInteraction.kind === 'ship' ? 'F' : 'E';
@@ -9819,7 +12150,12 @@ function updateInteractPrompt(): void {
     }
   } else {
     const step = missionManager.step;
-    if (mission24.started && !mission24.completed) {
+    if (mission25.started && !mission25.completed) {
+      const guidance = getMission25ObjectiveGuidance();
+      if (guidance.key === 'E' && ship.position.distanceTo(getMission25TargetPosition()) <= mission25Tuning.commandScanRange) {
+        label = guidance.nextAction ?? '';
+      }
+    } else if (mission24.started && !mission24.completed) {
       const distance = ship.position.distanceTo(getMission24StationPosition());
       if (distance <= mission24Tuning.stationRange && !mission24.ascentActive && mission24.step !== 'stabilizeOrbit' && mission24.step !== 'approachArk') {
         label = mission24.stepDefinition.nextAction;
@@ -9853,8 +12189,14 @@ function updateInteractPrompt(): void {
   }
 
   if (label && nearestInteractionAction === 'none') nearestInteractionAction = 'scan';
-  interactKey.textContent = key;
-  interactLabel.textContent = label;
+  // Nothing of its own to offer: surface the mission's live action instead, so
+  // late-mission steps get the same bottom-centre prompt as a surface scan.
+  if (!label && objectiveContextAction.label) {
+    key = objectiveContextAction.key;
+    label = objectiveContextAction.label;
+  }
+  setText(interactKey, key);
+  setText(interactLabel, label);
   interactPrompt.classList.toggle('is-active', label.length > 0);
   interactPrompt.setAttribute('aria-hidden', String(label.length === 0));
 }
@@ -9884,6 +12226,8 @@ function applyReward(reward: Partial<ResourceState>): void {
 }
 
 function getCurrentPhase(): SaveGameData['currentPhase'] {
+  if (mission25.started || mission25.unlocked && mission24.completed) return 'space';
+  if (mission20.started && mission20.state.ascentComplete) return 'space';
   if (mission24.atmosphericAscentActive || mission24.step === 'orbitalInsertion') return 'descent';
   if (mission24.orbitalFlightActive) return 'space';
   if (inSurfacePhase) {
@@ -10087,6 +12431,15 @@ function updateArkDeparture(delta: number, elapsed: number): void {
     mission01TimeSinceUndock += delta;
   }
 
+  applyArkDepartureFlightConstraint();
+
+  mothership.setClampOpen(arkDeparture.clampProgress);
+  mothership.setPlatformPower(arkDeparture.platformPower);
+  arkDockingAssembly.update(arkDeparture.clampProgress, !arkDeparture.completed, elapsed);
+}
+
+/** Applies the cradle lock/corridor cap after each low-FPS flight substep. */
+function applyArkDepartureFlightConstraint(): void {
   // Docked: hold the hull still. The clamps are shut, so no input translates.
   if (arkDeparture.translationLocked) {
     velocity.set(0, 0, 0);
@@ -10098,10 +12451,6 @@ function updateArkDeparture(delta: number, elapsed: number): void {
     const speed = velocity.length();
     if (speed > cap) velocity.multiplyScalar(cap / speed);
   }
-
-  mothership.setClampOpen(arkDeparture.clampProgress);
-  mothership.setPlatformPower(arkDeparture.platformPower);
-  arkDockingAssembly.update(arkDeparture.clampProgress, !arkDeparture.completed, elapsed);
 }
 
 // --- Mission 01 onboarding ---------------------------------------------------
@@ -10268,6 +12617,12 @@ function mission01AlignmentTo(target: THREE.Vector3): number {
 function updateMission01Onboarding(delta: number, elapsed: number): void {
   if (inSurfacePhase || !mission01Tutorial.started) return;
 
+  // A standing refusal is a fact about the descent gate, so it is lifted by the
+  // gate opening — not by the pilot happening to advance a step.
+  if (missionManager.descentDenied && descentSafetyGate.descentAuthorized) {
+    missionManager.clearDenial();
+  }
+
   mission01Assist.update(delta);
   const speed = velocity.length();
 
@@ -10339,6 +12694,9 @@ function updateMission01Onboarding(delta: number, elapsed: number): void {
     missionManager.completeDataTransfer();
     descentSafetyGate.completeOrbitalScan(Math.max(descentSafetyGate.state.habitabilityScore, 74));
     habitabilitySystem.forceComplete();
+    // Lifted in the same frame the requirement is met, so there is never a
+    // frame where the HUD claims both "authorised" and "denied".
+    if (descentSafetyGate.descentAuthorized) missionManager.clearDenial();
     mission01AnalysisIndex = 0;
     mission01AnalysisTimer = 0;
     discoveryEffect.trigger(beaconPosition.clone());
@@ -10402,6 +12760,7 @@ function advanceMission01ToDebugStep(step: string): boolean {
 
   missionManager.activateScanner();
   descentSafetyGate.markE01Detected();
+  if (missionManager.blockReason === 'Sin candidato confirmado') missionManager.clearDenial();
   if (step === 'followSignal') return true;
 
   revealMission01Beacon();
@@ -10430,6 +12789,7 @@ function advanceMission01ToDebugStep(step: string): boolean {
   missionManager.startMarkerDecode();
   missionManager.completeMarkerDecode();
   descentSystem.lockCorridor();
+  if (descentSafetyGate.descentAuthorized) missionManager.clearDenial();
   return step === 'descentAuthorized' || step === 'approachPlanet';
 }
 
@@ -10691,6 +13051,7 @@ function restoreMission01Onboarding(save: SaveGameData): void {
 }
 
 function getCurrentAudioMissionId(): string {
+  if (mission25.started) return 'mission-25';
   if (mission24.started) return 'mission-24';
   if (mission23.started && !mission23.completed) return 'mission-23';
   if (mission22.started && !mission22.completed) return 'mission-22';
@@ -10718,6 +13079,7 @@ function getCurrentAudioMissionId(): string {
 }
 
 function getCurrentAudioMissionStep(): string {
+  if (mission25.started) return mission25.completed && mission25.state.mission25ChapterEndDismissed ? 'freeExploration' : mission25.step;
   if (mission24.started) return mission24.step;
   if (mission23.started && !mission23.completed) return mission23.step;
   if (mission22.started && !mission22.completed) return mission22.step;
@@ -10763,14 +13125,23 @@ function getScannedResourceFlags(): SaveGameData['scannedResources'] {
 function buildSaveGameData(): Omit<SaveGameData, 'version' | 'savedAt'> {
   const currentObjectiveDisplay = getCurrentObjectiveDisplay();
   const descentSafety = descentSafetyGate.state;
+  const ammo = weaponSystem.ammoSnapshot;
   return {
+    primaryMagazine: ammo.primaryMagazine,
+    primaryReserve: ammo.primaryReserve,
+    torpedoTubes: ammo.torpedoTubes,
+    torpedoReserve: ammo.torpedoReserve,
     currentPhase: getCurrentPhase(),
-    currentMissionId: mission24.started
+    currentMissionId: mission25.started
+      ? mission25.missionId
+      : mission24.started
       ? mission24.missionId
       : inSurfacePhase
       ? mission23.started ? mission23.missionId : mission22.started ? mission22.missionId : mission21.started ? mission21.missionId : mission20.started ? mission20.missionId : mission19.started ? mission19.missionId : mission18.started ? mission18.missionId : mission17.started ? mission17.missionId : mission16.started ? mission16.missionId : mission15.started ? mission15.missionId : mission14.started ? mission14.missionId : mission13.started ? mission13.missionId : mission12.started ? mission12.missionId : mission11.started ? mission11.missionId : mission10.started ? mission10.missionId : mission09.started ? mission09.missionId : mission08.started ? mission08.missionId : mission07.started ? mission07.missionId : mission06.started ? mission06.missionId : mission05.started ? mission05.missionId : mission04.started ? mission04.missionId : mission03.started ? mission03.missionId : surfaceMission.missionId
       : 'mission-01-search-home',
-    currentMissionStep: mission24.started
+    currentMissionStep: mission25.started
+      ? mission25.step
+      : mission24.started
       ? mission24.step
       : inSurfacePhase
       ? mission23.started ? mission23.step : mission22.started ? mission22.step : mission21.started ? mission21.step : mission20.started ? mission20.step : mission19.started ? mission19.step : mission18.started ? mission18.step : mission17.started ? mission17.step : mission16.started ? mission16.step : mission15.started ? mission15.step : mission14.started ? mission14.step : mission13.started ? mission13.step : mission12.started ? mission12.step : mission11.started ? mission11.step : mission10.started ? mission10.step : mission09.started ? mission09.step : mission08.started ? mission08.step : mission07.started ? mission07.step : mission06.started ? mission06.step : mission05.started ? mission05.step : mission04.started ? mission04.step : mission03.started ? mission03.step : surfaceMission.currentStep.id
@@ -10841,6 +13212,7 @@ function buildSaveGameData(): Omit<SaveGameData, 'version' | 'savedAt'> {
     ...mission21.snapshot(),
     ...mission22.snapshot(),
     ...mission23.snapshot(),
+    ...mission25.snapshot(),
     ...mission24.snapshot(),
     ...getArkDepartureSaveState(),
     ...mission01Tutorial.snapshot(),
@@ -10856,6 +13228,9 @@ function buildSaveGameData(): Omit<SaveGameData, 'version' | 'savedAt'> {
 
 function saveProgress(): SaveGameData {
   upgradeSystem.updateUnlocks(resourceInventory.state, colonyManager.state.colonizationReadiness);
+  // Never persist a running reload. Rounds already transferred are kept, the
+  // rest stay in reserve, and no timer survives into the restored session.
+  weaponSystem.cancelReloads();
   return saveSystem.saveGame(buildSaveGameData());
 }
 
@@ -10872,10 +13247,63 @@ function restoreSurfaceResourceNodes(save: SaveGameData): void {
   surfaceResourceSystem.syncFromColony(colonyManager);
 }
 
+function normalizeRestoredCollisionPositions(parkedSurfaceShip: boolean): void {
+  if (!collisionWorld.diagnostics.ready || mission24.ascentActive || playerModeSystem.transitionActive) return;
+  let corrected = false;
+  if (playerModeSystem.onFootActive) {
+    const characterCorrected = collisionWorld.normalizeCharacter(
+      surfaceCharacter.group.position,
+      surfaceGroundHeight,
+      characterCollisionResult
+    );
+    if (characterCorrected) {
+      surfaceCharacter.group.position.copy(characterCollisionResult.position);
+      corrected = true;
+    }
+  }
+  const shipCorrected = collisionWorld.normalizeShip(
+    ship.position,
+    ship.quaternion,
+    PLAYER_SHIP_COLLIDERS,
+    inSurfacePhase ? surfaceGroundHeight : undefined,
+    shipCollisionResult
+  );
+  if (shipCorrected) {
+    ship.position.copy(shipCollisionResult.position);
+    velocity.set(0, 0, 0);
+    if (parkedSurfaceShip) parkShipOnTerrain(ship.position, true);
+    corrected = true;
+  }
+  if (corrected) {
+    saveSystem.lastWarning = 'Se corrigio una posicion guardada que intersectaba geometria solida.';
+  }
+}
+
 function applySaveGame(save: SaveGameData): void {
   launched = true;
+  expeditionStartedThisSession = true;
+  input.clear();
+  weaponSystem.clearTransient();
+  combatCameraImpulse.reset();
+  playerShip.clearWeaponResponse();
+  sfxManager.stopLoop('playerTorpedoEngine', 0);
+  torpedoIgnitionAudioCursor = 0;
+  torpedoImpactAudioCursor = 0;
+  torpedoDetonationAudioCursor = 0;
+  enemyNearMissCursor = enemyCombatVisuals.events.nearMisses;
+  enemyHeavyDestructionCursor = enemyCombatVisuals.events.heavyDestructions;
+  enemyThreatWarningRemaining = 0;
+  enemyThreatWarningText = '';
+  lastScan = -10;
+  lastLateInteractionAt = -10;
+  pendingLateInteractionUntil = -Infinity;
+  pendingLateInteractionMission = '';
+  pendingLateInteractionStep = '';
+  queuedLateInteractionMission = '';
+  queuedLateInteractionStep = '';
+  queuedLateInteractionDelta = 0;
   hud.classList.add('is-active');
-  bootScreen.classList.add('is-hidden');
+  bootExperience.hide();
 
   colonyManager.restore({
     ...save.colony,
@@ -11121,6 +13549,15 @@ function applySaveGame(save: SaveGameData): void {
     mission17Completed: save.mission17Completed ?? false,
     mission18Unlocked: save.mission18Unlocked ?? false
   });
+  if (mission17.started && !mission16.completed) {
+    mission16.restore({
+      ...mission16.snapshot(),
+      mission16Started: true,
+      mission16Step: 'completed',
+      mission16Completed: true,
+      mission17Unlocked: true
+    });
+  }
   // The incoming-signature beat is one-shot, exactly like the M16 revelation:
   // a reload into or past that step must never replay it.
   mission17SignaturesAnnounced =
@@ -11226,6 +13663,10 @@ function applySaveGame(save: SaveGameData): void {
     mission22InitialCommsFront: save.mission22InitialCommsFront ?? 'none',
     auroraFrontDefended: save.auroraFrontDefended ?? false,
     nereidaFrontDefended: save.nereidaFrontDefended ?? false,
+    auroraHostilesDestroyed: save.auroraHostilesDestroyed ?? 0,
+    nereidaHostilesDestroyed: save.nereidaHostilesDestroyed ?? 0,
+    orbitalHostilesDestroyed: save.orbitalHostilesDestroyed ?? 0,
+    finalHostilesDestroyed: save.finalHostilesDestroyed ?? 0,
     orbitalRelaysProtected: save.orbitalRelaysProtected ?? [false, false, false],
     crossFrontCrisisManaged: save.crossFrontCrisisManaged ?? false,
     mission22SupportPriority: save.mission22SupportPriority ?? 'none',
@@ -11235,6 +13676,18 @@ function applySaveGame(save: SaveGameData): void {
     mission22Completed: save.mission22Completed ?? false,
     mission23Unlocked: save.mission23Unlocked ?? false
   });
+  if (mission22.completed && !(save.mission23Started ?? false)) {
+    const played = new Set(save.playedDialogueIds ?? []);
+    if (!played.has('m22_closing')) triggerDialogue('m22_closing', 'mission22-restore-closing');
+  }
+  if (mission21.completed && !mission22.started) {
+    const played = new Set(save.playedDialogueIds ?? []);
+    const assaultMissing = !played.has('m21_assault');
+    if (assaultMissing) triggerDialogue('m21_assault', 'mission21-restore-assault');
+    if (!played.has('m21_closing')) {
+      triggerDialogue('m21_closing', 'mission21-restore-closing', assaultMissing ? 0.2 : 0);
+    }
+  }
   mission23.restore({
     mission23Started: save.mission23Started ?? false,
     mission23Step: save.mission23Step ?? 'inactive',
@@ -11288,6 +13741,42 @@ function applySaveGame(save: SaveGameData): void {
     mission24Completed: save.mission24Completed ?? false,
     mission25Unlocked: save.mission25Unlocked ?? false
   });
+  mission25.restore({
+    mission25Unlocked: save.mission25Unlocked ?? save.mission24Completed ?? false,
+    mission25Started: save.mission25Started ?? false,
+    mission25State: save.mission25State ?? 'inactive',
+    mission25BriefingPlayed: save.mission25BriefingPlayed ?? false,
+    mission25DefensePhase: save.mission25DefensePhase ?? 0,
+    mission25Wave: save.mission25Wave ?? 0,
+    mission25WaveKills: save.mission25WaveKills ?? 0,
+    mission25SystemIntegrities: save.mission25SystemIntegrities ?? [100, 100, 100],
+    mission25ArkIntegrity: save.mission25ArkIntegrity ?? 100,
+    mission25InheritedM22Priority: save.mission25InheritedM22Priority ?? 'none',
+    mission25InheritedM23Support: save.mission25InheritedM23Support ?? false,
+    mission25InheritedM23TargetOrder: save.mission25InheritedM23TargetOrder ?? [],
+    mission25CommandNodesDestroyed: save.mission25CommandNodesDestroyed ?? [false, false, false],
+    mission25CommandTargetLocated: save.mission25CommandTargetLocated ?? false,
+    mission25CommandTargetExposed: save.mission25CommandTargetExposed ?? false,
+    mission25CommandCoreIntegrity: save.mission25CommandCoreIntegrity ?? 100,
+    mission25FinalPhase: save.mission25FinalPhase ?? 0,
+    mission25ThreatNeutralized: save.mission25ThreatNeutralized ?? false,
+    mission25StabilizationComplete: save.mission25StabilizationComplete ?? false,
+    mission25ChapterEndShown: save.mission25ChapterEndShown ?? false,
+    mission25ChapterEndDismissed: save.mission25ChapterEndDismissed ?? false,
+    mission25Completed: save.mission25Completed ?? false,
+    chapterCompleted: save.chapterCompleted ?? false,
+    mission25EnemiesDestroyed: save.mission25EnemiesDestroyed ?? 0,
+    mission25EmergencyReinforcementUsed: save.mission25EmergencyReinforcementUsed ?? false
+  }, mission24.snapshot(), mission22.snapshot(), mission23.snapshot());
+  mission25AnnouncedBeats.clear();
+  mission25TransitionElapsed = 0;
+  mission25TransitionStartedAt = 0;
+  mission25WaveLaunched = false;
+  mission25LastSavedStep = mission25.step;
+  mission25HudUpdateAccumulator = 0;
+  mission25ResourcesReleased = false;
+  cleanupMission25Combat(true);
+  chapterEndScreen.hide();
   mission24AnnouncedBeats.clear();
   mission24RehearsalEngaged = false;
   restoreArkDeparture(save);
@@ -11301,23 +13790,20 @@ function applySaveGame(save: SaveGameData): void {
   syncMission23Visuals();
   mission22AnnouncedBeats.clear();
   if (mission22.started) {
-    const waveOwner: Record<string, string> = {
-      'wave:aurora': 'defendAuroraFront',
-      'wave:nereida': 'defendNereidaFront',
-      'wave:orbital': 'defendOrbitalFront',
-      'wave:final': 'surviveFinalPressure'
-    };
-    for (const key of Object.keys(waveOwner)) {
-      if (waveOwner[key] !== mission22.step) mission22AnnouncedBeats.add(key);
-    }
+    // Rebuild only completed encounter latches. Marking every non-current wave
+    // as announced suppresses future spawns after a mid-mission restore.
+    if (mission22.state.auroraFrontDefended) mission22AnnouncedBeats.add('wave:aurora');
+    if (mission22.state.nereidaFrontDefended) mission22AnnouncedBeats.add('wave:nereida');
+    if (mission22.state.orbitalRelaysProtected.every(Boolean)) mission22AnnouncedBeats.add('wave:orbital');
+    if (mission22.completed) mission22AnnouncedBeats.add('wave:final');
   }
   mission22DefenseCooldowns.fill(0);
   mission21AnnouncedBeats.clear();
   if (mission21.started) {
     // Save data and played dialogue ids are authoritative after restore. Replaying
     // either reveal would duplicate the capital arrival or Coalition ultimatum.
-    mission21AnnouncedBeats.add('capital-reveal');
-    mission21AnnouncedBeats.add('ultimatum');
+    if (mission21.state.capitalShipDetected) mission21AnnouncedBeats.add('capital-reveal');
+    if (mission21.state.ultimatumReceived) mission21AnnouncedBeats.add('ultimatum');
   }
   // Orbital combat never survives a load: the sky is cleared and the current
   // wave relaunches from its stable start on the next update.
@@ -11463,6 +13949,29 @@ function applySaveGame(save: SaveGameData): void {
   if (save.nereidaLandingCompleted && descentSystem.state.phase !== 'landed') {
     descentSystem.completeLanding();
   }
+  // Weapon stores restore on every load path, not just surface saves: the
+  // magazine belongs to the ship, not to a phase. A save without these fields
+  // is pre-magazine, so `restoreAmmo` hands back a full loadout rather than
+  // reading zeros. A legacy torpedo total still restores the ready tubes first;
+  // its old reserve value no longer limits fabrication or reload.
+  // A save taken after M20's ascent belongs in the orbital world. Without this
+  // the surface planet stays loaded and visible behind the ship.
+  if (
+    save.mission20Started && !save.mission20Completed &&
+    (save as { ascentComplete?: boolean }).ascentComplete
+  ) {
+    enterOrbitalEnvironment();
+    mothership.group.visible = true;
+    mission20Transition.handedOver = true;
+  }
+
+  weaponSystem.restoreAmmo({
+    primaryMagazine: save.primaryMagazine,
+    primaryReserve: save.primaryReserve,
+    torpedoTubes: save.torpedoTubes,
+    torpedoReserve: save.torpedoReserve,
+    torpedoTotal: (save as { torpedoAmmo?: number }).torpedoAmmo
+  });
   if (
     save.currentPhase === 'surface' ||
     save.currentPhase === 'colonization' ||
@@ -11504,12 +14013,16 @@ function applySaveGame(save: SaveGameData): void {
     syncMission17Visuals();
     syncMission18Visuals();
     syncMission19Visuals();
-    syncMission20Visuals();
-    syncMission21Visuals();
-    syncMission22Visuals();
     if (mission09.state.auroraSectorDiscovered) planetaryWorld.setRevealProgress(1);
     colonyPanel.update(colonyManager.state);
   }
+
+  // M20-M22 can all own the orbital scene. Restore their visuals after the
+  // phase has been resolved so space saves rebuild the same authority as
+  // surface saves; M22 runs last and clears any superseded M21 HUD state.
+  syncMission20Visuals();
+  syncMission21Visuals();
+  syncMission22Visuals();
 
   const savedShipPosition = save.shipSurfacePosition ?? save.playerApproxPosition;
   ship.position.set(...savedShipPosition);
@@ -11520,30 +14033,51 @@ function applySaveGame(save: SaveGameData): void {
     ship.position.copy(coalitionJumpBeacon.position).add(mission23Scratch.set(0, 35, 240));
   }
   velocity.set(0, 0, 0);
+  spaceThrustLevel = 0;
+  spaceBoostLevel = 0;
+  spaceBrakeActive = false;
+  spaceCameraLag = 0;
   if (mission24.started) {
     atmosphericAscent.begin(ship.position, smoothYaw);
     if (mission24StepAtLeast('lowAtmosphereAscent')) {
       const restoreGround = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
       atmosphericAscent.restoreCheckpoint(mission24.step, ship, velocity, restoreGround);
       atmosphericAscentEffect.activate(ship.position);
-      if (mission24StepAtLeast('orbitalInsertion')) enterMission24OrbitalEnvironment();
+      if (mission24StepAtLeast('orbitalInsertion')) enterOrbitalEnvironment();
       else atmosphericAscentEffect.update(clock.elapsedTime, atmosphericAscent.metrics);
     }
     mothership.group.visible = mission24StepAtLeast('approachArk');
     sleepMission24LegacyVisuals();
     syncMission24Visuals();
   }
-  if (inSurfacePhase && save.playerMode === 'onFoot' && save.characterUnlocked) {
+  if (mission25.unlocked && mission24.completed) {
+    mission25ResourcesReleased = false;
+    releaseMission24ResourcesForM25();
+    if (mission25.started && !mission25.completed) syncMission25Visuals();
+  }
+  const restoreParkedSurfaceShip =
+    inSurfacePhase &&
+    !mission24.started &&
+    !mission25.started &&
+    save.playerMode === 'onFoot' &&
+    save.characterUnlocked === true;
+  parkedShipRestoreChecked = restoreParkedSurfaceShip;
+  parkedShipSaveCorrected = false;
+  if (restoreParkedSurfaceShip) {
     // Correct only parked legacy saves; saves made while flying remain exact.
-    settleParkedShipOnTerrain(false);
+    parkedShipSaveCorrected = parkShipOnTerrain(ship.position, false);
   } else {
     parkedShipResolved = false;
     playerShip.setParkedVisualState(false);
+    // Instant route: a save taken in flight must come back stowed, with no
+    // late animation playing itself out after the world has already loaded.
+    shipTakeoffPhase = 'none';
+    playerShipLandingGear.forceRetracted();
   }
   shipAltitudeHoldY = inSurfacePhase ? ship.position.y : undefined;
   shipPreviousY = ship.position.y;
   previousVerticalInput = 0;
-  if (inSurfacePhase && save.playerMode === 'onFoot' && save.characterUnlocked) {
+  if (restoreParkedSurfaceShip) {
     const savedCharacter = save.characterPosition ?? [ship.position.x + 6, ship.position.y, ship.position.z];
     // The pilot is valid inside any settled area, so a save taken on foot in
     // the Aurora valley restores where it was left rather than snapping the
@@ -11554,13 +14088,13 @@ function applySaveGame(save: SaveGameData): void {
       Math.hypot(savedCharacter[0] - savedAnchor.x, savedCharacter[2] - savedAnchor.z) <= 870;
     const x = validCharacterPosition ? savedCharacter[0] : ship.position.x + 6;
     const z = validCharacterPosition ? savedCharacter[2] : ship.position.z;
-    const groundY = planetaryWorld.getHeightAt(x, z) + 0.04;
+    const groundY = surfaceGroundHeight(x, z) + 0.04;
     surfaceCharacter.placeAt(new THREE.Vector3(x, groundY, z), smoothYaw);
     orientOnFootCameraAwayFromShip(surfaceCharacter.group.position);
     surfaceCharacter.setVisible(true);
     playerModeSystem.forceOnFoot();
     snapOnFootCameraNextFrame = true;
-    transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+    transitionGroundHeight = surfaceGroundHeight(ship.position.x, ship.position.z);
     shipAccessLift.state = 'deployed';
     liftRideState = 'exitingShipComplete';
     boardingAnimationState = 'idle';
@@ -11584,6 +14118,7 @@ function applySaveGame(save: SaveGameData): void {
     characterFootLockActive = false;
     liftProgress = 0;
   }
+  normalizeRestoredCollisionPositions(restoreParkedSurfaceShip);
   requestCameraFollowSync('save-load');
   upgradeSystem.updateUnlocks(resourceInventory.state, colonyManager.state.colonizationReadiness);
   lastDialogueObjectiveKey = '';
@@ -11592,50 +14127,86 @@ function applySaveGame(save: SaveGameData): void {
   updateStarMap();
 }
 
+function emitEnemyCombatShot(
+  origin: THREE.Vector3,
+  targetCenter: THREE.Vector3,
+  weapon: EnemyWeaponClass,
+  targetRadius = 0
+): THREE.Vector3 {
+  enemyCombatDirectionScratch.copy(targetCenter).sub(origin);
+  if (enemyCombatDirectionScratch.lengthSq() < 0.0001) enemyCombatDirectionScratch.set(0, 0, -1);
+  else enemyCombatDirectionScratch.normalize();
+  enemyCombatImpactScratch.copy(targetCenter).addScaledVector(enemyCombatDirectionScratch, -Math.max(0, targetRadius));
+  enemyCombatVisuals.emitShot(origin, enemyCombatImpactScratch, weapon, camera.position);
+  return enemyCombatImpactScratch;
+}
+
 function getWeaponTargets(): WeaponTarget[] {
-  if (mission24.started) return [];
-  const live = threats.map((threat) => threat.target).filter((target) => target.health > 0);
+  if (gameModes.isCombat) return coalitionDrones.targets;
+  if (combatHudProbeActive) return weaponProbeTargets;
+  if (combatPacingProbeActive) return coalitionDrones.targets;
+  if (mission25.started && !mission25.completed) {
+    mission25WeaponTargets.length = 0;
+    for (let index = 0; index < coalitionDrones.targets.length; index += 1) {
+      const target = coalitionDrones.targets[index];
+      if (target.health > 0) mission25WeaponTargets.push(target);
+    }
+    coalitionSiegeCommand.appendWeaponTargets(mission25WeaponTargets);
+    return mission25WeaponTargets;
+  }
+  if (mission24.started) return noWeaponTargets;
+  liveWeaponTargets.length = 0;
+  for (let index = 0; index < threats.length; index += 1) {
+    const target = threats[index].target;
+    if (target.health > 0) liveWeaponTargets.push(target);
+  }
   // M18 drones are ordinary WeaponTargets, so the ship's existing lasers,
   // missiles, lock-on, impacts and explosions all work on them unchanged —
   // there is no second combat system.
   if (mission18.started && !mission18.completed) {
     for (const target of coalitionDrones.targets) {
-      if (target.health > 0) live.push(target);
+      if (target.health > 0) liveWeaponTargets.push(target);
     }
   }
   // M19 reuses the same contract for both the air wave (scout drones) and the
   // ground incursion, so the ship's guns work on either without new code.
   if (mission19.started && !mission19.completed) {
     for (const target of coalitionDrones.targets) {
-      if (target.health > 0 && !live.includes(target)) live.push(target);
+      if (target.health > 0 && !liveWeaponTargets.includes(target)) liveWeaponTargets.push(target);
     }
     for (const target of coalitionBreachDrones.targets) {
-      if (target.health > 0) live.push(target);
+      if (target.health > 0) liveWeaponTargets.push(target);
     }
+  }
+  if (mission20.started && !mission20.completed) {
+    for (const target of coalitionDrones.targets) {
+      if (target.health > 0 && !liveWeaponTargets.includes(target)) liveWeaponTargets.push(target);
+    }
+    if (mission20.jammerExposed && coalitionJammer.alive) liveWeaponTargets.push(coalitionJammer.target);
   }
   if (mission22.started && !mission22.completed) {
     for (const target of coalitionDrones.targets) {
-      if (target.health > 0 && !live.includes(target)) live.push(target);
+      if (target.health > 0 && !liveWeaponTargets.includes(target)) liveWeaponTargets.push(target);
     }
     for (const target of coalitionBreachDrones.targets) {
-      if (target.health > 0 && !live.includes(target)) live.push(target);
+      if (target.health > 0 && !liveWeaponTargets.includes(target)) liveWeaponTargets.push(target);
     }
   }
   if (mission23.started && !mission23.completed) {
     for (const target of coalitionDrones.targets) {
-      if (target.health > 0 && !live.includes(target)) live.push(target);
+      if (target.health > 0 && !liveWeaponTargets.includes(target)) liveWeaponTargets.push(target);
     }
     if (mission23.step === 'destroyJammerNode' && coalitionDrones.activeCount === 0 && coalitionJammer.alive) {
-      live.push(coalitionJammer.target);
+      liveWeaponTargets.push(coalitionJammer.target);
     }
     if (mission23StepUsesPlatform() && coalitionDrones.activeCount === 0) {
-      coalitionLogisticsPlatform.appendWeaponTargets(live);
+      coalitionLogisticsPlatform.appendWeaponTargets(liveWeaponTargets);
     }
     if (mission23.step === 'disableBeaconAnchors' && coalitionDrones.activeCount === 0) {
-      coalitionJumpBeacon.appendWeaponTargets(live);
+      coalitionJumpBeacon.appendWeaponTargets(liveWeaponTargets);
     }
   }
-  return live;
+  return liveWeaponTargets;
 }
 
 // ---------------------------------------------------------------------------
@@ -11739,41 +14310,104 @@ async function playDebugSfx(id: string): Promise<boolean> {
 }
 
 function triggerLiftLockTremor(): void {
-  liftLockTremorRemaining = 0.3;
+  combatCameraImpulse.triggerMechanicalLock();
   void sfxManager.play('liftLock', 0.75);
 }
 
-function applyLiftLockTremor(delta: number): void {
-  if (liftLockTremorRemaining <= 0) return;
-  const strength = 0.045 * (liftLockTremorRemaining / 0.3);
-  camera.position.x += (Math.random() - 0.5) * strength;
-  camera.position.y += (Math.random() - 0.5) * strength;
-  liftLockTremorRemaining = Math.max(0, liftLockTremorRemaining - delta);
+/** On-demand launch-area metrics. Never called from the frame loop. */
+function getArkPlatformVisualDebugState(): ArkPlatformVisualDebugState {
+  const platform = scene.getObjectByName('Launch Platform Epsilon-3');
+  const materials = new Set<string>();
+  let platformMeshes = 0;
+  let platformInstancedMeshes = 0;
+  let platformTriangles = 0;
+  platform?.traverse((object) => {
+    let ancestor: THREE.Object3D | null = object;
+    while (ancestor && ancestor !== platform) {
+      if (ancestor.name === 'Player Scout Ship' || ancestor.name === 'Ark Docking Assembly') return;
+      ancestor = ancestor.parent;
+    }
+    const mesh = object as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    platformMeshes += 1;
+    const instanced = (mesh as THREE.InstancedMesh).isInstancedMesh;
+    const instances = instanced ? (mesh as THREE.InstancedMesh).count : 1;
+    if (instanced) platformInstancedMeshes += 1;
+    const triangles = mesh.geometry.index
+      ? mesh.geometry.index.count / 3
+      : (mesh.geometry.attributes.position?.count ?? 0) / 3;
+    platformTriangles += triangles * instances;
+    const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of meshMaterials) materials.add(material.uuid);
+  });
+  const platformSize = new THREE.Vector3();
+  if (platform) new THREE.Box3().setFromObject(platform).getSize(platformSize);
+  const launchAnchor = mothership.getLaunchAnchor();
+  const launchAnchorWorld = launchAnchor?.getWorldPosition(new THREE.Vector3()) ?? new THREE.Vector3();
+  const corridorFocusWorld = launchAnchor
+    ? launchAnchor.localToWorld(new THREE.Vector3(0, 0, arkDepartureTuning.corridorLength * 0.42))
+    : new THREE.Vector3();
+  const docking = arkDockingAssembly.visualDiagnostics;
+  return {
+    platformBuilt: Boolean(platform),
+    platformVisible: Boolean(platform?.visible),
+    platformMeshes,
+    platformInstancedMeshes,
+    platformMaterials: materials.size,
+    platformTriangles: Math.round(platformTriangles),
+    platformSize: platformSize.toArray() as [number, number, number],
+    launchAnchorWorld: launchAnchorWorld.toArray() as [number, number, number],
+    corridorFocusWorld: corridorFocusWorld.toArray() as [number, number, number],
+    dockingAssemblyBuilt: docking.built,
+    dockingGateCount: docking.gateCount,
+    dockingGuideModuleCount: docking.guideModuleCount,
+    dockingMeshes: docking.meshes,
+    dockingInstancedMeshes: docking.instancedMeshes,
+    dockingTriangles: docking.triangles,
+    drawCalls: renderer.info.render.calls,
+    sceneTriangles: renderer.info.render.triangles,
+    fps: diagnostics.data.fps
+  };
 }
 
 function fireLaser(): void {
-  if (!launched || resources.energy < 2) return;
+  if (!launched) { weaponAudit.lastBlockReason = 'not-launched'; return; }
+  // The capacitor is the cannon's resource now. `resources.energy` is no
+  // longer debited per shot: gating the same trigger on both a magazine and
+  // the shared pool would limit the weapon twice over. Flight, boost and
+  // shields still draw on that pool exactly as before.
+  combatWeaponMode = 'laser';
+  weaponAudit.primaryFireEvents += 1;
   const fired = weaponSystem.fireLaser(ship, getWeaponTargets());
   if (fired) {
-    resources.energy = clampResource(resources.energy - 1.4);
-    cameraShake = Math.max(cameraShake, 0.035);
-    playTone(1180, 0.06);
+    weaponAudit.primaryShotsCreated += 1;
+    weaponAudit.primaryChargesSpent += 1;
+    combatCameraImpulse.triggerFire('laser', ship.quaternion);
+    playerShip.triggerWeaponResponse('laser', weaponSystem.activeHardpointSide);
+    playerLaserAudioToggle = !playerLaserAudioToggle;
+    void sfxManager.play(playerLaserAudioToggle ? 'playerLaserBurstA' : 'playerLaserBurstB', 0.78);
   } else {
-    missionManager.setHint(weaponSystem.state.lastMessage);
+    weaponAudit.lastBlockReason = weaponSystem.state.lastMessage;
+    if (gameModes.isStory) missionManager.setHint(weaponSystem.state.lastMessage);
     playTone(260, 0.08);
   }
 }
 
 function fireMissile(): void {
-  if (!launched || resources.energy < 4) return;
-  const fired = weaponSystem.fireMissile(ship, getWeaponTargets());
+  if (!launched) { weaponAudit.lastBlockReason = 'not-launched'; return; }
+  combatWeaponMode = 'torpedo';
+  weaponAudit.torpedoLaunchEvents += 1;
+  const fired = weaponSystem.fireMissile(ship, getWeaponTargets(), velocity);
   if (fired) {
-    resources.energy = clampResource(resources.energy - 3.8);
-    cameraShake = Math.max(cameraShake, 0.1);
-    playTone(160, 0.18);
-    window.setTimeout(() => playTone(90, 0.22), 120);
+    // One launch empties exactly one tube, booked only once the torpedo really
+    // exists, so blocked and refunded attempts stay free.
+    weaponAudit.torpedoesCreated += 1;
+    weaponAudit.torpedoTubesConsumed += 1;
+    combatCameraImpulse.triggerFire('missile', ship.quaternion);
+    playerShip.triggerWeaponResponse('missile');
+    void sfxManager.play('playerTorpedoEject', 0.82);
   } else {
-    missionManager.setHint(weaponSystem.state.lastMessage);
+    if (gameModes.isStory) missionManager.setHint(weaponSystem.state.lastMessage);
     playTone(220, 0.12);
   }
 }
@@ -11974,39 +14608,440 @@ function orientOnFootCameraAwayFromShip(characterPosition: THREE.Vector3): void 
 }
 
 function calculateParkedShipTargetY(groundHeight: number): number {
+  ship.updateMatrixWorld(true);
   playerShip.getHullWorldBounds(parkedShipBounds);
   if (parkedShipBounds.isEmpty()) return groundHeight + SURFACE_SHIP_TUNING.PARK_HEIGHT;
   const currentClearance = parkedShipBounds.min.y - groundHeight;
   return ship.position.y + PARKED_HULL_CLEARANCE - currentClearance;
 }
 
+function fireWeaponVisualProbe(
+  weapon: 'laser' | 'missile',
+  surface: 'shield' | 'hull' | 'structure' = 'hull',
+  destructive = false
+): boolean {
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
+  weaponProbeObject.scale.setScalar(1);
+  weaponProbeObject.position.copy(ship.position).addScaledVector(forward, weapon === 'missile' ? 95 : 110);
+  const previousSurface = weaponProbeObject.userData.combatSurface;
+  weaponProbeObject.userData.combatSurface = surface;
+  weaponProbeObject.visible = true;
+  weaponProbeMaterial.wireframe = surface === 'shield';
+  weaponProbeMaterial.color.setHex(surface === 'shield' ? 0x285568 : surface === 'structure' ? 0x3b3030 : 0x293238);
+  weaponProbeMaterial.emissive.setHex(surface === 'shield' ? 0x176a83 : surface === 'structure' ? 0x4a1712 : 0x10242d);
+  if (!weaponProbeTarget.hostile || weaponProbeTarget.health <= 0 || previousSurface !== surface || destructive) {
+    weaponProbeObject.userData.combatMaximumHealth = destructive ? 20 : 180;
+    weaponProbeTarget.health = destructive ? 20 : 180;
+  }
+  weaponProbeTarget.hostile = true;
+  const fired = weapon === 'missile'
+    ? weaponSystem.fireMissile(ship, [weaponProbeTarget])
+    : weaponSystem.fireLaser(ship, [weaponProbeTarget]);
+  if (fired) combatCameraImpulse.triggerFire(weapon, ship.quaternion);
+  return fired;
+}
+
+type EnemyCombatProbeScenario = 'muzzle' | 'direct' | 'near-miss' | 'far';
+
+function fireEnemyCombatVisualProbe(
+  scenario: EnemyCombatProbeScenario = 'muzzle',
+  weapon: EnemyWeaponClass = 'light'
+): boolean {
+  const forward = new THREE.Vector3();
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
+  camera.getWorldDirection(forward).normalize();
+  const center = new THREE.Vector3().copy(camera.position).addScaledVector(forward, scenario === 'far' ? 150 : 82);
+  weaponProbeObject.position.copy(center);
+  weaponProbeObject.scale.setScalar(1);
+  weaponProbeObject.visible = true;
+  weaponProbeMaterial.wireframe = false;
+  weaponProbeMaterial.color.setHex(0x1d2024);
+  weaponProbeMaterial.emissive.setHex(0x4a1712);
+  weaponProbeObject.userData.combatSurface = 'hull';
+
+  const origin = new THREE.Vector3();
+  const destination = new THREE.Vector3();
+  if (scenario === 'near-miss') {
+    center.copy(camera.position).addScaledVector(forward, 17).addScaledVector(up, 2);
+    origin.copy(center).addScaledVector(right, -55);
+    destination.copy(center).addScaledVector(right, 55);
+    weaponProbeObject.position.copy(origin).addScaledVector(right, -13);
+  } else if (scenario === 'far') {
+    center.addScaledVector(up, 95);
+    origin.copy(center).addScaledVector(right, -60);
+    destination.copy(center).addScaledVector(right, 60);
+    weaponProbeObject.position.copy(origin).addScaledVector(right, -13);
+  } else {
+    origin.copy(weaponProbeObject.position).addScaledVector(forward, -13.2);
+    destination.copy(camera.position).addScaledVector(forward, scenario === 'direct' ? 2 : 18);
+  }
+  return enemyCombatVisuals.emitShot(origin, destination, weapon, camera.position);
+}
+
+function triggerEnemyDamageVisualProbe(
+  integrity: number,
+  mass: 'light' | 'medium' | 'heavy' = 'light',
+  surface: 'shield' | 'hull' | 'structure' = 'hull'
+): ReturnType<EnemyCombatVisualDirector['getDiagnostics']> {
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward).normalize();
+  weaponProbeObject.position.copy(camera.position).addScaledVector(forward, mass === 'heavy' ? 105 : 82);
+  weaponProbeObject.visible = true;
+  weaponProbeObject.scale.setScalar(mass === 'heavy' ? 2.2 : mass === 'medium' ? 1.45 : 1);
+  weaponProbeObject.userData.combatSurface = surface;
+  weaponProbeObject.userData.combatMass = mass;
+  weaponProbeMaterial.wireframe = surface === 'shield';
+  weaponProbeMaterial.color.setHex(surface === 'shield' ? 0x244957 : surface === 'structure' ? 0x352526 : 0x22262b);
+  weaponProbeMaterial.emissive.setHex(surface === 'shield' ? 0x176077 : surface === 'structure' ? 0x571b17 : 0x24110e);
+  const clampedIntegrity = THREE.MathUtils.clamp(integrity, 0, 1);
+  const normal = forward.clone().negate();
+  const point = weaponProbeObject.position.clone().addScaledVector(normal, 12 * weaponProbeObject.scale.x);
+  const event = {
+    target: weaponProbeObject,
+    point,
+    normal,
+    direction: forward,
+    kind: surface,
+    power: mass === 'heavy' ? 2.2 : mass === 'medium' ? 1.45 : 1,
+    scale: mass === 'heavy' ? 3.2 : mass === 'medium' ? 1.75 : 1,
+    integrity: clampedIntegrity,
+    destroyed: clampedIntegrity <= 0
+  } as const;
+  weaponSystem.visuals.setViewerPosition(camera.position);
+  weaponSystem.visuals.emitImpact(event);
+  enemyCombatVisuals.registerImpact(event, mass);
+  return enemyCombatVisuals.getDiagnostics();
+}
+
+function getEnemyCombatResourceDiagnostics(): {
+  objects: number;
+  geometries: number;
+  materials: number;
+  visibleObjects: number;
+  drawCalls: number;
+  triangles: number;
+} {
+  const geometries = new Set<string>();
+  const materials = new Set<string>();
+  let objects = 0;
+  let visibleObjects = 0;
+  enemyCombatVisuals.group.traverse((object) => {
+    objects += 1;
+    if (object.visible) visibleObjects += 1;
+    const renderable = object as THREE.Mesh | THREE.Points | THREE.Sprite;
+    if ('geometry' in renderable && renderable.geometry) geometries.add(renderable.geometry.uuid);
+    if (!('material' in renderable) || !renderable.material) return;
+    if (Array.isArray(renderable.material)) {
+      for (let index = 0; index < renderable.material.length; index += 1) materials.add(renderable.material[index].uuid);
+    } else {
+      materials.add(renderable.material.uuid);
+    }
+  });
+  return {
+    objects,
+    geometries: geometries.size,
+    materials: materials.size,
+    visibleObjects,
+    drawCalls: renderer.info.render.calls,
+    triangles: renderer.info.render.triangles
+  };
+}
+
+function getWeaponResourceDiagnostics(): {
+  objects: number;
+  geometries: number;
+  materials: number;
+  visibleObjects: number;
+} {
+  const geometries = new Set<string>();
+  const materials = new Set<string>();
+  let objects = 0;
+  let visibleObjects = 0;
+  weaponSystem.group.traverse((object) => {
+    objects += 1;
+    if (object.visible) visibleObjects += 1;
+    const renderable = object as THREE.Mesh | THREE.Points | THREE.Sprite;
+    if ('geometry' in renderable && renderable.geometry) geometries.add(renderable.geometry.uuid);
+    if (!('material' in renderable) || !renderable.material) return;
+    if (Array.isArray(renderable.material)) {
+      for (let index = 0; index < renderable.material.length; index += 1) materials.add(renderable.material[index].uuid);
+    } else {
+      materials.add(renderable.material.uuid);
+    }
+  });
+  return { objects, geometries: geometries.size, materials: materials.size, visibleObjects };
+}
+
 function refreshParkedShipMetrics(groundHeight: number): void {
+  ship.updateMatrixWorld(true);
   playerShip.getHullWorldBounds(parkedShipBounds);
   parkedShipTerrainHeight = groundHeight;
   parkedShipHullBottom = parkedShipBounds.isEmpty() ? ship.position.y : parkedShipBounds.min.y;
   parkedShipTerrainSeparation = parkedShipHullBottom - parkedShipTerrainHeight;
 }
 
-function settleParkedShipOnTerrain(force: boolean): boolean {
+function prepareParkedShipPose(position: { x: number; z: number }): void {
+  ship.position.x = position.x;
+  ship.position.z = position.z;
+  pitch = 0;
+  smoothPitch = 0;
+  bankRoll = 0;
+  spaceThrustPitch = 0;
+  spaceThrustLevel = 0;
+  spaceBoostLevel = 0;
+  spaceBrakeActive = false;
+  spaceCameraLag = 0;
+  yaw = smoothYaw;
+  ship.rotation.set(0, smoothYaw, 0);
   playerShip.setParkedVisualState(true);
-  const groundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+  ship.updateMatrixWorld(true);
+}
+
+/**
+ * Starts the takeoff hand-off once the access is confirmed shut.
+ *
+ * Only for real gameplay transitions. Instant routes — save restore, mission
+ * jumps, respawn, debug teleports — must call `forceRetracted` instead, so the
+ * gear is already stowed rather than animating itself away mid-flight.
+ */
+function beginShipTakeoff(): void {
+  if (shipTakeoffPhase !== 'none') return;
+  if (playerShipLandingGear.isStowed) return;
+  shipTakeoffPhase = 'unloading';
+  shipTakeoffElapsed = 0;
+  shipTakeoffLiftFrom = ship.position.y;
+  shipTakeoffLiftTarget = ship.position.y + TAKEOFF_UNLOAD_LIFT;
+  playerShipLandingGear.requestRetract();
+}
+
+/**
+ * Drives the hull's unweighting lift and waits out the gear.
+ *
+ * Runs before the gear update each frame so the legs measure the hull height
+ * this sequence just set, in the same frame. Delta-driven with no timers: a
+ * `setTimeout` here would keep running across a pause or a scene change.
+ */
+function updateShipTakeoff(delta: number): void {
+  if (shipTakeoffPhase === 'none') return;
+  shipTakeoffElapsed += delta;
+
+  if (shipTakeoffPhase === 'unloading') {
+    const t = THREE.MathUtils.clamp(shipTakeoffElapsed / LANDING_GEAR_TUNING.unloadSeconds, 0, 1);
+    ship.position.y = THREE.MathUtils.lerp(
+      shipTakeoffLiftFrom,
+      shipTakeoffLiftTarget,
+      THREE.MathUtils.smoothstep(t, 0, 1)
+    );
+    shipAltitudeHoldY = ship.position.y;
+    shipPreviousY = ship.position.y;
+    ship.updateMatrixWorld(true);
+    // The gear advances itself once the feet are clear; mirror the state here
+    // so the lock releases on the same frame rather than one behind.
+    if (!playerShipLandingGear.isDeployed && playerShipLandingGear.currentState !== 'unloading') {
+      shipTakeoffPhase = 'retracting';
+    }
+  } else if (playerShipLandingGear.isStowed) {
+    shipTakeoffPhase = 'none';
+    return;
+  }
+
+  // Never strand the player waiting on an animation that failed to finish.
+  if (shipTakeoffElapsed > TAKEOFF_MAX_SECONDS) {
+    playerShipLandingGear.forceRetracted();
+    shipTakeoffPhase = 'none';
+  }
+}
+
+/**
+ * Advances the M20 atmospheric hand-off.
+ *
+ * Runs only while M20 is climbing out and still in the surface world. Every
+ * value is a lerp off one progress scalar, so the cost is a handful of numbers
+ * per frame and nothing is allocated.
+ */
+function updateMission20Transition(delta: number, elapsed: number): void {
+  const climbing = mission20.started && !mission20.completed &&
+    (mission20.step === 'emergencyAscent' || mission20.state.ascentComplete);
+  if (!climbing || !inSurfacePhase || mission20Transition.handedOver) {
+    if (mission20Transition.active && !mission20Transition.handedOver) {
+      mission20Transition.active = false;
+      atmosphericAscentEffect.hideAtmosphere();
+      planetaryWorld.setAtmosphericFade(0);
+      if (scene.background instanceof THREE.Color) scene.background.copy(BASIN_BACKGROUND);
+      if (scene.fog instanceof THREE.FogExp2) {
+        scene.fog.color.copy(BASIN_BACKGROUND);
+        scene.fog.density = 0.00255;
+      }
+    }
+    return;
+  }
+
+  const ground = surfaceGroundHeight(ship.position.x, ship.position.z);
+  const altitude = ship.position.y - ground;
+  if (altitude < M20_TRANSITION_START) {
+    if (mission20Transition.active) {
+      mission20Transition.active = false;
+      atmosphericAscentEffect.hideAtmosphere();
+      planetaryWorld.setAtmosphericFade(0);
+      if (scene.background instanceof THREE.Color) scene.background.copy(BASIN_BACKGROUND);
+      if (scene.fog instanceof THREE.FogExp2) {
+        scene.fog.color.copy(BASIN_BACKGROUND);
+        scene.fog.density = 0.00255;
+      }
+    }
+    mission20Transition.progress = 0;
+    return;
+  }
+
+  if (!mission20Transition.active) {
+    mission20Transition.active = true;
+    // Same effect rig M24 raises; built once and reused.
+    atmosphericAscentEffect.activate(ship.position);
+    atmosphericAscentEffect.setVisible(true);
+    showPhaseBanner('TRANSICION ATMOSFERICA', 'Manten SPACE para salir de la atmosfera');
+  }
+
+  const raw = (altitude - M20_TRANSITION_START) / (M20_TRANSITION_TOP - M20_TRANSITION_START);
+  const target = THREE.MathUtils.clamp(raw, 0, 1);
+  // Eased so the sky darkens smoothly rather than tracking altitude jitter.
+  mission20Transition.progress += (target - mission20Transition.progress) *
+    (1 - Math.exp(-delta * 3.4));
+  const t = mission20Transition.progress;
+
+  // The effect reads `worldClearance` against M24's own ladder: clouds fade out
+  // past 104, the planet limb appears past 58, vacuum at 152. Mapping onto that
+  // scale is what lets M20 reuse the rig untouched.
+  const m = mission20Transition.metrics;
+  m.worldClearance = t * 152;
+  m.cloudOpacity = THREE.MathUtils.clamp(1 - t * 1.4, 0, 1);
+  m.enginePower = 120;
+  // Brought forward so the first stars arrive while the dome is still fading,
+  // which is what sells the two as one continuous event.
+  m.starOpacity = THREE.MathUtils.smoothstep(t, 0.3, 0.85);
+  m.curvature = THREE.MathUtils.smoothstep(t, 0.2, 0.9);
+  m.altitude = Math.round(altitude);
+  atmosphericAscentEffect.update(elapsed, m);
+
+  const sky = m.starOpacity;
+  // The dome is driven by the raw progress, NOT by `starOpacity`. Probing the
+  // live uniforms showed the fade was working but invisible: `starOpacity` is a
+  // late-blooming curve (smoothstep 0.35-0.95), so at 56% up the band the sky
+  // had only moved 29% of the way — still visibly pale green. Progress is the
+  // scalar the player is actually experiencing, so the sky follows it.
+  planetaryWorld.setAtmosphericFade(t);
+
+  // The background is what the player actually sees up here, and it is the
+  // reason the sky stayed green: the dome only tracks the camera in x/z, never
+  // in y, so past roughly its own 640-unit radius the ship climbs clean out of
+  // it and the flat clear colour is all that is left. So the background gets
+  // the same steep progress curve the dome does, not the late `starOpacity`.
+  const skyFade = THREE.MathUtils.smoothstep(t, 0.05, 0.8);
+  if (scene.background instanceof THREE.Color) {
+    scene.background.copy(BASIN_BACKGROUND).lerp(SPACE_BACKGROUND, skyFade);
+  }
+  if (scene.fog instanceof THREE.FogExp2) {
+    scene.fog.color.copy(BASIN_BACKGROUND).lerp(SPACE_FOG, skyFade);
+    // Thinning the haze is what lets the terrain below stay readable while the
+    // sky empties, instead of everything dissolving into one flat colour.
+    scene.fog.density = THREE.MathUtils.lerp(0.00255, 0.00006, skyFade);
+  }
+  // A touch wider as the horizon opens up; the chase pose itself is untouched.
+  camera.fov = THREE.MathUtils.lerp(camera.fov, 62 + sky * 8, 1 - Math.exp(-delta * 2));
+
+  transientWarning = `SALIDA ATMOSFERICA // ALT ${m.altitude} m // ${Math.round(t * 100)}%`;
+
+  if (t >= 0.985) {
+    mission20Transition.handedOver = true;
+    mission20Transition.active = false;
+    // The orbital world M24 already builds. Reused, not duplicated.
+    enterOrbitalEnvironment();
+    // Leaving the surface phase stops `updateMission20Systems` from running, so
+    // the mission's own ascent timer can never close the step from here.
+    // Reaching vacuum IS that beat, so it is closed explicitly.
+    if (mission20.step === 'emergencyAscent') mission20.forceAscent();
+    mothership.group.visible = true;
+
+    // --- Re-seat the hull in the orbital frame ---------------------------
+    //
+    // The 2400 m figure is a transition threshold, not a place: it exists to
+    // decide *when* the environment changes. Leaving the ship sitting at that
+    // surface-frame altitude drops it into the orbital world far from where
+    // M01 actually plays, which is a standoff from the Ark — and, because the
+    // collision world's last safe position was seeded down on the surface, it
+    // also pinned every subsequent move.
+    //
+    // Heading and velocity are preserved; only the frame changes. The ship is
+    // placed on the approach line it was already flying, at the M01 standoff.
+    mothership.group.getWorldPosition(orbitalEntryScratch);
+    orbitalApproachScratch
+      .set(-Math.sin(smoothYaw), 0, -Math.cos(smoothYaw))
+      .normalize()
+      .multiplyScalar(-M20_ORBITAL_STANDOFF);
+    ship.position.copy(orbitalEntryScratch).add(orbitalApproachScratch);
+    ship.position.y = orbitalEntryScratch.y + M20_ORBITAL_ENTRY_RISE;
+    ship.updateMatrixWorld(true);
+    shipAltitudeHoldY = ship.position.y;
+    shipPreviousY = ship.position.y;
+    // Without this the collision world keeps rejecting moves against a safe
+    // position that is still down on the surface.
+    collisionWorld.setSafeShipPosition(ship.position);
+    cameraFollowSnapPending = true;
+    atmosphericAscentEffect.setVisible(false);
+    showPhaseBanner('VACIO ALCANZADO', 'Arca Epsilon en rango de aproximacion');
+    triggerDialogue('m20_ascent', 'mission20-vacuum');
+    missionText.textContent = 'Alcanza el Arca.';
+    saveProgress();
+  }
+}
+
+function parkShipOnTerrain(position: { x: number; z: number }, force: boolean): boolean {
+  prepareParkedShipPose(position);
+  const groundHeight = surfaceGroundHeight(position.x, position.z);
+  transitionGroundHeight = groundHeight;
+  // The gear is what the ship now stands on, so it decides how high the belly
+  // rests. Built and snapped to the settled stance here because every caller
+  // of this function — landing, debug jumps, save restore — expects the ship
+  // to be parked when it returns, not mid-animation.
+  playerShipLandingGear.ensureBuilt(playerShip.hullBounds, playerShip.hullBottomLocalY);
+  playerShipLandingGear.forceDeployed();
+  const parkedClearance = playerShipLandingGear.targetBellyClearance;
   refreshParkedShipMetrics(groundHeight);
   if (
     force ||
     parkedShipTerrainSeparation < -0.08 ||
-    Math.abs(parkedShipTerrainSeparation - PARKED_HULL_CLEARANCE) > PARKED_RESTORE_TOLERANCE
+    Math.abs(parkedShipTerrainSeparation - parkedClearance) > PARKED_RESTORE_TOLERANCE
   ) {
-    ship.position.y += PARKED_HULL_CLEARANCE - parkedShipTerrainSeparation;
+    ship.position.y += parkedClearance - parkedShipTerrainSeparation;
     ship.updateMatrixWorld(true);
     refreshParkedShipMetrics(groundHeight);
     shipAltitudeHoldY = ship.position.y;
     shipPreviousY = ship.position.y;
     velocity.y = 0;
     parkedShipResolved = true;
+    collisionWorld.setSafeShipPosition(ship.position);
+    shipAccessLift.updateAnchor(ship.position, smoothYaw, groundHeight, 1, 1, clock.elapsedTime);
+    resupplyAtBase(position);
     return true;
   }
   parkedShipResolved = true;
+  collisionWorld.setSafeShipPosition(ship.position);
+  shipAccessLift.updateAnchor(ship.position, smoothYaw, groundHeight, 1, 1, clock.elapsedTime);
+  resupplyAtBase(position);
   return false;
+}
+
+/**
+ * Rearms the ship at Base Nereida.
+ *
+ * Base Nereida is the one resupply point on the surface; Aurora is a survey
+ * site with nothing to rearm from, so parking there deliberately does not
+ * refill. This is why the check is on the zone and not simply on parking.
+ */
+function resupplyAtBase(position: { x: number; z: number }): void {
+  if (getSurfaceZoneAt(position.x, position.z) !== 'nereida') return;
+  // Full rearm: capacitor, finite cannon reserve and all four torpedo tubes.
+  weaponSystem.refillWeaponStores();
 }
 
 function getBoardingProximity(): {
@@ -12023,7 +15058,11 @@ function getBoardingProximity(): {
     anchor,
     horizontal,
     vertical,
-    available: horizontal <= BOARDING_HORIZONTAL_RANGE && vertical <= BOARDING_VERTICAL_TOLERANCE
+    available:
+      playerModeSystem.onFootActive &&
+      parkedShipResolved &&
+      horizontal <= BOARDING_HORIZONTAL_RANGE &&
+      vertical <= BOARDING_VERTICAL_TOLERANCE
   };
 }
 
@@ -12040,8 +15079,8 @@ function requestExitShip(): boolean {
   previousShipCameraPreference = cameraModeSystem.mode;
   lastCameraModeTransition = `${cameraModeSystem.mode}->EXITING_SHIP`;
   exitShipStartY = ship.position.y;
-  transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
-  playerShip.setParkedVisualState(true);
+  transitionGroundHeight = surfaceGroundHeight(ship.position.x, ship.position.z);
+  prepareParkedShipPose(ship.position);
   exitShipTargetY = calculateParkedShipTargetY(transitionGroundHeight);
   parkedShipResolved = false;
   velocity.set(0, 0, 0);
@@ -12089,9 +15128,25 @@ function requestEnterShip(force = false): boolean {
   return true;
 }
 
+function resolveSurfaceCharacterCollision(
+  start: THREE.Vector3,
+  displacement: THREE.Vector3,
+  characterVelocity: THREE.Vector3
+) {
+  return collisionWorld.moveCharacter(
+    start,
+    displacement,
+    characterVelocity,
+    surfaceGroundHeight,
+    characterCollisionResult
+  );
+}
+
 function updateSurfacePlayer(delta: number): void {
   if (!inSurfacePhase) return;
-  transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+  if (!playerModeSystem.onFootActive && !playerModeSystem.transitionActive) {
+    transitionGroundHeight = surfaceGroundHeight(ship.position.x, ship.position.z);
+  }
   if (playerModeSystem.characterVisible) updateOnFootCameraOrbit(delta);
 
   if (playerModeSystem.transitionActive) {
@@ -12176,10 +15231,10 @@ function updateSurfacePlayer(delta: number): void {
       sfxManager.stopLoop('liftServo');
       void sfxManager.play('hatch', 0.72);
       triggerLiftLockTremor();
-      settleParkedShipOnTerrain(true);
+      parkShipOnTerrain(ship.position, true);
       shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
       const exitPosition = shipAccessLift.getGroundExitPosition();
-      exitPosition.y = planetaryWorld.getHeightAt(exitPosition.x, exitPosition.z) + 0.04;
+      exitPosition.y = surfaceGroundHeight(exitPosition.x, exitPosition.z) + 0.04;
       surfaceCharacter.placeAt(exitPosition, smoothYaw - Math.PI / 2);
       surfaceCharacter.setVisible(true);
       surfaceCharacter.setAnimation('idle');
@@ -12215,6 +15270,10 @@ function updateSurfacePlayer(delta: number): void {
       previousVerticalInput = 0;
       parkedShipResolved = false;
       playerShip.setParkedVisualState(false);
+      // Access is shut and the pilot is aboard: only now may the gear start
+      // coming up. Without this the ship went straight to flight and kept its
+      // legs down for the rest of the sortie.
+      beginShipTakeoff();
       playerModeSystem.syncShipContext(true, previousShipCameraPreference === 'cockpit');
       requestCameraFollowSync(`ENTERING_SHIP->${previousShipCameraPreference}`);
       hud.classList.toggle('cockpit-active', previousShipCameraPreference === 'cockpit');
@@ -12233,10 +15292,6 @@ function updateSurfacePlayer(delta: number): void {
 
   shipAccessLift.state = 'deployed';
   shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
-  const obstacles = [{ position: ship.position, radius: 5.35 }];
-  if (planetaryWorld.colonyModule.group.visible) {
-    obstacles.push({ position: planetaryWorld.colonyModule.group.position, radius: 6.4 });
-  }
   const cameraBasis = getOnFootCameraBasis();
   const boundaryAnchor = getSurfaceBoundaryAnchor();
   surfaceCharacter.updateMovement(
@@ -12251,11 +15306,12 @@ function updateSurfacePlayer(delta: number): void {
     },
     // Walk on the visible Aurora valley floor (falls back to analytic terrain
     // elsewhere), so the character shares the exact ground the colony sits on.
-    (x, z) => auroraSurfaceHeight(x, z),
-    obstacles,
+    (x, z) => surfaceGroundHeight(x, z),
+    EMPTY_CHARACTER_OBSTACLES,
     isSurfaceBoundarySuspended() ? Number.POSITIVE_INFINITY : SURFACE_SHIP_TUNING.TELEMETRY_RADIUS - 8,
     boundaryAnchor.x,
-    boundaryAnchor.z
+    boundaryAnchor.z,
+    resolveSurfaceCharacterCollision
   );
   resources.oxygen = clampResource(resources.oxygen - delta * (input.has('shift') ? 0.052 : 0.032));
 }
@@ -12619,6 +15675,7 @@ function performMission04Interaction(position: THREE.Vector3, portableScanner: b
 }
 
 function performSurfaceInteraction(position: THREE.Vector3, portableScanner: boolean): void {
+  if (mission25.started && performMission25Interaction(position)) return;
   if (mission24.started && performMission24Interaction(position)) return;
   if (mission09.started && performMission09Interaction(position)) return;
   if (mission10.started && performMission10Interaction(position)) return;
@@ -12793,7 +15850,7 @@ function interactOnFoot(): void {
     missionText.textContent = 'No hay objetos interactivos cerca.';
     return;
   }
-  const interactionRange = interaction.kind === 'ship' ? 4.4 : interaction.kind === 'landing' ? 10 : interaction.kind === 'resource' ? 12 : interaction.kind === 'relay' ? MISSION03_RELAY_INTERACTION_RANGE : interaction.kind === 'defense' ? mission04Tuning.beaconInteractionRange : interaction.kind === 'atlas' && interaction.id === atlasSeedArchiveDefinition.id ? mission07Tuning.archiveActivationRange : interaction.kind === 'atlas' ? mission07Tuning.nodeScanRange : interaction.kind === 'aurora' ? (mission15.started && !mission15.completed ? ((mission15.step === 'findEnergyParasite' || mission15.step === 'findLifeSupportParasite' || mission15.step === 'findCommsParasite') ? mission15Tuning.lockRange : mission15Tuning.stationRange) : mission14.started && !mission14.completed ? (mission14.step === 'locateHiddenNode' ? mission14Tuning.lockRange : mission14Tuning.stationRange) : mission13.started && !mission13.completed ? mission13Tuning.stationRange : mission12.started && !mission12.completed ? (mission12.step === 'markLandingZone' || mission12.step === 'guideCapsuleDescent' ? mission12Tuning.landingZoneRange : mission12Tuning.stationRange) : mission11.started && !mission11.completed ? mission11Tuning.stationRange : mission10Tuning.clearingRange) : 6.5;
+  const interactionRange = interaction.kind === 'ship' ? 4.4 : interaction.kind === 'landing' ? 10 : interaction.kind === 'resource' ? 12 : interaction.kind === 'relay' ? MISSION03_RELAY_INTERACTION_RANGE : interaction.kind === 'defense' ? mission04Tuning.beaconInteractionRange : interaction.kind === 'atlas' && interaction.id === atlasSeedArchiveDefinition.id ? mission07Tuning.archiveActivationRange : interaction.kind === 'atlas' ? mission07Tuning.nodeScanRange : interaction.kind === 'auroraDefense' ? mission17StepRange() : interaction.kind === 'pleyadian' ? (mission16.step === 'synchronizeNodes' ? mission16Tuning.nodeRange : mission16Tuning.stationRange) : interaction.kind === 'aurora' ? (mission15.started && !mission15.completed ? ((mission15.step === 'findEnergyParasite' || mission15.step === 'findLifeSupportParasite' || mission15.step === 'findCommsParasite') ? mission15Tuning.lockRange : mission15Tuning.stationRange) : mission14.started && !mission14.completed ? (mission14.step === 'locateHiddenNode' ? mission14Tuning.lockRange : mission14Tuning.stationRange) : mission13.started && !mission13.completed ? mission13Tuning.stationRange : mission12.started && !mission12.completed ? (mission12.step === 'markLandingZone' || mission12.step === 'guideCapsuleDescent' ? mission12Tuning.landingZoneRange : mission12Tuning.stationRange) : mission11.started && !mission11.completed ? mission11Tuning.stationRange : mission10Tuning.clearingRange) : 6.5;
   if (interaction.distance > interactionRange) {
     missionText.textContent = `Objetivo cercano: ${interaction.label} a ${Math.round(interaction.distance)} m. Acércate para interactuar.`;
     playTone(250, 0.1);
@@ -12813,7 +15870,14 @@ function interactOnFoot(): void {
 // Scanner
 // ---------------------------------------------------------------------------
 
-function scan(): void {
+function scan(): boolean {
+  if (!launched || gamePaused) return false;
+  if (getActiveLateMissionId()) return requestLateMissionInteraction();
+  legacyScan();
+  return true;
+}
+
+function legacyScan(): void {
   if (!launched || gamePaused) return;
   const now = clock.elapsedTime;
   const scanCooldown = mission15.step === 'disableCommsParasite'
@@ -12836,6 +15900,7 @@ function scan(): void {
       return;
     }
 
+    if (mission25.started && performMission25Interaction(ship.position)) return;
     if (mission24.started && performMission24Interaction(ship.position)) return;
     if (mission09.started && performMission09Interaction(ship.position)) return;
     if (mission10.started && performMission10Interaction(ship.position)) return;
@@ -12880,6 +15945,7 @@ function scan(): void {
     return;
   }
 
+  if (mission25.started && performMission25Interaction(ship.position)) return;
   if (mission24.started && performMission24Interaction(ship.position)) return;
 
   const planetDistance = candidatePlanet.distanceTo(ship.position);
@@ -12899,6 +15965,10 @@ function scan(): void {
     }
     missionManager.activateScanner();
     descentSafetyGate.markE01Detected();
+    // The player resolved the exact cause of an early refusal. Keep the
+    // remaining gate requirements, but do not leave a stale scanner objective
+    // over the newly active followSignal step.
+    if (missionManager.blockReason === 'Sin candidato confirmado') missionManager.clearDenial();
     tutorialManager.complete('scanner');
     triggerDialogue('m01_e01_detected', 'e01-detected');
     scannerPulse.trigger(ship.position, true);
@@ -13039,7 +16109,27 @@ function scan(): void {
 // Simulation
 // ---------------------------------------------------------------------------
 
+function movePlayerShipThroughWorld(delta: number, terrain?: (x: number, z: number) => number): void {
+  collisionDisplacement.copy(velocity).multiplyScalar(delta);
+  collisionWorld.moveShip(
+    ship.position,
+    collisionDisplacement,
+    velocity,
+    ship.quaternion,
+    PLAYER_SHIP_COLLIDERS,
+    terrain,
+    shipCollisionResult
+  );
+  ship.position.copy(shipCollisionResult.position);
+  if (shipCollisionResult.impact && clock.elapsedTime - lastShipCollisionFeedbackAt >= 0.38) {
+    lastShipCollisionFeedbackAt = clock.elapsedTime;
+    cameraShake = Math.max(cameraShake, 0.035);
+  }
+}
+
 function applyInput(delta: number): void {
+  const wasSpaceBrakeActive = spaceBrakeActive;
+  spaceBrakeActive = false;
   if (mission24.ascentActive && playerModeSystem.insideShip) {
     mission24AscentInput.thrustUp = input.has(' ');
     mission24AscentInput.thrustForward = input.has('w');
@@ -13068,12 +16158,37 @@ function applyInput(delta: number): void {
     surfaceForward.set(-sinYaw, 0, -cosYaw);
     surfaceRight.set(cosYaw, 0, -sinYaw);
     const boosting = input.has('shift');
-    const forwardInput = (input.has('w') ? 1 : 0) - (input.has('s') ? 1 : 0);
-    const strafeInput = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
-    const verticalInput = (input.has(' ') ? 1 : 0) -
+    // Translation is held while the gear is still down or folding: flying off
+    // with the legs planted drags the feet through the terrain. The camera and
+    // yaw stay live, so this reads as a brief hold, not a freeze.
+    const takeoffLock = shipTakeoffPhase !== 'none';
+    if (takeoffLock) {
+      velocity.x = 0;
+      velocity.z = 0;
+    }
+    const forwardInput = takeoffLock ? 0 : (input.has('w') ? 1 : 0) - (input.has('s') ? 1 : 0);
+    const strafeInput = takeoffLock ? 0 : (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
+    const verticalInput = takeoffLock ? 0 : (input.has(' ') ? 1 : 0) -
       (input.has('q') || input.has('c') || input.has('control') ? 1 : 0);
     const hasHorizontalInput = forwardInput !== 0 || strafeInput !== 0;
-    const acceleration = SURFACE_SHIP_TUNING.ACCELERATION * (boosting ? 1.28 : 1) * delta;
+    // --- Precision assist -------------------------------------------------
+    // Engages on its own when already slow, low and off boost: manoeuvring
+    // near the base or a landing site. It damps drift and softens the
+    // throttle; it never moves the ship, and it adds no key.
+    const groundHere = surfaceGroundHeight(ship.position.x, ship.position.z);
+    const altitudeAboveTerrain = ship.position.y - groundHere;
+    const planarSpeed = Math.hypot(velocity.x, velocity.z);
+    surfacePrecisionActive =
+      !boosting &&
+      planarSpeed < PLAYER_SHIP_FLIGHT_TUNING.precisionSpeedThreshold &&
+      altitudeAboveTerrain < PLAYER_SHIP_FLIGHT_TUNING.precisionAltitudeThreshold;
+
+    // Reverse with no forward component is a brake, not just thrust: it bleeds
+    // real velocity so the ship stops where the pilot expects.
+    surfaceBrakeActive = forwardInput < 0 && planarSpeed > PLAYER_SHIP_FLIGHT_TUNING.brakeStopSpeed;
+
+    const acceleration = SURFACE_SHIP_TUNING.ACCELERATION * (boosting ? 1.28 : 1) *
+      (surfacePrecisionActive ? PLAYER_SHIP_FLIGHT_TUNING.precisionAccelerationScale : 1) * delta;
 
     if (forwardInput !== 0) {
       velocity.addScaledVector(surfaceForward, acceleration * (forwardInput > 0 ? forwardInput : forwardInput * 0.74));
@@ -13086,7 +16201,14 @@ function applyInput(delta: number): void {
       velocity.addScaledVector(surfaceUp, acceleration * 0.72 * verticalInput);
     }
 
-    const horizontalDamping = Math.exp(-(hasHorizontalInput ? 1.15 : SURFACE_SHIP_TUNING.DECELERATION) * delta);
+    // Base damping is unchanged; the brake and the precision assist only add to
+    // it, so ordinary flight still behaves exactly as before.
+    const extraDamping =
+      (surfaceBrakeActive ? PLAYER_SHIP_FLIGHT_TUNING.brakeExtraDamping : 0) +
+      (surfacePrecisionActive ? PLAYER_SHIP_FLIGHT_TUNING.precisionLateralDamping : 0);
+    const horizontalDamping = Math.exp(
+      -((hasHorizontalInput ? 1.15 : SURFACE_SHIP_TUNING.DECELERATION) + extraDamping) * delta
+    );
     velocity.x *= horizontalDamping;
     velocity.z *= horizontalDamping;
     velocity.y *= Math.exp(-(verticalInput === 0 ? 5.6 : 1.65) * delta);
@@ -13113,21 +16235,34 @@ function applyInput(delta: number): void {
       velocity.z = (velocity.z / horizSpeed) * maxHorizontalSpeed;
     }
 
-    ship.position.addScaledVector(velocity, delta);
+    movePlayerShipThroughWorld(delta, surfaceGroundHeight);
     traveled += velocity.length() * delta * 0.12;
 
-    const ground = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+    const ground = surfaceGroundHeight(ship.position.x, ship.position.z);
     shipTerrainY = ground;
     const minAltitude = ground + SURFACE_SHIP_TUNING.HOVER_HEIGHT;
     if (ship.position.y < minAltitude) {
-      const terrainCorrection = (minAltitude - ship.position.y) * 0.35;
+      // Was a flat `* 0.35` per frame, which closed the gap over three times
+      // faster at 60 FPS than at 20 — the only genuinely frame-rate-dependent
+      // term left in this path.
+      const terrainCorrection =
+        (minAltitude - ship.position.y) *
+        (1 - Math.exp(-PLAYER_SHIP_FLIGHT_TUNING.hoverRecoveryResponse * delta));
       ship.position.y += terrainCorrection;
       shipAltitudeResetForce = delta > 0 ? terrainCorrection / delta : 0;
       if (velocity.y < 0) velocity.y = 0;
       shipAltitudeHoldY = ship.position.y;
     }
-    if (ship.position.y > 160) {
-      ship.position.y = 160;
+    // Surface flight is capped at 160 m so ordinary flying stays in the basin.
+    // M20's emergency ascent needs to pass 900 m to trigger the orbital
+    // hand-off, so with the cap always on that step was unreachable: the clamp
+    // zeroed the climb long before the mission could ever see the altitude it
+    // was waiting for. The ceiling lifts only while that ascent is authorised.
+    const ceiling = orbitalAscentAuthorized()
+      ? mission20Tuning.ascentAltitude + SURFACE_ORBITAL_ASCENT_HEADROOM
+      : SURFACE_FLIGHT_CEILING;
+    if (ship.position.y > ceiling) {
+      ship.position.y = ceiling;
       if (velocity.y > 0) velocity.y = 0;
       shipAltitudeHoldY = ship.position.y;
     }
@@ -13161,7 +16296,17 @@ function applyInput(delta: number): void {
     return;
   }
 
-  if (descentSystem.state.phase === 'landed' && !mission24.orbitalFlightActive) {
+  // Parked-on-a-surface brake. `descentSystem.phase` stays 'landed' for the
+  // whole surface chapter, so once M20 hands off to orbit this guard was still
+  // firing every frame: it zeroed the velocity and returned before the space
+  // flight model ever ran. Every gate upstream read healthy and the hull simply
+  // never moved. M24 already had an exemption for exactly this; M20's orbital
+  // leg needs the same one.
+  if (
+    descentSystem.state.phase === 'landed' &&
+    !mission24.orbitalFlightActive &&
+    !mission20OrbitalLegActive()
+  ) {
     velocity.multiplyScalar(Math.pow(0.68, delta * 60));
     return;
   }
@@ -13187,13 +16332,26 @@ function applyInput(delta: number): void {
   // M01's flight assist. Outside the onboarding every factor is 1, so this
   // whole block reduces exactly to the original model.
   const assist = mission01Assist.current;
-  const assistActive = mission01Assist.active;
+  const assistActive = gameModes.isStory && mission01Assist.active;
 
-  const forwardInput =
-    (input.has('w') ? 1 : 0) - (input.has('s') ? 0.64 * (assistActive ? assist.brakeGain : 1) : 0);
+  // Space throttle follows the prow. W and SPACE both feed it, so the rule the
+  // pilot actually experiences holds: point the nose up and thrust, the ship
+  // climbs; point it down and thrust, it descends. No fixed world axis is
+  // involved. S stays a brake rather than reverse.
+  const prowThrust = input.has('w') || input.has(' ') ? 1 : 0;
+  const brakeInput = input.has('s') && prowThrust === 0 ? 1 : 0;
+  const forwardInput = prowThrust;
+  spaceBrakeActive = brakeInput > 0 && velocity.length() > PLAYER_SHIP_FLIGHT_TUNING.space.brakeStopSpeed;
+  if (spaceBrakeActive && !wasSpaceBrakeActive) {
+    lastSpaceBrakeStartSpeed = velocity.dot(forward);
+    lastSpaceBrakeFirstSampleSpeed = lastSpaceBrakeStartSpeed;
+    spaceBrakeActivations += 1;
+  }
   const strafeInput = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
+  // Explicit vertical translation, independent of where the nose points, so
+  // the pilot can hold a heading and still change altitude.
   const verticalInput =
-    (input.has(' ') ? 1 : 0) - (input.has('q') || input.has('c') || input.has('control') ? 1 : 0);
+    (input.has('e') ? 1 : 0) - (input.has('q') || input.has('c') || input.has('control') ? 1 : 0);
 
   // Engines take time to build and longer to bleed off: mass, felt.
   //
@@ -13202,21 +16360,40 @@ function applyInput(delta: number): void {
   // leaves it still accelerating. Under assist the bleed is faster than the
   // build, so letting go reads as letting go.
   const spoolUp = forwardInput > spaceThrustLevel;
-  const spoolRate = spoolUp ? 2.6 : 1.5 * (assistActive ? assist.spoolDownGain : 1);
+  const spoolRate = brakeInput > 0
+    ? PLAYER_SHIP_FLIGHT_TUNING.space.brakeSpoolDownResponse
+    : spoolUp
+      ? PLAYER_SHIP_FLIGHT_TUNING.space.thrustSpoolUpResponse
+      : PLAYER_SHIP_FLIGHT_TUNING.space.thrustSpoolDownResponse * (assistActive ? assist.spoolDownGain : 1);
   spaceThrustLevel += (forwardInput - spaceThrustLevel) * (1 - Math.exp(-delta * spoolRate));
   // Boost is a separate, slower ramp so it lands as a shove, not a toggle.
-  spaceBoostLevel += ((boosting ? 1 : 0) - spaceBoostLevel) * (1 - Math.exp(-delta * 1.9));
+  const boostTarget = boosting && forwardInput > 0 && brakeInput === 0 ? 1 : 0;
+  spaceBoostLevel += (boostTarget - spaceBoostLevel) * (1 - Math.exp(-delta * 1.9));
   const boost = 1 + (settings.boost - 1) * spaceBoostLevel;
   // The ramp also sets terminal velocity, since this model has no speed cap:
   // the ship is slower while the pilot is learning and gets faster as the
   // assist decays.
   const acceleration = settings.thrust * boost * delta * (assistActive ? assist.accelerationRamp : 1);
 
-  velocity.addScaledVector(forward, acceleration * spaceThrustLevel);
+  // S is a brake, not reverse thrust. Positive residual spool is visually
+  // allowed to decay, but it cannot keep accelerating the hull after braking
+  // intent begins.
+  const appliedThrustLevel = brakeInput > 0 ? 0 : spaceThrustLevel;
+  velocity.addScaledVector(forward, acceleration * appliedThrustLevel);
   velocity.addScaledVector(right, acceleration * 0.72 * strafeInput);
-  velocity.addScaledVector(up, acceleration * 0.55 * verticalInput);
+  // Vertical authority scales with whatever forward burn is still running.
+  //
+  // Measured cause: after the M20 climb the prow points up, so residual
+  // `spaceThrustLevel` keeps adding +Y. At the stock 0.55 weight against a 1.0
+  // forward weight, holding Q still produced vy +18.6 and the ship kept
+  // climbing. Adding the live thrust level guarantees the vertical request
+  // outranks the leftover burn for as long as it is held, and collapses back
+  // to the stock 0.55 the moment the burn is gone. Nothing outside this branch
+  // is touched: no spool rate, no global acceleration, no damping.
+  const verticalAuthority = 0.55 + Math.max(0, appliedThrustLevel) * 1.15;
+  velocity.addScaledVector(up, acceleration * verticalAuthority * verticalInput);
 
-  if ((mission24.step === 'approachArk' || mission24.step === 'arriveAtOrigin') && forwardInput > 0) {
+  if (gameModes.isStory && (mission24.step === 'approachArk' || mission24.step === 'arriveAtOrigin') && forwardInput > 0) {
     mission24ApproachDirection.copy(mothership.group.position).sub(ship.position);
     const arkDistance = mission24ApproachDirection.length();
     if (arkDistance > 0.001) {
@@ -13242,8 +16419,15 @@ function applyInput(delta: number): void {
   // Split the velocity into "along the hull" and "everything else", then damp
   // them at different rates. Axial momentum persists; drift is cleaned up.
   const axialSpeed = velocity.dot(forward);
-  spaceAxial.copy(forward).multiplyScalar(axialSpeed);
-  spaceLateral.copy(velocity).sub(spaceAxial);
+  let dampedAxialSpeed = axialSpeed;
+  if (brakeInput > 0 && axialSpeed > 0) {
+    dampedAxialSpeed *= Math.exp(
+      -PLAYER_SHIP_FLIGHT_TUNING.space.brakeAxialDamping * (assistActive ? assist.brakeGain : 1) * delta
+    );
+    if (dampedAxialSpeed < PLAYER_SHIP_FLIGHT_TUNING.space.brakeStopSpeed) dampedAxialSpeed = 0;
+  }
+  spaceLateral.copy(velocity).addScaledVector(forward, -axialSpeed);
+  spaceAxial.copy(forward).multiplyScalar(dampedAxialSpeed);
   // Stock axial damping gives a 1.3 s coast — correct for vacuum, bewildering
   // for a first flight. The assist shortens it only while there is no thrust
   // input, so momentum still reads as momentum when the pilot is flying.
@@ -13253,14 +16437,19 @@ function applyInput(delta: number): void {
   spaceAxial.multiplyScalar(axialDamping);
   spaceLateral.multiplyScalar(lateralDamping);
   velocity.copy(spaceAxial).add(spaceLateral);
+  if (spaceBrakeActive && !wasSpaceBrakeActive) {
+    lastSpaceBrakeFirstSampleSpeed = velocity.dot(forward);
+  }
 
-  ship.position.addScaledVector(velocity, delta);
+  movePlayerShipThroughWorld(delta);
   traveled += velocity.length() * delta * 0.12;
 
   // Attitude: the hull noses up slightly under sustained burn and dips with
   // vertical thrust. Eased here, then folded into the existing bank system at
   // the orientation site so there stays exactly one source of hull attitude.
-  const targetPitch = spaceThrustLevel * 0.05 - verticalInput * 0.1;
+  const targetPitch =
+    appliedThrustLevel * PLAYER_SHIP_FLIGHT_TUNING.space.thrustPitchRadians -
+    verticalInput * PLAYER_SHIP_FLIGHT_TUNING.space.verticalPitchRadians;
   spaceThrustPitch += (targetPitch - spaceThrustPitch) * (1 - Math.exp(-delta * 2.6));
 
   resources.energy = clampResource(resources.energy - velocity.length() * delta * (boosting ? 0.034 : 0.015));
@@ -13345,6 +16534,12 @@ function updateHazards(delta: number): void {
     transientWarning = 'Anomalia gravitacional: trayectoria comprometida';
     cameraShake = Math.max(cameraShake, pull * 0.16);
   }
+}
+
+function updateEnemyThreatFeedback(delta: number): void {
+  if (enemyThreatWarningRemaining <= 0) return;
+  enemyThreatWarningRemaining = Math.max(0, enemyThreatWarningRemaining - delta);
+  transientWarning = enemyThreatWarningText;
 }
 
 function getForwardVector(): THREE.Vector3 {
@@ -13596,7 +16791,7 @@ function updateMission05Systems(delta: number, elapsed: number): void {
   }
 }
 
-function updateMissionSystems(delta: number, elapsed: number): void {
+function updateMissionSystems(delta: number, elapsed: number, mission01Delta = delta): void {
   const planetDistance = candidatePlanet.distanceTo(ship.position);
   const signal = candidatePlanet.signalStrengthFrom(ship.position);
   const planetInRange = candidatePlanet.inScanRange(ship.position);
@@ -13604,8 +16799,9 @@ function updateMissionSystems(delta: number, elapsed: number): void {
   const markerInRange = markerDistance <= orbitalMarkerSystem.scanRadius;
 
   if (mission24.started) {
-    if (inBasin || inSurfacePhase) planetaryWorld.update(delta, elapsed);
+    if (inBasin || inSurfacePhase) planetaryWorld.update(delta, elapsed, camera.position);
     updateMission24Systems(delta, elapsed);
+    updateMission25Systems(delta, elapsed);
     return;
   }
 
@@ -13626,7 +16822,7 @@ function updateMissionSystems(delta: number, elapsed: number): void {
 
   threatDirector.update(delta);
   if (inBasin || inSurfacePhase) {
-    planetaryWorld.update(delta, clock.elapsedTime);
+    planetaryWorld.update(delta, clock.elapsedTime, camera.position);
   }
   if (inSurfacePhase) {
     surfaceResourceSystem.update(clock.elapsedTime, getActivePlayerPosition());
@@ -13646,6 +16842,14 @@ function updateMissionSystems(delta: number, elapsed: number): void {
     updateMission16Systems(delta, elapsed);
     updateMission17Systems(delta, elapsed);
     updateMission18Systems(delta, elapsed);
+    auroraSettlementInfrastructure.setProgress(
+      mission10.state.auroraModuleDeployed,
+      mission11.state.auroraSecondModuleDeployed,
+      mission12.started,
+      mission12.state.auroraFirstCrewDisembarked,
+      mission13.started
+    );
+    auroraSettlementInfrastructure.update(elapsed, camera.position, auroraHabitatModule.group.position);
     updateMission19Systems(delta, elapsed);
     updateMission20Systems(delta, elapsed);
     updateMission21Systems(delta, elapsed);
@@ -13668,9 +16872,24 @@ function updateMissionSystems(delta: number, elapsed: number): void {
       resources.hull = clampResource(resources.hull - delta * 2.5);
     }
   }
+  if (!inSurfacePhase) {
+    // M20 begins on Nereida but its link and combat phases continue in orbit.
+    // M21 starts from M20's orbital completion, so it needs the same branch;
+    // otherwise its valid start contract is never evaluated after the battle.
+    updateMission20Systems(delta, elapsed);
+    updateMission21Systems(delta, elapsed);
+    // A restored M21 save resumes in the orbital phase. M22 must evaluate its
+    // unlock here as well or the real M21 completion can never hand off after
+    // a mid-mission reload. The surface/orbit branches are mutually exclusive.
+    updateMission22Systems(delta, elapsed);
+    // M23 begins from M22's orbital closing beat. It must evaluate its unlock
+    // in the same world branch or the completed M22 save can never hand off.
+    updateMission23Systems(delta, elapsed);
+  }
   updateMission24Systems(delta, elapsed);
-  updateMission01Onboarding(delta, elapsed);
-  updateMission01Analysis(delta, elapsed);
+  updateMission25Systems(delta, elapsed);
+  updateMission01Onboarding(mission01Delta, elapsed);
+  updateMission01Analysis(mission01Delta, elapsed);
   updateMission01Hud();
   if (
     threatDirector.complicationActive &&
@@ -13750,12 +16969,15 @@ function updateMissionSystems(delta: number, elapsed: number): void {
         // First refusal: everything the pilot needs, immediately. No throttle —
         // the delay was the defect.
         const objective = blocker?.objective ?? MISSION01_DENIAL.objective;
+        // The beacon is revealed *before* the refusal is recorded, not after:
+        // revealing it advances the mission step, and the objective the pilot
+        // ends up reading has to be the one that survives that transition.
+        // Being told what is missing is useless without being shown where to
+        // get it, which is why this no longer waits for the habitability scan.
+        if (blocker?.id === 'orbitalScanComplete') revealMission01Beacon();
         missionManager.denyDescent(objective, blocker?.reason ?? MISSION01_DENIAL.bannerReason);
         missionText.textContent = `${blocker?.reason ?? MISSION01_DENIAL.bannerReason}. ${objective}`;
         showPhaseBanner(MISSION01_DENIAL.bannerTitle, blocker?.reason ?? MISSION01_DENIAL.bannerReason);
-        // The beacon is revealed here, not after the habitability scan: being
-        // told what is missing is useless without being shown where to get it.
-        if (blocker?.id === 'orbitalScanComplete') revealMission01Beacon();
         triggerDialogue('m01_descent_blocked', 'descent-blocked');
         speakMission01Beat(MISSION01_ONBOARDING_DIALOGUE.descentDeniedReason, 'm01-denial-reason', 1.4);
         playTone(170, 0.24);
@@ -13871,6 +17093,7 @@ function updateMissionSystems(delta: number, elapsed: number): void {
   );
   orbitalMarker.update(delta, elapsed, orbitalMarkerSystem.state.decoded);
   updateObjectiveMarker();
+  updateHostileContacts();
   updateStarMap();
   contextualTutorialHint = tutorialManager.update(delta, {
     missionStep: missionManager.step,
@@ -13905,20 +17128,26 @@ function updateThreats(delta: number, elapsed: number): number {
     object.position.y += Math.sin(threat.phase) * delta * 2.1;
 
     if (inSafeZone && object.position.distanceTo(mothership.group.position) < mothership.safeZoneRadius * 1.28) {
-      const repel = object.position.clone().sub(mothership.group.position).normalize();
+      const repel = enemyCombatDirectionScratch.copy(object.position).sub(mothership.group.position).normalize();
       object.position.addScaledVector(repel, delta * 42);
       continue;
     }
 
     if (distance < threat.alertRadius) {
-      const direction = ship.position.clone().sub(object.position).normalize();
+      const direction = enemyCombatDirectionScratch.copy(ship.position).sub(object.position).normalize();
       object.position.addScaledVector(direction, delta * (8 + (threat.alertRadius - distance) * 0.055));
     }
 
     if (distance < threat.damageRadius && !inSafeZone) {
       resources.hull = clampResource(resources.hull - settings.threatDamage * delta);
-      velocity.add(object.position.clone().sub(ship.position).normalize().multiplyScalar(-delta * 34));
-      shieldEffect.registerImpact();
+      enemyCombatDirectionScratch.copy(object.position).sub(ship.position).normalize();
+      velocity.addScaledVector(enemyCombatDirectionScratch, -delta * 34);
+      shieldEffect.registerImpact(object.position);
+      if (elapsed - lastPlayerDamageFeedbackAt >= 0.42) {
+        lastPlayerDamageFeedbackAt = elapsed;
+        combatCameraImpulse.triggerReceived(object.position, ship.position, camera);
+        flightCombatHud.registerDamageDirection(object.position, ship.position, camera);
+      }
       cameraShake = Math.max(cameraShake, 0.22);
       transientWarning = 'Contacto hostil: maniobra evasiva recomendada';
     }
@@ -14502,6 +17731,11 @@ function getSurfaceObjectivePosition(): THREE.Vector3 {
   if (mission23.started) return getMission23StationPosition();
   if (mission22.started) return getMission22StationPosition();
   if (mission21.started) return getMission21StationPosition();
+  if (mission20.started && !mission20.completed) return getMission20StationPosition();
+  if (mission19.started && !mission19.completed) return getMission19StationPosition();
+  if (mission18.started && !mission18.completed) return getMission18StationPosition();
+  if (mission17.started && !mission17.completed) return getMission17StationPosition();
+  if (mission16.started && !mission16.completed) return getMission16StationPosition();
   if (mission15.started) return getMission15StationPosition();
   if (mission14.started) return getMission14StationPosition();
   if (mission13.started) return getMission13StationPosition();
@@ -14598,6 +17832,11 @@ function getSurfaceObjectiveLabel(): string {
   if (mission23.started) return getMission23StationLabel();
   if (mission22.started) return getMission22StationLabel();
   if (mission21.started) return getMission21StationLabel();
+  if (mission20.started && !mission20.completed) return getMission20StationLabel();
+  if (mission19.started && !mission19.completed) return getMission19StationLabel();
+  if (mission18.started && !mission18.completed) return getMission18StationLabel();
+  if (mission17.started && !mission17.completed) return getMission17StationLabel();
+  if (mission16.started && !mission16.completed) return getMission16StationLabel();
   if (mission15.started) return getMission15StationLabel();
   if (mission14.started) return getMission14StationLabel();
   if (mission13.started) return getMission13StationLabel();
@@ -14673,10 +17912,23 @@ function getSurfaceObjectiveLabel(): string {
 }
 
 function getMissionObjectivePosition(): THREE.Vector3 {
+  if (arkDeparture.started && !arkDeparture.completed) {
+    const launchAnchor = mothership.getLaunchAnchor();
+    return launchAnchor
+      ? launchAnchor.getWorldPosition(arkDepartureObjectiveWorld)
+      : arkDepartureObjectiveWorld.copy(mothership.group.position);
+  }
+  if (mission01Tutorial.started && !mission01Tutorial.completed && mission01MarkerValid) {
+    return mission01MarkerAnchor;
+  }
+  if (mission25.started || mission25.unlocked && mission24.completed) return getMission25TargetPosition();
   if (mission24.started) return getMission24StationPosition();
   if (mission23.started) return getMission23StationPosition();
   if (mission22.started) return getMission22StationPosition();
   if (mission21.started) return getMission21StationPosition();
+  if (mission20.started && !mission20.completed) return getMission20StationPosition();
+  if (mission19.started && !mission19.completed) return getMission19StationPosition();
+  if (mission18.started && !mission18.completed) return getMission18StationPosition();
   if (inSurfacePhase) {
     return getSurfaceObjectivePosition();
   }
@@ -14700,10 +17952,23 @@ function getMissionObjectiveDistance(): number {
 }
 
 function getMissionObjectiveTargetName(): string {
+  if (arkDeparture.started && !arkDeparture.completed) return 'Plataforma Epsilon-3';
+  if (mission01Tutorial.started && !mission01Tutorial.completed && mission01MarkerValid) {
+    switch (mission01Tutorial.step) {
+      case 'flightOrientation': return 'Baliza de salida E-01';
+      case 'propulsionTrial': return 'Corredor de salida';
+      case 'navigationTrial': return 'Baliza de navegacion';
+      case 'stabilizationTrial': return 'Zona de estabilizacion';
+    }
+  }
+  if (mission25.started || mission25.unlocked && mission24.completed) return getMission25TargetLabel();
   if (mission24.started) return getMission24StationLabel();
   if (mission23.started) return getMission23StationLabel();
   if (mission22.started) return getMission22StationLabel();
   if (mission21.started) return getMission21StationLabel();
+  if (mission20.started && !mission20.completed) return getMission20StationLabel();
+  if (mission19.started && !mission19.completed) return getMission19StationLabel();
+  if (mission18.started && !mission18.completed) return getMission18StationLabel();
   if (inSurfacePhase) return getSurfaceObjectiveLabel();
   if (missionManager.step === 'scanOrbitalMarker' || missionManager.step === 'decodeDescentCorridor') {
     return orbitalMarkerLore.name;
@@ -14715,6 +17980,23 @@ function getMissionObjectiveTargetName(): string {
   return 'Biosfera E-01';
 }
 
+function getArkDepartureKeyHint(): string {
+  if (dialogueManager.awaitingInput) return 'Enter';
+  switch (arkDeparture.step) {
+    case 'dockedAtArk':
+    case 'commanderIntroduction':
+    case 'missionContext':
+    case 'preflightCheck':
+    case 'readyForRelease':
+      return 'E';
+    case 'undocking':
+    case 'clearArk':
+      return 'W';
+    default:
+      return '';
+  }
+}
+
 function getCurrentObjectiveDisplay(): ObjectiveDisplay {
   const missionHud = missionManager.update(
     0,
@@ -14723,7 +18005,11 @@ function getCurrentObjectiveDisplay(): ObjectiveDisplay {
     getMissionProgress()
   );
   const phase = getCurrentPhase();
-  const activeMission24Step = mission24.started ? mission24.stepDefinition : undefined;
+  const activeArkDepartureStep = arkDeparture.started && !arkDeparture.completed
+    ? arkDeparture.stepDefinition
+    : undefined;
+  const activeMission25Step = mission25.started ? mission25.stepDefinition : undefined;
+  const activeMission24Step = mission24.started && !activeMission25Step ? mission24.stepDefinition : undefined;
   const activeMission23Step = mission23.started && !activeMission24Step ? mission23.stepDefinition : undefined;
   const activeMission22Step = mission22.started && !activeMission23Step ? mission22.stepDefinition : undefined;
   const activeMission21Step = mission21.started && !activeMission22Step && !activeMission23Step ? mission21.stepDefinition : undefined;
@@ -14745,7 +18031,8 @@ function getCurrentObjectiveDisplay(): ObjectiveDisplay {
   const activeMission05Step = inSurfacePhase && mission05.started ? mission05.currentStep : undefined;
   const activeMission04Step = inSurfacePhase && mission04.started ? mission04.currentStep : undefined;
   const activeMission03Step = inSurfacePhase && mission03.started ? mission03.currentStep : undefined;
-  const activeSurfaceMissionStep = activeMission24Step ?? activeMission23Step ?? activeMission22Step ?? activeMission21Step ?? activeMission20Step ?? activeMission19Step ?? activeMission18Step ?? activeMission17Step ?? activeMission16Step ?? activeMission15Step ?? activeMission14Step ?? activeMission13Step ?? activeMission12Step ?? activeMission11Step ?? activeMission10Step ?? activeMission09Step ?? activeMission08Step ?? activeMission07Step ?? activeMission06Step ?? activeMission05Step ?? activeMission04Step ?? activeMission03Step;
+  const activeSurfaceMissionStep = activeMission25Step ?? activeMission24Step ?? activeMission23Step ?? activeMission22Step ?? activeMission21Step ?? activeMission20Step ?? activeMission19Step ?? activeMission18Step ?? activeMission17Step ?? activeMission16Step ?? activeMission15Step ?? activeMission14Step ?? activeMission13Step ?? activeMission12Step ?? activeMission11Step ?? activeMission10Step ?? activeMission09Step ?? activeMission08Step ?? activeMission07Step ?? activeMission06Step ?? activeMission05Step ?? activeMission04Step ?? activeMission03Step;
+  const mission25Guidance = activeMission25Step ? getMission25ObjectiveGuidance() : undefined;
   const mission24Guidance = activeMission24Step ? getMission24ObjectiveGuidance() : undefined;
   const mission23Guidance = activeMission23Step ? getMission23ObjectiveGuidance() : undefined;
   const mission22Guidance = activeMission22Step ? getMission22ObjectiveGuidance() : undefined;
@@ -14771,10 +18058,10 @@ function getCurrentObjectiveDisplay(): ObjectiveDisplay {
   return resolveObjectiveDisplay({
     phase,
     missionStep: missionManager.step,
-    missionTitle: activeMission24Step ? mission24.missionName : activeMission23Step ? mission23.missionName : activeMission22Step ? mission22.missionName : activeMission21Step ? mission21.missionName : activeMission20Step ? mission20.missionName : activeMission19Step ? mission19.missionName : activeMission18Step ? mission18.missionName : activeMission17Step ? mission17.missionName : activeMission16Step ? mission16.missionName : activeMission15Step ? mission15.missionName : activeMission14Step ? mission14.missionName : activeMission13Step ? mission13.missionName : activeMission12Step ? mission12.missionName : activeMission11Step ? mission11.missionName : activeMission10Step ? mission10.missionName : activeMission09Step ? mission09.missionName : activeMission08Step ? mission08.missionName : activeMission07Step ? mission07.missionName : activeMission06Step ? mission06.missionName : activeMission05Step ? mission05.missionName : activeMission04Step ? mission04.missionName : activeMission03Step ? mission03.missionName : missionHud.missionName,
-    stepTitle: activeSurfaceMissionStep?.stepTitle ?? (inSurfacePhase ? surfaceMission.currentStep.stepTitle : missionHud.stepTitle),
-    objective: missionHud.objective,
-    nextAction: missionHud.nextAction,
+    missionTitle: activeMission25Step ? mission25.missionName : activeMission24Step ? mission24.missionName : activeMission23Step ? mission23.missionName : activeMission22Step ? mission22.missionName : activeMission21Step ? mission21.missionName : activeMission20Step ? mission20.missionName : activeMission19Step ? mission19.missionName : activeMission18Step ? mission18.missionName : activeMission17Step ? mission17.missionName : activeMission16Step ? mission16.missionName : activeMission15Step ? mission15.missionName : activeMission14Step ? mission14.missionName : activeMission13Step ? mission13.missionName : activeMission12Step ? mission12.missionName : activeMission11Step ? mission11.missionName : activeMission10Step ? mission10.missionName : activeMission09Step ? mission09.missionName : activeMission08Step ? mission08.missionName : activeMission07Step ? mission07.missionName : activeMission06Step ? mission06.missionName : activeMission05Step ? mission05.missionName : activeMission04Step ? mission04.missionName : activeMission03Step ? mission03.missionName : missionHud.missionName,
+    stepTitle: activeArkDepartureStep?.title ?? activeSurfaceMissionStep?.stepTitle ?? (inSurfacePhase ? surfaceMission.currentStep.stepTitle : missionHud.stepTitle),
+    objective: activeArkDepartureStep?.objective ?? missionHud.objective,
+    nextAction: activeArkDepartureStep?.nextAction ?? missionHud.nextAction,
     target: getMissionObjectiveTargetName(),
     distance: getMissionObjectiveDistance(),
     surfaceStep: inSurfacePhase && !activeSurfaceMissionStep ? surfaceMission.currentStep : undefined,
@@ -14794,9 +18081,9 @@ function getCurrentObjectiveDisplay(): ObjectiveDisplay {
       !activeSurfaceMissionStep &&
       playerModeSystem.onFootActive &&
       surfaceMission.currentStep.id === 'prepareExpansion',
-    actionOverride: mission24Guidance?.nextAction ?? mission23Guidance?.nextAction ?? mission22Guidance?.nextAction ?? mission21Guidance?.nextAction ?? mission20Guidance?.nextAction ?? mission19Guidance?.nextAction ?? mission18Guidance?.nextAction ?? mission17Guidance?.nextAction ?? mission16Guidance?.nextAction ?? mission15Guidance?.nextAction ?? mission14Guidance?.nextAction ?? mission13Guidance?.nextAction ?? mission12Guidance?.nextAction ?? mission11Guidance?.nextAction ?? mission10Guidance?.nextAction ?? mission09Guidance?.nextAction ?? mission08Guidance?.nextAction ?? mission07Guidance?.nextAction ?? mission06Guidance?.nextAction ?? mission05Guidance?.nextAction ?? mission04Guidance?.nextAction ?? mission03Guidance?.nextAction,
-    keyOverride: mission24Guidance?.key ?? mission23Guidance?.key ?? mission22Guidance?.key ?? mission21Guidance?.key ?? mission20Guidance?.key ?? mission19Guidance?.key ?? mission18Guidance?.key ?? mission17Guidance?.key ?? mission16Guidance?.key ?? mission15Guidance?.key ?? mission14Guidance?.key ?? mission13Guidance?.key ?? mission12Guidance?.key ?? mission11Guidance?.key ?? mission10Guidance?.key ?? mission09Guidance?.key ?? mission08Guidance?.key ?? mission07Guidance?.key ?? mission06Guidance?.key ?? mission05Guidance?.key ?? mission04Guidance?.key ?? mission03Guidance?.key,
-    blockedReason: mission24Guidance?.blockedReason ?? mission23Guidance?.blockedReason ?? mission22Guidance?.blockedReason ?? mission21Guidance?.blockedReason ?? mission20Guidance?.blockedReason ?? mission19Guidance?.blockedReason ?? mission18Guidance?.blockedReason ?? mission17Guidance?.blockedReason ?? mission16Guidance?.blockedReason ?? mission15Guidance?.blockedReason ?? mission14Guidance?.blockedReason ?? mission13Guidance?.blockedReason ?? mission12Guidance?.blockedReason ?? mission11Guidance?.blockedReason ?? mission10Guidance?.blockedReason ?? mission09Guidance?.blockedReason ?? mission08Guidance?.blockedReason ?? mission07Guidance?.blockedReason ?? mission06Guidance?.blockedReason ?? mission05Guidance?.blockedReason ?? mission04Guidance?.blockedReason ?? mission03Guidance?.blockedReason ?? (!inSurfacePhase ? descentSafetyGate.state.descentBlockedReason : ''),
+    actionOverride: mission25Guidance?.nextAction ?? mission24Guidance?.nextAction ?? mission23Guidance?.nextAction ?? mission22Guidance?.nextAction ?? mission21Guidance?.nextAction ?? mission20Guidance?.nextAction ?? mission19Guidance?.nextAction ?? mission18Guidance?.nextAction ?? mission17Guidance?.nextAction ?? mission16Guidance?.nextAction ?? mission15Guidance?.nextAction ?? mission14Guidance?.nextAction ?? mission13Guidance?.nextAction ?? mission12Guidance?.nextAction ?? mission11Guidance?.nextAction ?? mission10Guidance?.nextAction ?? mission09Guidance?.nextAction ?? mission08Guidance?.nextAction ?? mission07Guidance?.nextAction ?? mission06Guidance?.nextAction ?? mission05Guidance?.nextAction ?? mission04Guidance?.nextAction ?? mission03Guidance?.nextAction,
+    keyOverride: activeArkDepartureStep ? getArkDepartureKeyHint() : mission25Guidance?.key ?? mission24Guidance?.key ?? mission23Guidance?.key ?? mission22Guidance?.key ?? mission21Guidance?.key ?? mission20Guidance?.key ?? mission19Guidance?.key ?? mission18Guidance?.key ?? mission17Guidance?.key ?? mission16Guidance?.key ?? mission15Guidance?.key ?? mission14Guidance?.key ?? mission13Guidance?.key ?? mission12Guidance?.key ?? mission11Guidance?.key ?? mission10Guidance?.key ?? mission09Guidance?.key ?? mission08Guidance?.key ?? mission07Guidance?.key ?? mission06Guidance?.key ?? mission05Guidance?.key ?? mission04Guidance?.key ?? mission03Guidance?.key,
+    blockedReason: mission25Guidance?.blockedReason ?? mission24Guidance?.blockedReason ?? mission23Guidance?.blockedReason ?? mission22Guidance?.blockedReason ?? mission21Guidance?.blockedReason ?? mission20Guidance?.blockedReason ?? mission19Guidance?.blockedReason ?? mission18Guidance?.blockedReason ?? mission17Guidance?.blockedReason ?? mission16Guidance?.blockedReason ?? mission15Guidance?.blockedReason ?? mission14Guidance?.blockedReason ?? mission13Guidance?.blockedReason ?? mission12Guidance?.blockedReason ?? mission11Guidance?.blockedReason ?? mission10Guidance?.blockedReason ?? mission09Guidance?.blockedReason ?? mission08Guidance?.blockedReason ?? mission07Guidance?.blockedReason ?? mission06Guidance?.blockedReason ?? mission05Guidance?.blockedReason ?? mission04Guidance?.blockedReason ?? mission03Guidance?.blockedReason ?? (!inSurfacePhase ? descentSafetyGate.state.descentBlockedReason : ''),
     missingRequirements: !inSurfacePhase ? descentSafetyGate.state.missingDescentRequirements : []
   });
 }
@@ -14872,7 +18159,10 @@ function syncDialogueWithObjective(): void {
   const objectiveKey = `${objective.phase}:${objective.step}`;
   if (objectiveKey === lastDialogueObjectiveKey) return;
   lastDialogueObjectiveKey = objectiveKey;
-  if (mission24.started) return;
+  // M06+ own their communications explicitly. Keeping the legacy M03-M05
+  // objective synchronizer alive past this point can inject old completion
+  // lines into later mission queues (notably m05_complete during M22).
+  if (mission06.started || mission24.started) return;
 
   const dialogueId = inSurfacePhase
     ? mission05.started
@@ -14926,16 +18216,13 @@ function getSurfaceMapTargetId(): string {
     return 'mission22-ark';
   }
   if (mission21.started) {
-    if (mission21.step === 'detectCapitalShip' || mission21.step === 'analyzeSignature' || mission21.step === 'receiveUltimatum') {
+    if (mission21.step === 'detectCapitalShip' || mission21.step === 'receiveUltimatum') {
       return 'coalition-capital';
     }
     if (mission21.step === 'restoreThreeChannels') {
       return `mission21-link-${Math.max(0, mission21.activeEnclaveChannelIndex)}`;
     }
     if (mission21.step === 'witnessDemonstration') return 'remote-orbital-beacon';
-    if (mission21.step === 'classifyAttackRoutes') {
-      return `mission21-route-${Math.max(0, mission21.activeRouteIndex)}`;
-    }
     return 'mission21-ark';
   }
   if (mission09.started && !mission09.completed) {
@@ -15007,10 +18294,12 @@ function getSurfaceMapTargetId(): string {
 }
 
 function getMissionProgress(): number {
+  if (mission25.started || mission25.unlocked && mission24.completed) return getMission25Progress();
   if (mission24.started) return getMission24Progress();
   if (mission23.started) return getMission23Progress();
   if (mission22.started) return getMission22Progress();
   if (mission21.started) return getMission21Progress();
+  if (mission20.started && !mission20.completed) return mission20.phaseProgress;
   switch (missionManager.step) {
     case 'decodeDescentCorridor':
       return orbitalMarkerSystem.state.progress;
@@ -15030,12 +18319,14 @@ function getMissionProgress(): number {
 }
 
 function getMissionSignalStrength(): number {
+  if (mission25.started) return mission25.state.mission25ArkIntegrity / 100;
   if (mission24.started) return mission24.atmosphericAscentActive
     ? 1 - atmosphericAscent.metrics.density * 0.45
     : mission24.state.allEnclaveLinksRestored ? 1 : 0.72;
   if (mission23.started) return mission23.state.jammerNodeDestroyed ? 1 : mission23.jammed ? 0.28 : mission23.readout.jointEnergy / 100;
   if (mission22.started) return mission22.readout.communicationsQuality / 100;
   if (mission21.started) return mission21.readout.enemySignal / 100;
+  if (mission20.started && !mission20.completed) return mission20.readout.commsQuality / 100;
   if (inSurfacePhase && mission13.started) {
     // Power stability is the reading that matters while the front is over us.
     return mission13.readout.energyStability / 100;
@@ -15135,6 +18426,7 @@ function getInputActionState(): InputActionState {
 }
 
 function handleShipAccessAction(): boolean {
+  shipAccessFConsumed = false;
   if (!inSurfacePhase) {
     missionText.textContent = 'Acceso de superficie no disponible durante el vuelo orbital.';
     return false;
@@ -15142,6 +18434,7 @@ function handleShipAccessAction(): boolean {
 
   if (playerModeSystem.onFootActive) {
     if (requestEnterShip()) {
+      shipAccessFConsumed = true;
       tutorialManager.complete('returnShip');
       return true;
     }
@@ -15153,6 +18446,7 @@ function handleShipAccessAction(): boolean {
 
   if (playerModeSystem.insideShip) {
     if (requestExitShip()) {
+      shipAccessFConsumed = true;
       tutorialManager.complete('shipAccess');
       return true;
     }
@@ -15192,6 +18486,7 @@ function dispatchInputAction(action: GameInputAction, key: string): boolean {
     {
       scan: () => {
         if (!launched) return false;
+        if (getActiveLateMissionId()) return scan();
         // During the prologue the interaction key runs the launch checklist
         // and the clamp release instead of the long-range sweep, which only
         // makes sense once the ship is outside the perimeter anyway.
@@ -15200,8 +18495,7 @@ function dispatchInputAction(action: GameInputAction, key: string): boolean {
         // inventing a second binding. Only one of these can claim the key on a
         // given frame, so E is never processed twice.
         if (handleMission01BeaconInteraction()) return true;
-        scan();
-        return true;
+        return scan();
       },
       shipAccess: handleShipAccessAction,
       toggleCamera: handleCameraToggleAction,
@@ -15535,6 +18829,15 @@ function getCockpitRadarContacts(radarRange: number): CockpitRadarContact[] {
     addContact('surface-hazard', 'RADIACIÓN', 'hazard', planetaryWorld.hazard.group.position);
   } else {
     if (mothership.group.visible) addContact('mothership', 'ARCA EPSILON', 'mothership', mothership.group.position);
+    if (mission25.started && !mission25.completed) {
+      for (let index = 0; index < coalitionDrones.targets.length; index += 1) {
+        const target = coalitionDrones.targets[index];
+        if (target.health > 0) addContact(`mission25-hostile-${index}`, 'ASALTANTE', 'hazard', target.object.position);
+      }
+      if (coalitionSiegeCommand.isVisible) {
+        addContact('mission25-command', getMission25TargetLabel(), 'hazard', coalitionSiegeCommand.position);
+      }
+    }
     if (missionManager.step !== 'briefing' && missionManager.step !== 'scannerTutorial') {
       addContact('candidate-e01', 'E-01', 'planet', candidatePlanet.group.position);
     }
@@ -15649,6 +18952,37 @@ function syncCockpitEventAlerts(elapsed: number): void {
   lastCockpitBaseOperational = baseOperational;
 }
 
+/**
+ * Feeds the contact tracker from whichever hostile fleets are live.
+ *
+ * The maximum-health figures come from the same tuning the fleets spawn with,
+ * so a selected contact's bar reads against the real value rather than a
+ * guess.
+ */
+function updateHostileContacts(): void {
+  if (!launched || !playerModeSystem.insideShip) {
+    hostileContacts.hideAll();
+    return;
+  }
+  hostileContactSources[0].source = coalitionBreachDrones;
+  hostileContactSources[1].source = coalitionDrones;
+  hostileContactSources[2].source = mission20.jammerExposed
+    ? coalitionJammerContactSource
+    : noHostileContactSource;
+  hostileContacts.update(
+    hostileContactSources,
+    camera,
+    ship.position,
+    window.innerWidth,
+    window.innerHeight
+  );
+  // The locked contact is what the primary biases toward. Read from the tracker
+  // rather than re-derived, so the thing the player sees marked is exactly the
+  // thing the gun converges on.
+  const locked = hostileContacts.contacts.find((c) => c.selected);
+  weaponSystem.setAimAssistTarget(locked ? locked.world : null);
+}
+
 function updateObjectiveMarker(): void {
   const target = getMissionObjectivePosition();
   const objective = getCurrentObjectiveDisplay();
@@ -15698,7 +19032,8 @@ function updateObjectiveMarker(): void {
 
 function updateStarMap(): void {
   if (!starMap.active) return;
-  if (inSurfacePhase) {
+  const mission22TacticalMapActive = mission22.started && !mission23.started;
+  if (inSurfacePhase || mission22TacticalMapActive) {
     const onFoot = playerModeSystem.onFootActive || playerModeSystem.transitionActive;
     const surfaceEntities = surfaceMapSystem.generateEntities(
       onFoot ? surfaceCharacter.group.position : ship.position,
@@ -15848,6 +19183,14 @@ function updateStarMap(): void {
       });
     }
     if (mission22.started && !mission23.started) {
+      // M22 is a strategic three-front view. Earlier surface POIs remain valid
+      // in the world, but showing all of them here obscures the active command
+      // picture, so this map state keeps only the player before adding M22 data.
+      for (let index = surfaceEntities.length - 1; index >= 0; index -= 1) {
+        const id = surfaceEntities[index].id;
+        if (id !== 'player-surface' && id !== 'surface-scout-ship') surfaceEntities.splice(index, 1);
+        else surfaceEntities[index].showLabel = false;
+      }
       const targetId = getSurfaceMapTargetId();
       const aurora = auroraStationPosition(auroraSettlementSiteDefinition.position);
       const nereida = mission19StationPosition(nereidaAtlasGate, mission19DefenseScratch);
@@ -15855,15 +19198,17 @@ function updateStarMap(): void {
         {
           id: 'mission22-ark', name: 'ARCA // MANDO', type: 'communications',
           position: mothership.group.position, status: `INTEGRIDAD ${Math.round(mission22.state.orbitalIntegrity)}%`,
-          isCurrentTarget: targetId === 'mission22-ark'
+          isCurrentTarget: targetId === 'mission22-ark', showLabel: targetId === 'mission22-ark'
         },
         {
           id: 'mission22-aurora', name: 'FRENTE AURORA', type: 'defense', position: aurora,
-          status: `${Math.round(mission22.state.auroraIntegrity)}%`, isCurrentTarget: targetId === 'mission22-aurora'
+          status: `${Math.round(mission22.state.auroraIntegrity)}% // ${mission22.state.auroraFrontDefended ? 'ESTABLE' : mission22.step === 'defendAuroraFront' ? 'BAJO ATAQUE' : 'EN RESERVA'}`,
+          isCurrentTarget: targetId === 'mission22-aurora', showLabel: targetId === 'mission22-aurora'
         },
         {
           id: 'mission22-nereida', name: 'FRENTE NEREIDA', type: 'defense', position: nereida,
-          status: `${Math.round(mission22.state.nereidaIntegrity)}%`, isCurrentTarget: targetId === 'mission22-nereida'
+          status: `${Math.round(mission22.state.nereidaIntegrity)}% // ${mission22.state.nereidaFrontDefended ? 'ESTABLE' : mission22.step === 'defendNereidaFront' ? 'BAJO ATAQUE' : 'EN RESERVA'}`,
+          isCurrentTarget: targetId === 'mission22-nereida', showLabel: targetId === 'mission22-nereida'
         }
       );
       threeFrontCommandNetwork.relayPositions.forEach((position, index) => {
@@ -15873,7 +19218,8 @@ function updateStarMap(): void {
           type: 'communications',
           position,
           status: mission22.state.orbitalRelaysProtected[index] ? 'PROTEGIDO' : 'BAJO ATAQUE',
-          isCurrentTarget: targetId === `mission22-relay-${index}`
+          isCurrentTarget: targetId === `mission22-relay-${index}`,
+          showLabel: targetId === `mission22-relay-${index}`
         });
       });
       threeFrontCommandNetwork.nodePositions.forEach((position, index) => {
@@ -15884,9 +19230,20 @@ function updateStarMap(): void {
           type: 'threat',
           position,
           status: mission22.state.coordinationNodesDetected[index] ? 'LOCALIZADO // NO ATACAR' : 'ANALIZANDO',
-          isCurrentTarget: targetId === `mission22-node-${index}`
+          isCurrentTarget: targetId === `mission22-node-${index}`,
+          showLabel: targetId === `mission22-node-${index}`
         });
       });
+      if (coalitionCapitalPresence.isVisible) {
+        surfaceEntities.push({
+          id: 'coalition-capital',
+          name: 'NAVE CAPITAL // MANDO ENEMIGO',
+          type: 'threat',
+          position: coalitionCapitalPresence.capitalPosition,
+          status: 'FUERA DE ALCANCE // NO ATACABLE'
+        });
+      }
+      surfaceEntities.sort((a, b) => Number(Boolean(b.isCurrentTarget)) - Number(Boolean(a.isCurrentTarget)));
     }
     if (mission23.started && !mission24.started) {
       const targetId = getSurfaceMapTargetId();
@@ -15932,9 +19289,13 @@ function updateStarMap(): void {
     const starmapTitle = document.querySelector('.starmap-title') as HTMLElement | null;
     const starmapPoiList = document.getElementById('starmap-poi-list');
     surfaceMapPanel.renderToStarMap(surfaceEntities, starmapTitle, starmapPoiList);
+    if (starmapTitle && mission22.started && !mission23.started) {
+      starmapTitle.textContent = 'MAPA TÁCTICO // TRES FRENTES';
+    }
     return;
   }
   const currentTargetPos = getMissionObjectivePosition();
+  const mission21MapTargetId = mission21.started && !mission22.started ? getSurfaceMapTargetId() : '';
   const entities: StarMapEntity[] = [
     {
       id: 'player',
@@ -15943,11 +19304,14 @@ function updateStarMap(): void {
       position: ship.position
     },
     {
-      id: 'mothership',
+      id: mission21MapTargetId ? 'mission21-ark' : 'mothership',
       name: 'ARCA EPSILON [ORIGEN]',
       type: 'mothership',
       position: mothership.group.position,
-      status: 'Órbita Segura // Telemetría Activa'
+      status: mission25.started ? `INTEGRIDAD ${Math.round(mission25.state.mission25ArkIntegrity)}%` : 'Órbita Segura // Telemetría Activa',
+      isCurrentTarget: mission21MapTargetId
+        ? mission21MapTargetId === 'mission21-ark'
+        : currentTargetPos.distanceTo(mothership.group.position) < 50
     },
     {
       id: 'marker',
@@ -15978,7 +19342,64 @@ function updateStarMap(): void {
     });
   }
 
-  if (mission24.started) {
+  if (mission21MapTargetId) {
+    if (coalitionCapitalPresence.isVisible) {
+      entities.push({
+        id: 'coalition-capital',
+        name: 'NAVE CAPITAL // FUERA DE ALCANCE',
+        type: 'threat',
+        position: coalitionCapitalPresence.capitalPosition,
+        status: 'NO ATACABLE // FIRMA MASIVA',
+        isCurrentTarget: mission21MapTargetId === 'coalition-capital'
+      });
+    }
+    if (!mission21.state.demonstrationObserved || mission21.step === 'witnessDemonstration') {
+      entities.push({
+        id: 'remote-orbital-beacon',
+        name: 'BALIZA ORBITAL REMOTA',
+        type: 'communications',
+        position: coalitionCapitalPresence.remoteBeaconPosition,
+        status: mission21.state.demonstrationObserved ? 'INUTILIZADA' : 'EN LINEA',
+        isCurrentTarget: mission21MapTargetId === 'remote-orbital-beacon'
+      });
+    }
+    mission21LinkPositions.forEach((position, index) => {
+      entities.push({
+        id: `mission21-link-${index}`,
+        name: ENCLAVE_CHANNEL_LABELS[ENCLAVE_CHANNEL_ORDER[index]],
+        type: 'communications',
+        position,
+        status: mission21.state.enclaveChannelsRestored[index] ? 'RESTAURADO' : 'AISLADO',
+        isCurrentTarget: mission21MapTargetId === `mission21-link-${index}`
+      });
+    });
+    mission21RoutePositions.forEach((position, index) => {
+      if (!mission21.state.attackRoutesClassified[index]) return;
+      entities.push({
+        id: `mission21-route-${index}`,
+        name: ATTACK_ROUTE_LABELS[ATTACK_ROUTE_ORDER[index]],
+        type: 'threat',
+        position,
+        status: 'CLASIFICADA'
+      });
+    });
+  }
+
+  if (mission25.started && !mission25.completed) {
+    const targetPosition = getMission25TargetPosition();
+    if (targetPosition.distanceToSquared(mothership.group.position) > 2500) {
+      entities.push({
+        id: 'mission25-target',
+        name: getMission25TargetLabel(),
+        type: mission25.waveActive || mission25StepAtLeast('commandTargetLocated') ? 'threat' : 'communications',
+        position: targetPosition,
+        status: mission25.stepDefinition.stepTitle.toUpperCase(),
+        isCurrentTarget: true
+      });
+    }
+  }
+
+  if (mission24.started && !mission25.started) {
     entities.push({
       id: 'mission24-target',
       name: getMission24StationLabel(),
@@ -16018,18 +19439,55 @@ function renderHabitabilityReport(): void {
   `;
 }
 
+function isCombatJammingActive(): boolean {
+  return (
+    mission20.started &&
+    !mission20.completed &&
+    mission20.readout.jammed
+  ) || mission23.jammed || combatHudJammingProbeActive;
+}
+
 function updateHud(nearestThreat: number): void {
   meters.hull.value = resources.hull;
   meters.shield.value = resources.energy;
   meters.energy.value = resources.energy;
   meters.oxygen.value = resources.oxygen;
   meters.memory.value = resources.memory;
-  const activeSpeed = playerModeSystem.onFootActive ? surfaceCharacter.speed : velocity.length() * 12;
-  velocityReadout.textContent = `${Math.round(activeSpeed)} m/s`;
+  const physicalSpeed = velocity.length();
+  const activeSpeed = playerModeSystem.onFootActive ? surfaceCharacter.speed : physicalSpeed;
+  // Speed always; on a surface it is joined by height above the terrain, and
+  // by the brake / precision state when either is acting. The "km" readout
+  // beside this one is a distance, so altitude has to be labelled separately
+  // rather than folded into it.
+  const navSuffix = surfaceBrakeActive || spaceBrakeActive
+    ? ' // FRENANDO'
+    : surfacePrecisionActive
+      ? ' // PRECISION'
+      : !inSurfacePhase && spaceBoostLevel > 0.35
+        ? ' // IMPULSO'
+      : '';
+  // `activeSpeed` carries a x12 display scaling, which is why the readout said
+  // 394 m/s while the ship was really doing 36.5. The label claims m/s, so the
+  // surface readout uses the physical magnitude. `activeSpeed` itself is left
+  // alone — other consumers still depend on it.
+  velocityReadout.textContent = playerModeSystem.insideShip
+    ? inSurfacePhase
+      ? `VEL ${Math.round(physicalSpeed)} m/s // ALT ${Math.round(
+          Math.max(0, ship.position.y - surfaceGroundHeight(ship.position.x, ship.position.z))
+        )} m${navSuffix}`
+      : `VEL ${Math.round(physicalSpeed)} m/s${navSuffix}`
+    : `${Math.round(activeSpeed)} m/s`;
+  velocityReadout.dataset.flightState = surfaceBrakeActive || spaceBrakeActive
+    ? 'brake'
+    : spaceBoostLevel > 0.35
+      ? 'boost'
+      : 'cruise';
   distanceReadout.textContent = `${Math.round(traveled)} km`;
 
   const closest = getClosestPoint();
-  if (inSurfacePhase && mission23.started && mission23StepUsesBeacon() && ship.position.distanceTo(coalitionJumpBeacon.position) < 520) {
+  if (mission25.started) {
+    sectorName.textContent = 'Ultima Orbita // Arca Epsilon';
+  } else if (inSurfacePhase && mission23.started && mission23StepUsesBeacon() && ship.position.distanceTo(coalitionJumpBeacon.position) < 520) {
     sectorName.textContent = 'Corredor de Salto Hostil';
   } else if (inSurfacePhase && mission23.started && mission23StepUsesPlatform() && ship.position.distanceTo(coalitionLogisticsPlatform.position) < 520) {
     sectorName.textContent = 'Nodo Logistico de la Coalicion';
@@ -16067,18 +19525,44 @@ function updateHud(nearestThreat: number): void {
   warningOverlay.classList.toggle('is-active', hazardActive);
 
   const currentObjectiveDisplay = getCurrentObjectiveDisplay();
-  missionNameReadout.textContent = `${currentObjectiveDisplay.missionTitle} // ${currentObjectiveDisplay.stepTitle}`;
-  objectiveText.textContent = currentObjectiveDisplay.objective;
+  // Split across the panel's levels instead of concatenated into the heading:
+  // the mission is context, the step is the answer to "what do I do now".
+  setText(missionNameReadout, currentObjectiveDisplay.missionTitle);
+  setText(objectiveStep, currentObjectiveDisplay.stepTitle);
+  setText(objectiveText, currentObjectiveDisplay.objective);
   const missingRequirements = currentObjectiveDisplay.missingRequirements.length > 0
     ? ` Pendiente: ${currentObjectiveDisplay.missingRequirements.join(', ')}.`
     : '';
-  nextAction.textContent = currentObjectiveDisplay.blockedReason
+  setText(nextAction, currentObjectiveDisplay.blockedReason
     ? `${currentObjectiveDisplay.blockedReason}${missingRequirements} ${currentObjectiveDisplay.nextAction}`
-    : currentObjectiveDisplay.nextAction;
-  objectiveDistance.textContent = `${currentObjectiveDisplay.target.toUpperCase()} // ${formatDistance(currentObjectiveDisplay.distance)}`;
-  document.querySelector('.objective-panel')?.setAttribute('data-urgency', currentObjectiveDisplay.urgency);
+    : currentObjectiveDisplay.nextAction);
+  setText(objectiveTargetName, currentObjectiveDisplay.target.toUpperCase());
+  setText(objectiveDistance, formatDistance(currentObjectiveDisplay.distance));
+  objectivePanel.setAttribute('data-urgency', currentObjectiveDisplay.urgency);
+  updateObjectiveState(currentObjectiveDisplay);
+  // Missions set the progress label to their own step title, which now has its
+  // own line above -- printing it twice wasted a row and read as a duplicate.
+  if (missionProgressLabel.textContent === currentObjectiveDisplay.stepTitle) {
+    setText(missionProgressLabel, 'Progreso');
+  }
 
-  if (mission24.started) {
+  if (mission25.started) {
+    scannerStatus.textContent = mission25.completed ? 'Capitulo I completado' : mission25.stepDefinition.stepTitle;
+    signalStrength.textContent = `${Math.round(mission25.state.mission25ArkIntegrity)}%`;
+    habitabilityProgress.value = getMission25Progress();
+    missionProgressLabel.textContent = mission25.waveActive
+      ? `Oleada ${mission25.state.mission25Wave}/4 // hostiles ${coalitionDrones.activeCount}`
+      : mission25.step === 'commandTargetProtected'
+        ? `Nodos ${mission25.destroyedNodeCount}/3`
+        : mission25.step === 'finalAssault'
+          ? `Nucleo ${Math.round(mission25.state.mission25CommandCoreIntegrity)}%`
+          : mission25.step === 'arkStabilization'
+            ? `Estabilizacion ${Math.round(mission25.stabilizationProgress)}%`
+            : `Fase ${mission25.stepNumber}/${MISSION25_STATE_ORDER.length - 1}`;
+    missionHint.textContent = mission25.completed
+      ? 'ARCA EPSILON // CAPITULO I COMPLETADO'
+      : mission25.stepDefinition.hint;
+  } else if (mission24.started) {
     scannerStatus.textContent = mission24.completed ? 'Formacion final estable' : mission24.stepDefinition.stepTitle;
     signalStrength.textContent = mission24.atmosphericAscentActive
       ? `${Math.round((1 - atmosphericAscent.metrics.density) * 100)}%`
@@ -16102,6 +19586,23 @@ function updateHud(nearestThreat: number): void {
     missionHint.textContent = mission24.completed
       ? 'M25 desbloqueada // no iniciada'
       : mission24.stepDefinition.hint;
+  } else if (mission20.started && !mission20.completed) {
+    const readout = mission20.readout;
+    scannerStatus.textContent = mission20.step === 'locateJammer'
+      ? 'Telemetría pasiva'
+      : readout.jammed
+        ? 'Fijación bloqueada'
+        : 'Sistemas orbitales';
+    signalStrength.textContent = `${Math.round(readout.commsQuality)}%`;
+    habitabilityProgress.value = mission20.phaseProgress;
+    missionProgressLabel.textContent = mission20.step === 'locateJammer'
+      ? `Firma ${readout.jammerSignal}% // alcance ${mission20Tuning.jammerLockRange} m`
+      : mission20.stepDefinition.stepTitle;
+    missionHint.textContent = mission20.step === 'disableJammer' && mission20.jammerExposed
+      ? 'Blindaje anulado. El núcleo pesado ya acepta daño real.'
+      : mission20.step === 'stopDataBreach' && mission20.waveKillsRemaining > 0
+        ? 'Elimina las escoltas antes de cortar el acoplamiento.'
+        : mission20.stepDefinition.hint;
   } else if (inSurfacePhase) {
     const surfaceStep = surfaceMission.currentStep;
     if (mission23.started) {
@@ -16142,15 +19643,17 @@ function updateHud(nearestThreat: number): void {
       missionProgressLabel.textContent = mission22.step === 'assignInitialResources'
         ? `Asignando ${mission22.activeInitialResource ? MISSION22_RESOURCE_LABELS[mission22.activeInitialResource] : 'recursos'}`
         : mission22.step === 'defendOrbitalFront'
-          ? `Relés ${readout.relaysProtected}/3 // hostiles ${coalitionDrones.activeCount}`
-          : mission22.step === 'detectCoordinationNodes'
+          ? `Relés ${readout.relaysProtected}/3 // restan ${mission22.currentWaveRemaining}`
+          : mission22.step === 'surviveFinalPressure'
+            ? `Presión final // restan ${mission22.currentWaveRemaining}`
+            : mission22.step === 'detectCoordinationNodes'
             ? `Nodos ${readout.nodesDetected}/3 // análisis ${Math.round(readout.phaseProgress)}%`
             : mission22.step === 'restoreJointNetwork'
               ? `Enlace conjunto ${Math.round(readout.jointLink)}%`
               : mission22.step === 'defendAuroraFront'
-                ? `Aurora ${Math.round(readout.auroraIntegrity)}% // hostiles ${coalitionDrones.activeCount}`
+                ? `Aurora ${Math.round(readout.auroraIntegrity)}% // restan ${mission22.currentWaveRemaining}`
                 : mission22.step === 'defendNereidaFront'
-                  ? `Nereida ${Math.round(readout.nereidaIntegrity)}% // brechas ${coalitionBreachDrones.activeCount}`
+                  ? `Nereida ${Math.round(readout.nereidaIntegrity)}% // restan ${mission22.currentWaveRemaining}`
                   : `Soporte ${support} // energía ${Math.round(readout.availableEnergy)}%`;
       missionHint.textContent = mission22.completed
         ? 'Aurora, Nereida y el Arca sobreviven // M23 desbloqueada'
@@ -16422,11 +19925,15 @@ function updateHud(nearestThreat: number): void {
             : 'Progreso';
   }
 
+  // `phase` stays 'landed' for the rest of the run once the ship has touched
+  // down, so in orbit the HUD kept showing DESCENSO, the descent panel and
+  // "Superficie E-01". Landed only counts while the ship is actually on a
+  // surface; the other phases are transient and speak for themselves.
   const descentActive =
     descentSystem.state.phase === 'entry' ||
     descentSystem.state.phase === 'cloudBreak' ||
     descentSystem.state.phase === 'landingApproach' ||
-    descentSystem.state.phase === 'landed';
+    (descentSystem.state.phase === 'landed' && inSurfacePhase);
   hud.classList.toggle('descent-active', descentActive);
   hud.classList.toggle('surface-active', inSurfacePhase);
 
@@ -16436,6 +19943,11 @@ function updateHud(nearestThreat: number): void {
     : descentActive ? 'Descenso' : 'Espacio';
   phaseChip.textContent = phaseLabel;
   phaseChip.dataset.phase = phaseLabel.toLowerCase();
+  // Sector follows the world the ship is actually in. "Cuenca Nereida" is a
+  // surface basin; once M20 hands off, the ship is in orbit above it.
+  if (mission20OrbitalLegActive()) {
+    sectorName.textContent = 'Orbita Nereida';
+  }
 
   // Tecla destacada del siguiente paso, extraída del texto de acción.
   // Solo mayúsculas: evita confundir la "m" de "9 m/s" con la tecla M.
@@ -16469,13 +19981,46 @@ function updateHud(nearestThreat: number): void {
       : `${Math.round(landingZone.distanceTo(ship.position))} m`
     : 'En espera';
 
-  laserStatus.textContent = weaponSystem.state.laserReady
-    ? 'Laser listo'
-    : `Laser ${weaponSystem.state.laserCooldown.toFixed(1)}s`;
-  missileStatus.textContent = weaponSystem.state.missileReady
-    ? `Misiles ${weaponSystem.state.missileAmmo}/4`
-    : `Misil ${weaponSystem.state.missileCooldown.toFixed(1)}s`;
-  lockStatus.textContent = mission23.jammed ? 'Lock degradado' : weaponSystem.state.lockStatus;
+  // --- Weapon strip: magazine and reserve, never the shared energy pool ----
+  const mag = weaponSystem.primaryMagazineState;
+  laserStatus.textContent = mag.reloading
+    ? `CANON ${mag.current}/${mag.maximum} // RECARGANDO ${Math.round(mag.progress * 100)}%`
+    : mag.current <= 0
+      ? `CANON 0/${mag.maximum} // G RECARGAR`
+      : mag.reserve <= 0
+        ? `CANON ${mag.current}/${mag.maximum} // SIN RESERVA`
+        : `CANON ${mag.current}/${mag.maximum} // RES ${mag.reserve}`;
+  // Capacity comes from the weapon, not a literal: the readout said "/4" long
+  // after the magazine stopped holding four, so a full bay showed as 12/4.
+  // Labelled torpedoes because that is what the launcher fires — the ventral
+  // tubes, the lock range and the M24/M25 usage are all torpedo systems.
+  // Only ready tubes are gameplay ammunition. The onboard fabricator makes the
+  // next round during manual reload, so a legacy reserve is never shown.
+  const tubes = weaponSystem.torpedoTubeState;
+  const tubeDots = tubes.tubes.map((loaded) => (loaded ? '\u25CF' : '\u25CB')).join('');
+  missileStatus.textContent = tubes.reloading
+    ? `TORPEDOS ${tubes.loadedCount}/${tubes.tubeCapacity} // RECARGANDO ${Math.round(tubes.progress * 100)}%`
+    : tubes.loadedCount <= 0
+      ? `TORPEDOS 0/${tubes.tubeCapacity} ${tubeDots} // G RECARGAR`
+      : tubes.loadedCount < tubes.tubeCapacity
+        ? `TORPEDOS ${tubes.loadedCount}/${tubes.tubeCapacity} ${tubeDots} // G RECARGAR`
+        : `TORPEDOS ${tubes.loadedCount}/${tubes.tubeCapacity} ${tubeDots}`;
+  laserStatus.dataset.firing = String(weaponSystem.state.firePulse > 0 && weaponSystem.state.lastFiredWeapon === 'laser');
+  missileStatus.dataset.firing = String(weaponSystem.state.firePulse > 0 && weaponSystem.state.lastFiredWeapon === 'torpedo');
+  lockStatus.textContent = isCombatJammingActive() ? 'Lock degradado // interferencia' : weaponSystem.state.lockStatus;
+  const feedback = weaponSystem.state.hitFeedback;
+  const feedbackLabels: Record<typeof feedback, string> = {
+    none: '',
+    shield: 'Contacto // escudo',
+    hull: 'Contacto // casco',
+    critical: 'Daño crítico confirmado',
+    destroyed: 'Objetivo neutralizado',
+    blocked: 'Arma no disponible',
+    'out-of-range': 'Sin impacto confirmado'
+  };
+  hitFeedback.textContent = feedbackLabels[feedback];
+  hitFeedback.dataset.kind = feedback;
+  hitFeedback.dataset.active = String(weaponSystem.state.hitPulse > 0 || feedback === 'blocked' || feedback === 'out-of-range');
 
   const diag = diagnostics.data;
   diagnosticsReadout.textContent =
@@ -16668,6 +20213,19 @@ function setDebugCameraLookAt(target: CameraLookAtInput): CameraProbeResult | un
   return applyDebugCameraProbe();
 }
 
+function frameDebugCameraTarget(
+  target: CameraLookAtInput,
+  offset: readonly [number, number, number],
+  lookHeight = 0
+): CameraProbeResult | undefined {
+  const probe = createDebugCameraProbe(target);
+  if (!probe || !offset.every(Number.isFinite) || !Number.isFinite(lookHeight)) return undefined;
+  probe.offset.set(offset[0], offset[1], offset[2]);
+  probe.lookHeight = lookHeight;
+  debugCameraProbe = probe;
+  return applyDebugCameraProbe();
+}
+
 function getDefenseNetworkVisualState(): DefenseNetworkVisualState {
   return {
     defenseLinksActive: defenseNetworkLinks.linksActive,
@@ -16709,7 +20267,6 @@ function updateCamera(delta: number): void {
     camera.fov = THREE.MathUtils.lerp(camera.fov, 57, 1 - Math.exp(-delta * 6));
     camera.near = THREE.MathUtils.lerp(camera.near, 0.08, 1 - Math.exp(-delta * 6));
     camera.updateProjectionMatrix();
-    applyLiftLockTremor(delta);
     return;
   }
 
@@ -16733,7 +20290,7 @@ function updateCamera(delta: number): void {
     desiredUnresolved.y += onFootCameraTuning.HEIGHT + Math.sin(footCameraPitch) * distance;
     const desired = resolveOnFootCameraCollision(characterTarget, desiredUnresolved);
     const cameraGround =
-      auroraSurfaceHeight(desired.x, desired.z) + onFootCameraTuning.TERRAIN_CLEARANCE;
+      surfaceGroundHeight(desired.x, desired.z) + onFootCameraTuning.TERRAIN_CLEARANCE;
     desired.y = Math.max(desired.y, cameraGround);
     if (snapOnFootCameraNextFrame) {
       camera.position.copy(desired);
@@ -16745,35 +20302,45 @@ function updateCamera(delta: number): void {
       camera.position.lerp(desired, 1 - Math.exp(-delta * onFootCameraTuning.FOLLOW_RESPONSE));
     }
     const currentCameraGround =
-      auroraSurfaceHeight(camera.position.x, camera.position.z) + onFootCameraTuning.TERRAIN_CLEARANCE;
+      surfaceGroundHeight(camera.position.x, camera.position.z) + onFootCameraTuning.TERRAIN_CLEARANCE;
     camera.position.y = Math.max(camera.position.y, currentCameraGround);
     camera.lookAt(lookTarget);
     camera.fov = THREE.MathUtils.lerp(camera.fov, transitioning ? 63 : 59, 1 - Math.pow(0.02, delta));
     camera.near = THREE.MathUtils.lerp(camera.near, 0.08, 1 - Math.pow(0.02, delta));
     camera.updateProjectionMatrix();
-    applyLiftLockTremor(delta);
     return;
   }
 
-  const target = ship.position.clone();
+  // While docked the scout is parented to the Ark and `ship.position` is the
+  // cradle-local origin. Follow its world position so the camera cannot frame
+  // empty space while the real hull and the Ark slide against a screen edge.
+  const target = ship.parent === scene
+    ? cameraTargetScratch.copy(ship.position)
+    : ship.getWorldPosition(cameraTargetScratch);
   cameraTargetCurrent.copy(target);
-  const lookTarget = target.clone();
+  const lookTarget = cameraLookTargetScratch.copy(target);
   const speed = velocity.length();
   const boosting = input.has('shift') && speed > 6;
-  const step = missionManager.step;
+  const step = gameModes.isCombat ? 'combat' : missionManager.step;
   const cockpitBlend = THREE.MathUtils.smoothstep(cameraModeSystem.blend, 0.02, 0.98);
 
   // Per-phase framing: tight and low on the surface so terrain reads;
   // slightly wide during basin approach to show the world below; raised
   // during planet approach so E-01 owns the upper frame.
-  let offsetY = 8.8 + Math.min(speed * 0.04, 2.8);
-  let offsetZ = 25 + Math.min(speed * 0.18, 13);
+  // The stock chase pose was authored for M01's onboarding, where the Ark fills
+  // the backdrop and a close hull reads well. In M20's open orbital leg the
+  // same distance leaves the ship covering most of the frame with nothing to
+  // give it scale, so the pose widens for that leg only — M01 keeps its own
+  // framing exactly.
+  const orbitalLeg = gameModes.isStory && mission20OrbitalLegActive();
+  let offsetY = (orbitalLeg ? 15.5 : 8.8) + Math.min(speed * 0.04, 2.8);
+  let offsetZ = (orbitalLeg ? 52 : 25) + Math.min(speed * 0.18, 13);
   let offsetX = 0;
   // Mission 01's flight phases get their own framing. The stock offsets put the
   // scout 25-38 m back at FOV 64, dead centre, which made the hull small and
   // hid the lane it was flying down. `mission01Framing` stays undefined outside
   // the onboarding, so every other phase keeps the framing it always had.
-  const mission01Framing = mission01FlightFramingActive()
+  const mission01Framing = gameModes.isStory && mission01FlightFramingActive()
     ? mission01Camera.update({
         speed,
         boosting,
@@ -16781,10 +20348,73 @@ function updateCamera(delta: number): void {
         timeSinceUndock: mission01TimeSinceUndock
       })
     : undefined;
+  if (!inSurfacePhase && !inBasin && !mission01Framing && step !== 'atmosphericEntry') {
+    const spaceSpeedMix = THREE.MathUtils.clamp(
+      speed / PLAYER_SHIP_FLIGHT_TUNING.space.cruiseReferenceSpeed,
+      0,
+      1
+    );
+    cameraLeadScratch.set(0, 0, -1).applyQuaternion(ship.quaternion).multiplyScalar(
+      PLAYER_SHIP_FLIGHT_TUNING.space.cameraLookAhead * spaceSpeedMix
+    );
+    lookTarget.add(cameraLeadScratch);
+    if (speed > 0.01) {
+      cameraLeadScratch.copy(velocity).multiplyScalar(
+        PLAYER_SHIP_FLIGHT_TUNING.space.cameraVelocityLead * spaceSpeedMix
+      );
+      lookTarget.add(cameraLeadScratch);
+    }
+    const lagTarget = spaceBrakeActive
+      ? 0
+      : PLAYER_SHIP_FLIGHT_TUNING.space.cameraLagMaximum * THREE.MathUtils.clamp(
+          spaceThrustLevel + spaceBoostLevel * 0.45,
+          0,
+          1
+        );
+    spaceCameraLag += (lagTarget - spaceCameraLag) *
+      (1 - Math.exp(-delta * PLAYER_SHIP_FLIGHT_TUNING.space.cameraLagResponse));
+    offsetZ += spaceCameraLag;
+  } else if (spaceCameraLag > 0.001) {
+    spaceCameraLag *= Math.exp(-PLAYER_SHIP_FLIGHT_TUNING.space.cameraLagResponse * delta);
+  }
   if (inSurfacePhase) {
+    // Pulled back so the hull stops filling the middle of the frame and the
+    // contacts ahead of it are visible. Boost widens further, precision creeps
+    // in; all three poses ease through the same damped follow below, so
+    // releasing boost never produces a cut.
+    const cam = PLAYER_SHIP_FLIGHT_TUNING;
     const boostCamera = THREE.MathUtils.clamp(surfaceBoostIntensity / SURFACE_SHIP_TUNING.BOOST_FX_INTENSITY, 0, 1);
-    offsetY = THREE.MathUtils.lerp(6.4, 7.6, boostCamera);
-    offsetZ = THREE.MathUtils.lerp(19, 26, boostCamera);
+    const precision = surfacePrecisionActive ? 1 : 0;
+    surfaceCameraPrecisionBlend +=
+      (precision - surfaceCameraPrecisionBlend) * (1 - Math.exp(-delta * cam.cameraResponse));
+    const baseHeight = THREE.MathUtils.lerp(cam.cameraHeight, cam.cameraBoostHeight, boostCamera);
+    const baseDistance = THREE.MathUtils.lerp(cam.cameraDistance, cam.cameraBoostDistance, boostCamera);
+    offsetY = THREE.MathUtils.lerp(baseHeight, cam.cameraPrecisionHeight, surfaceCameraPrecisionBlend);
+    offsetZ = THREE.MathUtils.lerp(baseDistance, cam.cameraPrecisionDistance, surfaceCameraPrecisionBlend);
+
+    // Lead the nose so the space being flown into is on screen, scaled by how
+    // fast the ship is actually going.
+    const speedLead = THREE.MathUtils.clamp(
+      Math.hypot(velocity.x, velocity.z) / SURFACE_SHIP_TUNING.CRUISE_SPEED, 0, 1
+    );
+    cameraLeadScratch
+      .set(-Math.sin(smoothYaw), 0, -Math.cos(smoothYaw))
+      .multiplyScalar(cam.cameraLookAhead * speedLead);
+    lookTarget.add(cameraLeadScratch);
+
+    // A selected contact nudges the look target a little toward it. Small on
+    // purpose: it opens space between hull and target without steering.
+    const selectedContact = hostileContacts.contacts.find((c) => c.selected);
+    if (selectedContact && !selectedContact.behindCamera) {
+      cameraLeadScratch.copy(selectedContact.world).sub(lookTarget);
+      const reach = cameraLeadScratch.length();
+      if (reach > 0.001) {
+        cameraLeadScratch.multiplyScalar(
+          Math.min(cam.cameraTargetBiasMax, reach * cam.cameraTargetBias) / reach
+        );
+        lookTarget.add(cameraLeadScratch);
+      }
+    }
   } else if (inBasin) {
     offsetX = -2;
     offsetY = 7.4;
@@ -16808,7 +20438,8 @@ function updateCamera(delta: number): void {
     lookTarget.lerp(SURFACE_LANDING_LOCAL, THREE.MathUtils.lerp(0.16, 0.05, surfaceIntroAge / 8));
   }
   if (planetaryWorld.colonyModule.activationInProgress) {
-    const moduleTarget = planetaryWorld.colonyModule.group.getWorldPosition(new THREE.Vector3());
+    const moduleTarget = cameraOffsetScratch;
+    planetaryWorld.colonyModule.group.getWorldPosition(moduleTarget);
     moduleTarget.y += 3.2;
     lookTarget.lerp(moduleTarget, 0.32);
     offsetX = 2.4;
@@ -16826,19 +20457,24 @@ function updateCamera(delta: number): void {
   // During M01 the camera hangs off a yaw+pitch basis with no roll — exactly
   // what the surface camera already does with `smoothYaw` — so the ship banks
   // and the world stays put.
-  const cameraBasis = inBasin || inSurfacePhase
-    ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), smoothYaw)
-    : mission01Framing
-      ? new THREE.Quaternion().setFromEuler(new THREE.Euler(smoothPitch, smoothYaw, 0, 'YXZ'))
-      : ship.quaternion;
-  const offset = new THREE.Vector3(offsetX, offsetY, offsetZ).applyQuaternion(cameraBasis);
-  const externalDesired = target.clone().add(offset);
+  if (inBasin || inSurfacePhase) {
+    cameraEulerScratch.set(0, smoothYaw, 0, 'YXZ');
+  } else {
+    // Roll is presentation, not a camera basis. Keeping it out of the chase
+    // transform lets the hull bank clearly without rolling the horizon twice.
+    cameraEulerScratch.set(smoothPitch + spaceThrustPitch, smoothYaw, 0, 'YXZ');
+  }
+  const cameraBasis = cameraBasisScratch.setFromEuler(cameraEulerScratch);
+  const offset = cameraOffsetScratch.set(offsetX, offsetY, offsetZ).applyQuaternion(cameraBasis);
+  const externalDesired = cameraDesiredScratch.copy(target).add(offset);
   if (inSurfacePhase && cockpitBlend < 0.98) {
     const cameraGround = planetaryWorld.getHeightAt(externalDesired.x, externalDesired.z) + 1.5;
     externalDesired.y = Math.max(externalDesired.y, cameraGround);
   }
-  const cockpitOffset = new THREE.Vector3(0, inSurfacePhase ? 0.84 : 0.94, -1.34).applyQuaternion(ship.quaternion);
-  const cockpitDesired = target.clone().add(cockpitOffset);
+  const cockpitOffset = cameraCockpitOffsetScratch
+    .set(0, inSurfacePhase ? 0.84 : 0.94, -1.34)
+    .applyQuaternion(ship.quaternion);
+  const cockpitDesired = cameraCockpitDesiredScratch.copy(target).add(cockpitOffset);
   const desired = externalDesired.lerp(cockpitDesired, cockpitBlend);
   if (!cameraFollowInitialized || cameraFollowSnapPending) {
     camera.position.copy(desired);
@@ -16850,7 +20486,13 @@ function updateCamera(delta: number): void {
     // cut the stock snap would produce. The blend eases so the Ark slides out of
     // frame behind the pilot instead of jumping there.
     const eased = mission01Framing.handover * mission01Framing.handover * (3 - 2 * mission01Framing.handover);
-    const response = 1 - Math.exp(-delta * THREE.MathUtils.lerp(2.4, mission01CameraTuning.followResponse, eased));
+    const response = 1 - Math.exp(
+      -delta * THREE.MathUtils.lerp(
+        mission01CameraTuning.handoverStartResponse,
+        mission01CameraTuning.followResponse,
+        eased
+      )
+    );
     camera.position.lerp(desired, response);
   } else {
     camera.position.lerp(desired, 1 - Math.pow(0.0009, delta));
@@ -16860,23 +20502,6 @@ function updateCamera(delta: number): void {
     camera.position.y = Math.max(camera.position.y, cameraGround);
   }
 
-  if (cameraShake > 0) {
-    const shakeScale = THREE.MathUtils.lerp(1, 0.38, cockpitBlend);
-    camera.position.x += (Math.random() - 0.5) * cameraShake * shakeScale;
-    camera.position.y += (Math.random() - 0.5) * cameraShake * shakeScale;
-    cameraShake = Math.max(0, cameraShake - delta * 0.55);
-  }
-  applyLiftLockTremor(delta);
-
-  // Atmospheric entry adds a low-frequency sway on top of the jitter: the
-  // whole airframe wallowing in turbulence, not just vibrating.
-  if (step === 'atmosphericEntry') {
-    const sway = clock.elapsedTime;
-    const swayScale = THREE.MathUtils.lerp(1, 0.32, cockpitBlend);
-    camera.position.x += Math.sin(sway * 1.3) * 0.55 * swayScale;
-    camera.position.y += Math.sin(sway * 1.7 + 1.2) * 0.4 * swayScale;
-  }
-
   camera.lookAt(lookTarget);
   // The camera leans a fraction of the ship's bank: horizon tilts with the
   // turn instead of staying artificially level. During M01 the lean is much
@@ -16884,9 +20509,8 @@ function updateCamera(delta: number): void {
   // two together are what made the hull's attitude unreadable.
   camera.rotateZ(bankRoll * (mission01Framing ? mission01Framing.rollLean : 0.3));
   if (cockpitBlend > 0) {
-    const externalQuaternion = camera.quaternion.clone();
-    const cockpitQuaternion = ship.quaternion.clone();
-    camera.quaternion.copy(externalQuaternion).slerp(cockpitQuaternion, cockpitBlend);
+    cameraExternalQuaternionScratch.copy(camera.quaternion);
+    camera.quaternion.copy(cameraExternalQuaternionScratch).slerp(ship.quaternion, cockpitBlend);
   }
 
   // Boost widens the lens; atmospheric entry pushes it further for the
@@ -16905,16 +20529,31 @@ function updateCamera(delta: number): void {
         // A tighter lens during M01: at 64 the close framing would distort, and
         // the narrower field is part of what makes the hull read as a vehicle.
         : mission01Framing
-          ? mission01Framing.fov
-          : boosting
-            ? 70
-            : step === 'approachPlanet' ? 66 : 64;
+          // Hand the lens back to the established corridor framing before
+          // atmospheric entry. The tutorial keeps its close 58-degree view,
+          // while approachPlanet has time to converge toward entry's 72.
+          ? step === 'approachPlanet' ? 66 : mission01Framing.fov
+          : step === 'approachPlanet'
+            ? 66
+            : THREE.MathUtils.lerp(
+                THREE.MathUtils.lerp(
+                  PLAYER_SHIP_FLIGHT_TUNING.space.lowSpeedFov,
+                  PLAYER_SHIP_FLIGHT_TUNING.space.cruiseFov,
+                  THREE.MathUtils.clamp(speed / PLAYER_SHIP_FLIGHT_TUNING.space.cruiseReferenceSpeed, 0, 1)
+                ),
+                PLAYER_SHIP_FLIGHT_TUNING.space.boostFov,
+                spaceBoostLevel
+              );
   const cockpitFov = step === 'atmosphericEntry' ? 68 : inSurfacePhase ? 64 : 66;
   // The Aurora expedition opens the lens a couple of degrees on the exposed
   // legs and on the reveal; it is an offset on the existing target, so every
   // other camera rule keeps working untouched.
   const targetFov = THREE.MathUtils.lerp(externalFov, cockpitFov, cockpitBlend) + auroraTravelFovOffset;
-  camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 1 - Math.pow(0.02, delta));
+  camera.fov = THREE.MathUtils.lerp(
+    camera.fov,
+    targetFov,
+    1 - Math.exp(-delta * PLAYER_SHIP_FLIGHT_TUNING.space.cameraFovResponse)
+  );
   camera.near = THREE.MathUtils.lerp(camera.near, THREE.MathUtils.lerp(0.1, 0.07, cockpitBlend), 1 - Math.pow(0.02, delta));
   camera.updateProjectionMatrix();
 }
@@ -16964,7 +20603,7 @@ function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta):
     starfield.update(delta, elapsed);
     nebula.update(delta, elapsed);
     planets.update(delta, elapsed);
-    asteroidField.update(delta);
+    asteroidField.update(delta, camera.position);
     radiationStorm.update(delta, elapsed);
     gravityAnomaly.update(delta, elapsed);
     for (const point of pointsOfInterest) {
@@ -17019,13 +20658,28 @@ function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta):
   const boosting = input.has('shift') && speed > 6;
   // Close the cloud-break beat once it has had its moment, then hand control
   // to the landing approach exactly as before.
-  if (cloudBreakHoldUntil >= 0 && elapsed >= cloudBreakHoldUntil) {
+  if (gameModes.isStory && cloudBreakHoldUntil >= 0 && elapsed >= cloudBreakHoldUntil) {
     cloudBreakHoldUntil = -1;
     descentSystem.beginLandingApproach();
   }
   // One staged profile drives the whole entry; recomputed in place before any
   // consumer reads it this frame.
-  updateEntryProfile(entryProfile, descentSystem.state, speed);
+  if (gameModes.isStory) {
+    updateEntryProfile(entryProfile, descentSystem.state, speed);
+  } else if (entryProfile.stage !== 'none' || entryProfile.skyMix !== 0) {
+    entryProfile.stage = 'none';
+    entryProfile.active = false;
+    entryProfile.progress = 0;
+    entryProfile.heat = 0;
+    entryProfile.ionization = 0;
+    entryProfile.haze = 0;
+    entryProfile.buffet = 0;
+    entryProfile.bloomBoost = 0;
+    entryProfile.skyMix = 0;
+    entryProfile.fogDensity = 0.0012;
+    entryProfile.hullGlow = 0;
+    entryProfile.airDensity = 0;
+  }
   entryEffect.update(delta, elapsed, descentSystem.state, entryProfile);
   // The plasma phase charges the nozzle collars; PlayerShip cools them down.
   // Hull glow outlives the sheath: hot metal cools slower than a shock layer.
@@ -17040,7 +20694,16 @@ function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta):
   // Propulsion intent: live acceleration and hover support drive the plume,
   // shimmer and ventral wash so movement reads powered, not translated.
   const pilotFlying = playerModeSystem.insideShip && launched;
-  playerShip.thrustInput = pilotFlying && input.has('w') ? (boosting ? 1 : 0.7) : 0;
+  playerShip.thrustInput = pilotFlying
+    ? inSurfacePhase
+      ? input.has('w') ? (boosting ? 1 : 0.7) : 0
+      : gameModes.isStory && mission24.ascentActive
+        ? mission24AscentInput.thrustUp || mission24AscentInput.thrustForward ? 1 : 0
+        : THREE.MathUtils.clamp(spaceThrustLevel, 0, 1)
+    : 0;
+  playerShip.brakeInput = pilotFlying && (
+    surfaceBrakeActive || spaceBrakeActive || (gameModes.isStory && mission24.ascentActive && mission24AscentInput.brake)
+  ) ? 1 : 0;
   playerShip.liftInput = pilotFlying && inSurfacePhase ? (input.has(' ') ? 1 : 0.45) : 0;
   playerShip.groundEffect = inSurfacePhase
     ? THREE.MathUtils.clamp(
@@ -17049,13 +20712,19 @@ function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta):
         1
       )
     : 0;
-  playerShip.update(delta, elapsed, speed, boosting, camera.position.distanceTo(ship.position));
+  const propulsionBoosting = boosting && playerShip.brakeInput < 0.1;
+  playerShip.update(delta, elapsed, speed, propulsionBoosting, camera.position.distanceTo(ship.position));
   // The propulsion mix hears exactly what the nozzles show: same intents.
   engineAudio.update(delta, elapsed, {
     active: pilotFlying,
     thrust: playerShip.thrustInput,
-    boost: boosting,
-    vertical: pilotFlying && input.has(' ') ? 1 : 0,
+    boost: propulsionBoosting,
+    brake: playerShip.brakeInput > 0.1,
+    vertical: pilotFlying
+      ? inSurfacePhase
+        ? input.has(' ') ? 1 : 0
+        : input.has('e') || input.has('q') || input.has('c') || input.has('control') ? 1 : 0
+      : 0,
     hover: playerShip.liftInput,
     groundEffect: playerShip.groundEffect,
     speed,
@@ -17066,16 +20735,94 @@ function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta):
   scannerPulse.update(visualDelta);
   discoveryEffect.update(visualDelta);
   shieldEffect.update(delta, resources.hull, resources.energy, elapsed);
-  engineTrail.update(input.has('shift'), speed, elapsed);
-  weaponSystem.update(delta, ship, getWeaponTargets());
+  engineTrail.update(propulsionBoosting, speed, elapsed, playerShip.thrustInput, playerShip.brakeInput > 0.1);
+  weaponSystem.setEnvironment(inSurfacePhase || inBasin ? 'atmosphere' : 'vacuum');
+  enemyCombatVisuals.setEnvironment(inSurfacePhase || inBasin ? 'atmosphere' : 'vacuum');
+  coalitionDrones.setEnvironment(inSurfacePhase || inBasin ? 'atmosphere' : 'vacuum');
+  if (combatPacingProbeActive) {
+    coalitionDrones.update(delta, elapsed, () => undefined, () => undefined);
+  }
+  if (combatJammerProbeActive) {
+    coalitionJammer.update(delta, elapsed, () => undefined);
+  }
+  weaponSystem.update(delta, ship, getWeaponTargets(), camera.position, Math.min(1, visualDelta));
+  if (weaponSystem.events.missileIgnitions < torpedoIgnitionAudioCursor) torpedoIgnitionAudioCursor = 0;
+  if (weaponSystem.events.missileIgnitions > torpedoIgnitionAudioCursor) {
+    torpedoIgnitionAudioCursor = weaponSystem.events.missileIgnitions;
+    void sfxManager.play('playerTorpedoIgnite', 0.88);
+  }
+  if (weaponSystem.state.torpedoEngineActive) {
+    if (!sfxManager.isLoopActive('playerTorpedoEngine')) void sfxManager.startLoop('playerTorpedoEngine', 0.34, 0.06);
+  } else if (sfxManager.isLoopActive('playerTorpedoEngine')) {
+    sfxManager.stopLoop('playerTorpedoEngine', 0.08);
+  }
+  enemyCombatVisuals.update(delta, elapsed);
+  if (enemyCombatVisuals.events.nearMisses > enemyNearMissCursor) {
+    enemyNearMissCursor = enemyCombatVisuals.events.nearMisses;
+    combatCameraImpulse.triggerNearMiss(enemyCombatVisuals.lastNearMissPoint, ship.position, camera);
+    enemyCombatRightScratch.set(1, 0, 0).applyQuaternion(camera.quaternion);
+    enemyCombatDirectionScratch.copy(enemyCombatVisuals.lastNearMissPoint).sub(camera.position);
+    const side = enemyCombatDirectionScratch.dot(enemyCombatRightScratch) >= 0 ? 'ESTRIBOR' : 'BABOR';
+    enemyThreatWarningText = `DISPARO ENEMIGO CERCANO // ${side}`;
+    enemyThreatWarningRemaining = 0.55;
+    void sfxManager.play('warning', 0.16);
+  }
+  if (enemyCombatVisuals.events.heavyDestructions > enemyHeavyDestructionCursor) {
+    enemyHeavyDestructionCursor = enemyCombatVisuals.events.heavyDestructions;
+    combatCameraImpulse.triggerHeavyDestruction(enemyCombatVisuals.lastHeavyDestructionPoint, ship.position, camera);
+  }
+  if (weaponSystem.events.impacts < weaponImpactAudioCursor) weaponImpactAudioCursor = weaponSystem.events.impacts;
+  if (weaponSystem.events.impacts > weaponImpactAudioCursor) {
+    weaponImpactAudioCursor = weaponSystem.events.impacts;
+    if (weaponSystem.events.lastImpactWeapon === 'torpedo') {
+      // Dedicated torpedo layers are handled below.
+    } else if (weaponSystem.events.lastImpactKind === 'shield') {
+      weaponImpactSoundToggle = !weaponImpactSoundToggle;
+      void sfxManager.play(weaponImpactSoundToggle ? 'stormShieldImpactA' : 'stormShieldImpactB', 0.34);
+    } else {
+      playTone(weaponSystem.events.lastImpactKind === 'structure' ? 118 : 330, 0.075);
+    }
+  }
+  if (weaponSystem.events.torpedoImpacts < torpedoImpactAudioCursor) torpedoImpactAudioCursor = 0;
+  if (weaponSystem.events.torpedoImpacts > torpedoImpactAudioCursor) {
+    torpedoImpactAudioCursor = weaponSystem.events.torpedoImpacts;
+    void sfxManager.play('playerTorpedoImpact', 0.72);
+  }
+  if (weaponSystem.events.torpedoDetonations < torpedoDetonationAudioCursor) torpedoDetonationAudioCursor = 0;
+  if (weaponSystem.events.torpedoDetonations > torpedoDetonationAudioCursor) {
+    torpedoDetonationAudioCursor = weaponSystem.events.torpedoDetonations;
+    void sfxManager.play('playerTorpedoDetonation', 0.9);
+  }
   cinematicDust.update(delta, camera, velocity);
+}
+
+function mission01RealtimeFlightActive(): boolean {
+  return (
+    gameModes.isStory &&
+    !inSurfacePhase &&
+    (
+      (arkDeparture.started && !arkDeparture.completed) ||
+      (mission01Tutorial.started && !mission01Tutorial.completed)
+    )
+  );
 }
 
 function animate(): void {
   renderer.info.reset();
+  collisionWorld.beginFrame();
   const rawDelta = clock.getDelta();
   const delta = Math.min(rawDelta, 0.05);
+  // M01 is the first-flight tutorial and must stay responsive on SwiftShader.
+  // Integrate its physics below in stable 50 ms slices, while clocks, attitude
+  // and camera consume the real elapsed time (bounded against tab suspension).
+  const mission01RealtimeDelta = mission01RealtimeFlightActive()
+    ? Math.min(rawDelta, MISSION01_REALTIME_MAX_DELTA)
+    : delta;
   const elapsed = clock.elapsedTime;
+  if (gameModes.isGarage) {
+    requestAnimationFrame(animate);
+    return;
+  }
   let nearestThreat = Number.POSITIVE_INFINITY;
   const dialoguePausesGameplay = dialogueManager.current?.pausesGameplay === true;
 
@@ -17095,14 +20842,17 @@ function animate(): void {
       // there is never a second flight model to drift out of sync. Outside the
       // onboarding every factor is exactly 1 and this reduces to the original.
       const assist = mission01Assist.current;
-      const assistActive = mission01Assist.active && !inSurfacePhase;
-      const headingResponse = 1 - Math.pow(0.002 / (assistActive ? assist.rotationDamping : 1), delta);
+      const assistActive = gameModes.isStory && mission01Assist.active && !inSurfacePhase;
+      const headingResponse = 1 - Math.pow(
+        0.002 / (assistActive ? assist.rotationDamping : 1),
+        mission01RealtimeDelta
+      );
       const yawError = yaw - smoothYaw;
       smoothYaw += yawError * headingResponse;
       smoothPitch += (pitch - smoothPitch) * headingResponse;
 
       // Bank into turns and lateral slip; ease back to level flight.
-      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ship.quaternion);
+      const right = spaceAttitudeRight.set(1, 0, 0).applyQuaternion(ship.quaternion);
       const lateralSlip = right.dot(velocity);
       const strafe = (input.has('d') ? 1 : 0) - (input.has('a') ? 1 : 0);
       const maxBank = inSurfacePhase
@@ -17118,35 +20868,60 @@ function animate(): void {
       // would fight the pilot every time they aimed above or below the ecliptic.
       const steering = Math.abs(yawError) > 0.002 || strafe !== 0;
       const levelBoost = assistActive && !steering ? 1 + assist.levelAssist : 1;
-      bankRoll += (targetRoll - bankRoll) * (1 - Math.pow(0.01, delta * levelBoost));
+      bankRoll += (targetRoll - bankRoll) * (1 - Math.pow(0.01, mission01RealtimeDelta * levelBoost));
       // In orbit the hull also carries the eased thrust attitude, so a burn
       // reads on the silhouette itself and not only in the HUD.
       ship.rotation.set(smoothPitch + (inSurfacePhase ? 0 : spaceThrustPitch), smoothYaw, bankRoll);
       // Surface control gets a slightly wider simulation step so input stays
       // responsive on low-FPS/WebGL software renderers without destabilizing
       // the rest of the mission simulation.
-      applyInput(
-        inSurfacePhase || mission24.orbitalFlightActive
-          ? Math.min(rawDelta, 0.1)
-          : delta
-      );
+      if (mission01RealtimeFlightActive()) {
+        let remaining = mission01RealtimeDelta;
+        while (remaining > 0.0001) {
+          const stepDelta = Math.min(remaining, MISSION01_FLIGHT_SUBSTEP);
+          applyInput(stepDelta);
+          applyArkDepartureFlightConstraint();
+          remaining -= stepDelta;
+        }
+      } else {
+        applyInput(
+          inSurfacePhase || mission24.orbitalFlightActive
+            ? Math.min(rawDelta, 0.1)
+            : delta
+        );
+      }
     } else {
       bankRoll *= Math.pow(0.02, delta);
       velocity.set(0, 0, 0);
     }
     // Runs after the flight model so the prologue's clamps and throttle cap
     // are applied to the velocity the pilot just produced.
-    updateArkDeparture(delta, elapsed);
-    updateSafeZone(delta);
-    updateHazards(delta);
-    updateMissionSystems(delta, elapsed);
-    nearestThreat = updateThreats(delta, elapsed);
-    updateHud(nearestThreat);
+    if (gameModes.isCombat) {
+      updateCombatSession(delta, elapsed, Math.min(rawDelta, 0.25));
+      updateEnemyThreatFeedback(delta);
+    } else if (gameModes.isStory) {
+      updateArkDeparture(mission01RealtimeDelta, elapsed);
+      updateSafeZone(delta);
+      updateHazards(delta);
+      updateBufferedLateMissionInteraction();
+      updateMissionSystems(delta, elapsed, mission01RealtimeDelta);
+      updateEnemyThreatFeedback(delta);
+      nearestThreat = updateThreats(delta, elapsed);
+      updateHud(nearestThreat);
+    }
   } else if (launched) {
     updateHud(nearestThreat);
   } else {
     updateHomeMarker();
   }
+
+  collisionWorld.updateDebug(
+    surfaceCharacter.group.position,
+    ship.position,
+    ship.quaternion,
+    PLAYER_SHIP_COLLIDERS,
+    shipCollisionResult.impact ? shipCollisionResult.normal : characterCollisionResult.normal
+  );
 
   footstepAudio.update({
     active:
@@ -17162,7 +20937,7 @@ function animate(): void {
     elapsedSeconds: elapsed
   });
 
-  if (launched) {
+  if (launched && gameModes.isStory) {
     musicManager.update({
       phase: getCurrentPhase(),
       currentMissionId: getCurrentAudioMissionId(),
@@ -17184,17 +20959,32 @@ function animate(): void {
       auroraSegment: mission09.started ? auroraTravelDirector.state.segment : null
     });
     syncDialogueWithObjective();
-    dialogueManager.update(!gamePaused && !starMap.active ? delta : 0);
+    // Dialogue scheduling is wall-clock UI, not physics. Using the simulation
+    // cap here made delayed comms stretch into minutes on low-FPS renderers.
+    dialogueManager.update(!gamePaused && !starMap.active ? rawDelta : 0);
+  } else if (launched && gameModes.isCombat) {
+    musicManager.update({
+      phase: 'space',
+      currentMissionId: 'combat-offline',
+      missionStep: combatSession?.snapshot.state ?? 'setup',
+      interferenceActive: false,
+      tensionActive: combatSession?.snapshot.state === 'active',
+      dialogueActive: false,
+      auroraSegment: null
+    });
   }
-  const nextDialogueAudioActive = launched && Boolean(dialogueManager.current);
+  const nextDialogueAudioActive = launched && gameModes.isStory && Boolean(dialogueManager.current);
   if (nextDialogueAudioActive !== dialogueAudioActive) {
     void sfxManager.play(nextDialogueAudioActive ? 'commStart' : 'commEnd', 0.48);
     dialogueAudioActive = nextDialogueAudioActive;
   }
   commsDialoguePanel.setSuppressed(
-    !launched || gamePaused || starMap.active || hud.classList.contains('capture-clean')
+    !launched || !gameModes.isStory || gamePaused || starMap.active || hud.classList.contains('capture-clean')
   );
   commsDialoguePanel.sync(dialogueManager.current);
+  if (dialogueManager.current && mission21ResponsePanel.visible) {
+    mission21ResponsePanel.setVisible(false);
+  }
   // Real commander voice follows whatever line is actually on screen; a
   // skipped or replaced line fades its take with it.
   voiceManager.syncDialogue(dialogueManager.current?.id, dialogueManager.current?.speakerId);
@@ -17225,7 +21015,7 @@ function animate(): void {
       lightPool.registerSubtree(scene);
     }
     // Keep the active objective lit even when the camera looks past it.
-    lightPool.setPriorityTarget(launched ? getMissionObjectivePosition() : null);
+    lightPool.setPriorityTarget(launched && gameModes.isStory ? getMissionObjectivePosition() : null);
     lightPool.update(rawDelta, camera);
   }
   if (!surfaceCharacter.group.visible) surfaceCharacter.noteInactiveFrame();
@@ -17242,21 +21032,58 @@ function animate(): void {
     cockpitInterior.noteInactiveFrame();
   }
   orbitalMarker.updateDistanceQuality(ship.position.distanceTo(orbitalMarker.group.position));
+  const cameraFeedbackScale = THREE.MathUtils.lerp(
+    1,
+    0.38,
+    THREE.MathUtils.smoothstep(cameraModeSystem.blend, 0.02, 0.98)
+  );
+  combatCameraImpulse.setEnvironmentalFeedback(
+    cameraShake,
+    gameModes.isStory && missionManager.step === 'atmosphericEntry' ? 1 : 0,
+    cameraFeedbackScale
+  );
+  cameraShake = Math.max(0, cameraShake - delta * 0.55);
   cameraPositionBeforeUpdate.copy(camera.position);
   cameraFollowInitializedThisFrame = false;
-  updateCamera(delta);
+  updateCamera(mission01RealtimeDelta);
   cameraJumpDistance = cameraFollowInitializedThisFrame
     ? 0
     : camera.position.distanceTo(cameraPositionBeforeUpdate);
   shipCameraJumpDistance = playerModeSystem.insideShip ? cameraJumpDistance : 0;
+  combatCameraImpulse.update(delta, camera);
+  weaponSystem.setCameraResponse(combatCameraImpulse.recoilAmount, combatCameraImpulse.magnitude);
+  flightCombatHudFrame.target = weaponSystem.selectedTarget;
+  flightCombatHudFrame.visible =
+    launched &&
+    playerModeSystem.insideShip &&
+    (gameModes.isCombat || mission18.started || combatHudProbeActive || combatPacingProbeActive) &&
+    (gameModes.isCombat || !mission25.completed) &&
+    !gamePaused &&
+    !starMap.active &&
+    !hud.classList.contains('capture-clean');
+  flightCombatHudFrame.horizonMode = inSurfacePhase || inBasin ? 'planetary' : 'inertial';
+  flightCombatHudFrame.weapon = combatWeaponMode;
+  flightCombatHudFrame.projectileSpeed = combatWeaponMode === 'torpedo'
+    ? weaponSystem.torpedoProjectileSpeed
+    : weaponSystem.laserProjectileSpeed;
+  flightCombatHudFrame.weaponReady = combatWeaponMode === 'torpedo'
+    ? weaponSystem.state.missileReady
+    : weaponSystem.state.laserReady;
+  flightCombatHudFrame.torpedoLocked = combatWeaponMode === 'torpedo' && Boolean(weaponSystem.selectedTarget);
+  flightCombatHudFrame.targetOccluded = false;
+  flightCombatHudFrame.jammed = isCombatJammingActive();
+  flightCombatHudFrame.critical = resources.hull < 35 || resources.energy < 22;
+  flightCombatHudFrame.hitFeedback = weaponSystem.state.hitFeedback;
+  flightCombatHudFrame.hitPulse = weaponSystem.state.hitPulse;
+  flightCombatHud.update(delta, flightCombatHudFrame);
   // Color grade by phase: neutral space, warm plasma during entry, gentle
   // earthy warmth over Cuenca Nereida. Eased inside the composer.
-  if (missionManager.step === 'atmosphericEntry') {
+  if (gameModes.isStory && missionManager.step === 'atmosphericEntry') {
     // The grade rides the thermal curve: neutral in the exosphere, deeply
     // warm at peak heating, cooling back off as the ship slows.
     const warmth = entryProfile.heat;
     post.setTintTarget(1 + warmth * 0.14, 1 - warmth * 0.04, 1 - warmth * 0.13);
-  } else if (inSurfacePhase || inBasin) {
+  } else if (gameModes.isStory && (inSurfacePhase || inBasin)) {
     post.setTintTarget(1.02, 1.005, 0.965);
   } else {
     post.setTintTarget(1, 1, 1);
@@ -17264,6 +21091,56 @@ function animate(): void {
   // Heat haze and the bloom lift are part of the same staged curve; both
   // return to their base values on their own once the entry ends.
   post.setEntryGrade(entryProfile.haze, entryProfile.bloomBoost);
+  // Landing gear: only does work while deployed or moving; a stowed gear is a
+  // single early return in flight.
+  // Order matters: the takeoff lift writes the hull height, then the gear
+  // measures its feet against it in the same frame.
+  updateShipTakeoff(delta);
+  if (gameModes.isStory) updateMission20Transition(delta, elapsed);
+  playerShipLandingGear.update(delta, ship.matrixWorld);
+
+  // Diagnostic feature orbit. Runs after the mission camera for the same reason
+  // the access rig does: it must win for this frame.
+  if (shipFeatureInspection) {
+    const focus = shipFeatureScratch.copy(shipFeatureInspection.local);
+    ship.localToWorld(focus);
+    const { azimuth, elevation, distance } = shipFeatureInspection;
+    camera.position.set(
+      focus.x + Math.cos(elevation) * Math.sin(azimuth) * distance,
+      focus.y + Math.sin(elevation) * distance,
+      focus.z + Math.cos(elevation) * Math.cos(azimuth) * distance
+    );
+    camera.lookAt(focus.x, focus.y, focus.z);
+    camera.updateMatrixWorld(true);
+  }
+
+  // Access inspection: re-drive the bay at the pinned progress and frame it.
+  // Runs last so it wins over the mission-driven update for this frame, and
+  // costs nothing when inactive.
+  if (accessInspection) {
+    const inspectionGround = surfaceGroundHeight(ship.position.x, ship.position.z);
+    shipAccessLift.updateAnchor(
+      ship.position,
+      smoothYaw,
+      inspectionGround,
+      accessInspection.open,
+      accessInspection.lift,
+      elapsed
+    );
+    const focus = accessInspection.focus === 'hatch'
+      ? shipAccessLift.getHatchWorldPosition(accessInspectionScratch)
+      : shipAccessLift.getBoardingAnchorWorld(accessInspectionScratch);
+    const azimuth = accessInspection.azimuth;
+    const elevation = accessInspection.elevation;
+    const distance = accessInspection.distance;
+    camera.position.set(
+      focus.x + Math.cos(elevation) * Math.sin(azimuth) * distance,
+      focus.y + Math.sin(elevation) * distance,
+      focus.z + Math.cos(elevation) * Math.cos(azimuth) * distance
+    );
+    camera.lookAt(focus.x, focus.y + (accessInspection.focus === 'hatch' ? 0 : 1.1), focus.z);
+    camera.updateMatrixWorld(true);
+  }
   lastFrameDelta = delta;
   updateCharacterShadow();
   post.render(delta, elapsed);
@@ -17285,6 +21162,12 @@ function animate(): void {
       const boardingProximity = inSurfacePhase && playerModeSystem.onFootActive
         ? getBoardingProximity()
         : undefined;
+      const diagnosticPlayerPosition = getActivePlayerPosition();
+      const diagnosticGroundHeight = inSurfacePhase
+        ? playerModeSystem.onFootActive && parkedShipResolved
+          ? parkedShipTerrainHeight
+          : surfaceGroundHeight(ship.position.x, ship.position.z)
+        : 0;
       diagnostics.update(renderer, rawDelta, {
         ...getPerformanceDiagnosticsPatch(),
         activeParticles:
@@ -17327,7 +21210,7 @@ function animate(): void {
         ],
         shipAltitudeHold: Number((shipAltitudeHoldY ?? ship.position.y).toFixed(2)),
         shipGroundClearance: inSurfacePhase
-          ? Number((ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z)).toFixed(2))
+          ? Number((ship.position.y - diagnosticGroundHeight).toFixed(2))
           : 0,
         shipAltitudeHoldTarget: Number((shipAltitudeHoldY ?? ship.position.y).toFixed(2)),
         shipVerticalVelocity: Number(velocity.y.toFixed(2)),
@@ -17336,7 +21219,7 @@ function animate(): void {
         shipAltitudeHoldY: Number((shipAltitudeHoldY ?? ship.position.y).toFixed(2)),
         shipTerrainY: Number(shipTerrainY.toFixed(2)),
         shipTerrainClearance: inSurfacePhase
-          ? Number((ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z)).toFixed(2))
+          ? Number((ship.position.y - diagnosticGroundHeight).toFixed(2))
           : 0,
         parkedShipTerrainHeight: Number(parkedShipTerrainHeight.toFixed(3)),
         parkedShipHullBottom: Number(parkedShipHullBottom.toFixed(3)),
@@ -17356,12 +21239,41 @@ function animate(): void {
           : Number.POSITIVE_INFINITY,
         shipBoardingAvailable: boardingProximity?.available ?? false,
         shipParked: inSurfacePhase && playerModeSystem.onFootActive && parkedShipResolved,
+        surfaceZone: getSurfaceZoneAt(diagnosticPlayerPosition.x, diagnosticPlayerPosition.z),
+        shipParkingState: playerModeSystem.transitionActive
+          ? 'transition'
+          : inSurfacePhase && playerModeSystem.onFootActive && parkedShipResolved
+            ? 'parked'
+            : 'flight',
+        parkedShipClearanceTarget: PARKED_HULL_CLEARANCE,
+        shipVisualOscillationActive: playerShip.visualOscillationActive,
+        shipAccessFConsumed,
+        parkedShipRestoreChecked,
+        parkedShipSaveCorrected,
         playerShipInstances: cachedPlayerShipInstances,
         shipAltitudeResetForce: Number(shipAltitudeResetForce.toFixed(3)),
         shipCameraJumpDistance: Number(shipCameraJumpDistance.toFixed(3)),
         verticalThrustActive:
           playerModeSystem.insideShip &&
           (input.has(' ') || input.has('q') || input.has('c') || input.has('control')),
+        shipCollisionCollidersActive: PLAYER_SHIP_COLLIDERS.length,
+        shipCollisionSweptDistance: Number(shipCollisionResult.sweptDistance.toFixed(3)),
+        shipCollisionImpact: shipCollisionResult.impact,
+        shipCollisionTimeOfImpact: Number(shipCollisionResult.timeOfImpact.toFixed(4)),
+        shipCollisionNormal: [
+          Number(shipCollisionResult.normal.x.toFixed(3)),
+          Number(shipCollisionResult.normal.y.toFixed(3)),
+          Number(shipCollisionResult.normal.z.toFixed(3))
+        ],
+        shipCollisionPenetration: Number(shipCollisionResult.penetration.toFixed(3)),
+        shipCollisionObject: shipCollisionResult.collidedWith,
+        shipCollisionCandidates: shipCollisionResult.candidates,
+        shipCollisionSubsteps: shipCollisionResult.substeps,
+        shipCollisionLastSafePosition: [
+          Number(shipCollisionResult.lastSafePosition.x.toFixed(2)),
+          Number(shipCollisionResult.lastSafePosition.y.toFixed(2)),
+          Number(shipCollisionResult.lastSafePosition.z.toFixed(2))
+        ],
         orbitalMarkerStatus: orbitalMarker.diagnostics.status,
         orbitalMarkerPath: orbitalMarker.diagnostics.path,
         orbitalMarkerMeshCount: orbitalMarker.diagnostics.meshCount,
@@ -17456,6 +21368,22 @@ function animate(): void {
         ],
         characterSpeed: Number(surfaceCharacter.speed.toFixed(2)),
         characterGrounded: surfaceCharacter.grounded,
+        characterColliderActive: inSurfacePhase && playerModeSystem.onFootActive,
+        characterCollisionSlope: Number(characterCollisionResult.slopeDegrees.toFixed(2)),
+        characterCollisionContact: characterCollisionResult.contact,
+        characterCollisionNormal: [
+          Number(characterCollisionResult.normal.x.toFixed(3)),
+          Number(characterCollisionResult.normal.y.toFixed(3)),
+          Number(characterCollisionResult.normal.z.toFixed(3))
+        ],
+        characterCollisionPenetration: Number(characterCollisionResult.penetration.toFixed(3)),
+        characterCollisionIterations: characterCollisionResult.iterations,
+        characterCollisionCandidates: characterCollisionResult.candidates,
+        characterCollisionLastSafePosition: [
+          Number(characterCollisionResult.lastSafePosition.x.toFixed(2)),
+          Number(characterCollisionResult.lastSafePosition.y.toFixed(2)),
+          Number(characterCollisionResult.lastSafePosition.z.toFixed(2))
+        ],
         liftRideState,
         characterOnLift,
         characterFootLockActive,
@@ -17478,8 +21406,8 @@ function animate(): void {
         mapOpen: starMap.active,
         pauseOpen: gamePaused,
         currentPhase: getCurrentPhase(),
-        currentMissionId: mission24.started ? mission24.missionId : inSurfacePhase ? mission23.started ? mission23.missionId : mission22.started ? mission22.missionId : mission21.started ? mission21.missionId : mission20.started ? mission20.missionId : mission19.started ? mission19.missionId : mission18.started ? mission18.missionId : mission17.started ? mission17.missionId : mission16.started ? mission16.missionId : mission15.started ? mission15.missionId : mission14.started ? mission14.missionId : mission13.started ? mission13.missionId : mission12.started ? mission12.missionId : mission11.started ? mission11.missionId : mission10.started ? mission10.missionId : mission09.started ? mission09.missionId : mission08.started ? mission08.missionId : mission07.started ? mission07.missionId : mission06.started ? mission06.missionId : mission05.started ? mission05.missionId : mission04.started ? mission04.missionId : mission03.started ? mission03.missionId : surfaceMission.missionId : 'mission-01-search-home',
-        currentMissionStep: mission24.started ? mission24.step : inSurfacePhase ? mission23.started ? mission23.step : mission22.started ? mission22.step : mission21.started ? mission21.step : mission20.started ? mission20.step : mission19.started ? mission19.step : mission18.started ? mission18.step : mission17.started ? mission17.step : mission16.started ? mission16.step : mission15.started ? mission15.step : mission14.started ? mission14.step : mission13.started ? mission13.step : mission12.started ? mission12.step : mission11.started ? mission11.step : mission10.started ? mission10.step : mission09.started ? mission09.step : mission08.started ? mission08.step : mission07.started ? mission07.step : mission06.started ? mission06.step : mission05.started ? mission05.step : mission04.started ? mission04.step : mission03.started ? mission03.step : surfaceMission.currentStep.id : missionManager.step,
+        currentMissionId: mission25.started ? mission25.missionId : mission24.started ? mission24.missionId : inSurfacePhase ? mission23.started ? mission23.missionId : mission22.started ? mission22.missionId : mission21.started ? mission21.missionId : mission20.started ? mission20.missionId : mission19.started ? mission19.missionId : mission18.started ? mission18.missionId : mission17.started ? mission17.missionId : mission16.started ? mission16.missionId : mission15.started ? mission15.missionId : mission14.started ? mission14.missionId : mission13.started ? mission13.missionId : mission12.started ? mission12.missionId : mission11.started ? mission11.missionId : mission10.started ? mission10.missionId : mission09.started ? mission09.missionId : mission08.started ? mission08.missionId : mission07.started ? mission07.missionId : mission06.started ? mission06.missionId : mission05.started ? mission05.missionId : mission04.started ? mission04.missionId : mission03.started ? mission03.missionId : surfaceMission.missionId : 'mission-01-search-home',
+        currentMissionStep: mission25.started ? mission25.step : mission24.started ? mission24.step : inSurfacePhase ? mission23.started ? mission23.step : mission22.started ? mission22.step : mission21.started ? mission21.step : mission20.started ? mission20.step : mission19.started ? mission19.step : mission18.started ? mission18.step : mission17.started ? mission17.step : mission16.started ? mission16.step : mission15.started ? mission15.step : mission14.started ? mission14.step : mission13.started ? mission13.step : mission12.started ? mission12.step : mission11.started ? mission11.step : mission10.started ? mission10.step : mission09.started ? mission09.step : mission08.started ? mission08.step : mission07.started ? mission07.step : mission06.started ? mission06.step : mission05.started ? mission05.step : mission04.started ? mission04.step : mission03.started ? mission03.step : surfaceMission.currentStep.id : missionManager.step,
         objectiveText: diagnosticObjective.objective,
         nextAction: diagnosticObjective.nextAction,
         currentGuideTarget: diagnosticObjective.target,
@@ -17787,6 +21715,33 @@ function animate(): void {
         mission24ActiveTimers: 0,
         mission24MothershipUuid: mothership.group.uuid,
         mission24MothershipInstances: mothership.group.parent === scene ? 1 : 0,
+        mission25Started: mission25.started,
+        mission25State: mission25.step,
+        mission25DefensePhase: mission25.state.mission25DefensePhase,
+        mission25Wave: mission25.state.mission25Wave,
+        mission25ArkIntegrity: mission25.state.mission25ArkIntegrity,
+        mission25SystemIntegrities: [...mission25.state.mission25SystemIntegrities],
+        mission25InheritedM22Priority: mission25.state.mission25InheritedM22Priority,
+        mission25InheritedM23Support: mission25.state.mission25InheritedM23Support,
+        mission25CommandNodesDestroyed: [...mission25.state.mission25CommandNodesDestroyed],
+        mission25CommandCoreIntegrity: mission25.state.mission25CommandCoreIntegrity,
+        mission25ActiveEnemies: coalitionDrones.activeCount,
+        mission25EnemiesDestroyed: mission25.state.mission25EnemiesDestroyed,
+        mission25BattleState: mission25.step,
+        mission25EndingStarted: mission25StepAtLeast('chapterResolution'),
+        mission25EndingCompleted: mission25.completed,
+        mission25Completed: mission25.completed,
+        chapterCompleted: mission25.state.chapterCompleted,
+        mission25DefenseNetworkBuilt: arkFinalDefenseNetwork.isBuilt,
+        mission25DefenseNetworkVisible: arkFinalDefenseNetwork.isVisible,
+        mission25CommandBuilt: coalitionSiegeCommand.isBuilt,
+        mission25CommandVisible: coalitionSiegeCommand.isVisible,
+        mission25ActiveTimers: mission25.activeTimers,
+        mission25MothershipUuid: mothership.group.uuid,
+        mission25MothershipInstances: mothership.group.parent === scene ? 1 : 0,
+        mission25PlayerShipInstances: cachedPlayerShipInstances,
+        mission25MusicCue: musicManager.requestedTrack ?? 'none',
+        mission25SaveRestored: saveSystem.lastLoadStatus === 'loaded' || saveSystem.lastLoadStatus === 'migrated',
         mission12Started: mission12.started,
         mission12Step: mission12.step,
         auroraFirstCrewAuthorized: mission12.state.auroraFirstCrewAuthorized,
@@ -17916,6 +21871,16 @@ function animate(): void {
         saveExists: saveSystem.hasSave(),
         lastSaveTime: saveSystem.lastSaveTime,
         saveLoadStatus: saveSystem.lastLoadStatus,
+        collisionWorldReady: collisionWorld.diagnostics.ready,
+        collisionStaticColliders: collisionWorld.diagnostics.staticColliders,
+        collisionDynamicColliders: collisionWorld.diagnostics.dynamicColliders,
+        collisionTriggers: collisionWorld.diagnostics.triggers,
+        collisionQueriesThisFrame: collisionWorld.diagnostics.queriesThisFrame,
+        collisionQueryCandidates: collisionWorld.diagnostics.queryCandidates,
+        collisionTimeMs: Number(collisionWorld.diagnostics.collisionTimeMs.toFixed(3)),
+        collisionRestoreCorrections: collisionWorld.diagnostics.restoreCorrections,
+        collisionDuplicateRegistrations: collisionWorld.diagnostics.duplicateRegistrations,
+        collisionResourcesReleased: collisionWorld.diagnostics.resourcesReleased,
         saveWarning: saveSystem.lastWarning,
         scannerPulses: scannerPulse.activeCount
       });
@@ -17930,26 +21895,46 @@ function animate(): void {
 // ---------------------------------------------------------------------------
 
 void (async () => {
-  loadingStatus.textContent = 'Cargando Arca Epsilon, nave, Marcador Atlas, cabina y piloto...';
+  bootExperience.updateTask('backdrop', 0, BOOT_TASK_STATUS.backdrop);
+  await bootBackdropReady;
+  activeBootTask = 'mothership';
+  bootExperience.updateTask(activeBootTask, 0, BOOT_TASK_STATUS[activeBootTask]);
   await mothership.load({
     medium: '/models/optimized/arca-epsilon.medium.glb',
     low: '/models/optimized/arca-epsilon.low.glb',
     original: '/models/arca-epsilon.glb'
   });
+  activeBootTask = 'playerShip';
+  bootExperience.updateTask(activeBootTask, 0, BOOT_TASK_STATUS[activeBootTask]);
+  const bootShipDefinition = getSelectedShipDefinition();
   await playerShip.load({
-    medium: '/models/optimized/scout-ship.medium.glb',
-    low: '/models/optimized/scout-ship.low.glb',
-    original: '/models/player-scout.glb'
+    medium: bootShipDefinition.model.gameplayMedium,
+    low: bootShipDefinition.model.gameplayLow,
+    original: bootShipDefinition.model.gameplayOriginal
   });
+  weaponSystem.setCannonOffsets(playerShip.getCannonOffsets());
+  weaponSystem.setMissilePodOffsets(playerShip.getMissileTubeOffsets());
+  activeBootTask = 'orbitalMarker';
+  bootExperience.updateTask(activeBootTask, 0, BOOT_TASK_STATUS[activeBootTask]);
   await orbitalMarker.load({
     medium: '/models/optimized/atlas-marker.medium.glb',
     low: '/models/optimized/atlas-marker.low.glb',
     original: '/models/wayfinder-monument.glb'
   });
+  activeBootTask = 'cockpit';
+  bootExperience.updateTask(activeBootTask, 0, BOOT_TASK_STATUS[activeBootTask]);
   await cockpitInterior.load('/models/cockpit-interior.glb');
+  bootExperience.completeTask(activeBootTask, BOOT_TASK_STATUS[activeBootTask]);
+  activeBootTask = 'pilot';
+  bootExperience.updateTask(activeBootTask, 0, BOOT_TASK_STATUS[activeBootTask]);
   await surfaceCharacter.load('/models/characters/arca-pilot-walk.glb', [
     '/models/characters/arca-pilot-run-animation.glb'
   ]);
+  bootExperience.completeTask(activeBootTask, BOOT_TASK_STATUS[activeBootTask]);
+  activeBootTask = 'systems';
+  bootExperience.updateTask(activeBootTask, 0.2, BOOT_TASK_STATUS[activeBootTask]);
+  await Promise.allSettled([audioInitialization, voiceInitialization]);
+  bootExperience.updateTask(activeBootTask, 0.55, BOOT_TASK_STATUS[activeBootTask]);
   engineTrail.setSocketPositions(playerShip.getEngineSocketPositions());
   diagnostics.update(renderer, 0, {
     ...getPerformanceDiagnosticsPatch(true),
@@ -18011,8 +21996,8 @@ void (async () => {
     rampState: 'retracted',
     shipExitAvailable: false,
     currentPhase: getCurrentPhase(),
-    currentMissionId: inSurfacePhase ? surfaceMission.missionId : 'mission-01-search-home',
-    currentMissionStep: inSurfacePhase ? surfaceMission.currentStep.id : missionManager.step,
+    currentMissionId: mission25.started ? mission25.missionId : mission24.started ? mission24.missionId : inSurfacePhase ? surfaceMission.missionId : 'mission-01-search-home',
+    currentMissionStep: mission25.started ? mission25.step : mission24.started ? mission24.step : inSurfacePhase ? surfaceMission.currentStep.id : missionManager.step,
     colonyStage: colonyManager.state.currentStage,
     colonyReadiness: colonyManager.state.colonizationReadiness,
     habitatOnline: colonyManager.state.habitatOnline,
@@ -18031,28 +22016,33 @@ void (async () => {
     cockpitInterior.glbDiagnostics.status === 'loaded' &&
     surfaceCharacter.diagnostics.status === 'loaded'
   ) {
-    loadingStatus.textContent = `GLB cargados: Arca ${mothership.diagnostics.meshCount}, nave ${playerShip.diagnostics.meshCount}, Atlas ${orbitalMarker.diagnostics.meshCount}, cabina ${cockpitInterior.glbDiagnostics.meshCount}, piloto ${surfaceCharacter.diagnostics.meshCount} mesh`;
     missionText.textContent = 'La Arca Epsilon y la nave de manejo estan listas. Sal, explora y vuelve a la zona segura si los sistemas caen.';
   } else {
-    loadingStatus.textContent = `Fallback activo. Arca: ${mothership.diagnostics.status}. Atlas: ${orbitalMarker.diagnostics.status}. Cabina: ${cockpitInterior.glbDiagnostics.status}. Piloto: ${surfaceCharacter.diagnostics.status}.`;
+    bootExperience.failTask('systems', 'Compatibilidad visual activa · finalizando red de misión');
     if (mothership.diagnostics.status !== 'loaded' || orbitalMarker.diagnostics.status !== 'loaded') {
       console.error('Arca Epsilon critical GLB fallback', mothership.diagnostics, orbitalMarker.diagnostics);
     }
   }
   if (saveSystem.hasSave()) {
-    launchButton.textContent = 'Continuar exploracion';
     missionText.textContent = 'Partida local detectada. Puedes continuar el progreso de Base Nereida.';
   }
-  launchButton.disabled = false;
   // Adopt every point light the world was built with before the first frame,
   // so the budget is already correct when the player presses launch.
   lightPool.registerSubtree(scene);
   applyRenderProfile(renderProfile);
+  refreshLoadGameSummary();
+  bootExperience.revealMenu({
+    hasSave: saveSystem.hasSave(),
+    savedAt: saveSystem.lastSaveTime || undefined
+  });
   window.__arcaGameReady = true;
   animate();
 })().catch((error) => {
-  loadingStatus.textContent = `No se pudo cargar la nave de manejo: ${error instanceof Error ? error.message : String(error)}`;
+  bootExperience.failTask(activeBootTask, 'Carga parcial · modo de compatibilidad activo');
+  refreshLoadGameSummary();
+  bootExperience.revealMenu({ hasSave: saveSystem.hasSave(), degraded: true });
   console.error('Boot asset load failed', error);
+  window.__arcaGameReady = true;
   animate();
 });
 
@@ -18086,6 +22076,7 @@ function enterSurfacePhase(shouldSave = true): void {
     landingZone.activate(new THREE.Vector3(0, 1.5, 0), new THREE.Vector3(0, 1, 0));
   }
   landingZone.setApproachVisibility(1);
+  landingZone.setSettled(true);
   surfaceResourceSystem.activate((x, z) => planetaryWorld.getHeightAt(x, z));
   surfaceMission.start();
   anchorMission03SurfaceObjects();
@@ -18184,6 +22175,365 @@ function requestGamePointerLock(): void {
   }
 }
 
+function refreshLoadGameSummary(): void {
+  if (!saveSystem.hasSave()) {
+    loadGameSummary.textContent = 'No hay una expedición guardada en este navegador.';
+    return;
+  }
+  loadGameSummary.textContent = saveSystem.lastSaveTime > 0
+    ? `Último registro: ${new Intl.DateTimeFormat('es-UY', { dateStyle: 'medium', timeStyle: 'short' }).format(saveSystem.lastSaveTime)}.`
+    : 'Registro local verificado y listo para restaurar.';
+}
+
+function getSelectedShipDefinition(): ShipDefinition {
+  playerProfile = profileRepository.load();
+  const selected = shipCatalog.get(playerProfile.selectedShipId);
+  if (selected && ownedShipIds(playerProfile).includes(selected.id)) return selected;
+  playerProfile = profileRepository.selectShip(shipCatalog.getStarter().id);
+  return shipCatalog.getStarter();
+}
+
+function syncGarageProfile(definition: ShipDefinition): void {
+  getElement('#garage-ship-name').textContent = definition.displayName;
+  getElement('#garage-roster-name').textContent = definition.displayName;
+  getElement('#garage-ship-class').textContent = definition.className;
+  getElement('#garage-description').textContent = definition.description;
+  getElement('#garage-stat-damage').textContent = `${definition.stats.primaryDamage} / pulso`;
+  getElement('#garage-stat-hull').textContent = `${definition.stats.hullCapacity}`;
+  getElement('#garage-stat-shield').textContent = `${definition.stats.shieldCapacity}`;
+  getElement('#garage-stat-speed').textContent = `${definition.stats.thrust} m/s² · boost ${definition.stats.boostMultiplier}×`;
+  getElement('#garage-stat-maneuver').textContent = `${(definition.stats.maneuverResponse * 1000).toFixed(1).replace('.', ',')} mrad/px`;
+  getElement('#garage-stat-torpedoes').textContent = `${definition.stats.torpedoCapacity} tubos`;
+  getElement('#garage-equipped-state').textContent = definition.id === playerProfile.selectedShipId ? 'Equipada' : 'Disponible';
+}
+
+async function openGarage(): Promise<void> {
+  if (launched) return;
+  await gameModes.enter('garage');
+  bootExperience.hide();
+  const definition = getSelectedShipDefinition();
+  syncGarageProfile(definition);
+  garageView ??= new GarageView(garageScreen, diagnosticsMode);
+  await garageView.show(definition);
+  musicManager.setDebugTrack('music-calm-exploration');
+}
+
+function closeGarage(): void {
+  garageView?.hide();
+  musicManager.setDebugTrack(null);
+  void gameModes.enter('menu');
+  bootExperience.showMenu({ hasSave: saveSystem.hasSave(), savedAt: saveSystem.lastSaveTime || undefined });
+}
+
+async function openCombatSetup(): Promise<void> {
+  if (launched) return;
+  await gameModes.enter('combat');
+  bootExperience.hide();
+  const definition = getSelectedShipDefinition();
+  combatModeView.showSetup(combatScenarioCatalog.require(ARK_ORBIT_SURVIVAL.id), definition);
+  musicManager.setDebugTrack('music-defense-network');
+}
+
+function closeCombatSetup(): void {
+  if (combatSession) return;
+  combatModeView.hide();
+  musicManager.setDebugTrack(null);
+  void gameModes.enter('menu');
+  bootExperience.showMenu({ hasSave: saveSystem.hasSave(), savedAt: saveSystem.lastSaveTime || undefined });
+}
+
+function captureCombatWorldVisibility(): void {
+  combatWorldVisibility = new Map();
+  const allowed = new Set<THREE.Object3D>([
+    camera,
+    ship,
+    mothership.group,
+    weaponSystem.group,
+    enemyCombatVisuals.group,
+    coalitionDrones.group,
+    starfield.group,
+    nebula.group,
+    planets.group,
+    asteroidField.group,
+    cinematicDust.points,
+    premiumVisuals.group,
+    lightPool.group,
+    keyStarSprite
+  ]);
+  for (const child of scene.children) {
+    combatWorldVisibility.set(child, child.visible);
+    child.visible = child instanceof THREE.Light || allowed.has(child);
+  }
+  mothership.group.visible = true;
+  ship.visible = true;
+  playerShip.group.visible = true;
+  coalitionDrones.group.visible = false;
+  starfield.group.visible = true;
+  nebula.group.visible = true;
+  planets.group.visible = true;
+  asteroidField.group.visible = true;
+  cinematicDust.points.visible = true;
+  keyStarSprite.visible = true;
+}
+
+function restoreCombatWorldVisibility(): void {
+  combatWorldVisibility.forEach((visible, object) => { object.visible = visible; });
+  combatWorldVisibility.clear();
+}
+
+function prepareCombatWorld(): void {
+  standDownArkDeparture();
+  inSurfacePhase = false;
+  inBasin = false;
+  planetaryWorld.deactivate();
+  landingZone.group.visible = false;
+  scene.background = SPACE_BACKGROUND;
+  scene.fog = new THREE.FogExp2(SPACE_FOG, 0.0012);
+  scene.environmentIntensity = 0.72;
+  captureCombatWorldVisibility();
+
+  const scenario = combatScenarioCatalog.require(ARK_ORBIT_SURVIVAL.id);
+  combatSpawnScratch.set(...scenario.playerSpawn).applyQuaternion(mothership.group.quaternion).add(mothership.group.position);
+  combatOriginScratch.set(...scenario.encounterOrigin).applyQuaternion(mothership.group.quaternion).add(mothership.group.position);
+  ship.position.copy(combatSpawnScratch);
+  ship.quaternion.copy(mothership.group.quaternion);
+  yaw = ship.rotation.y;
+  pitch = ship.rotation.x;
+  smoothYaw = yaw;
+  smoothPitch = pitch;
+  bankRoll = 0;
+  velocity.set(0, 0, 0);
+  resources.hull = 100;
+  resources.energy = 100;
+  resources.oxygen = 100;
+  spaceThrustLevel = 0;
+  spaceBoostLevel = 0;
+  weaponSystem.refillWeaponStores();
+  weaponSystem.clearTransient();
+  coalitionDrones.clearAll();
+  coalitionDrones.setEnvironment('vacuum');
+  coalitionDrones.setOrigin(combatOriginScratch.x, combatOriginScratch.y, combatOriginScratch.z);
+  coalitionDrones.setNavigationObstacle(mothership.group.position, 155);
+  playerModeSystem.forceShip(false, false);
+  cameraModeSystem.setMode('external');
+  requestCameraFollowSync('combat-session');
+  dialogueManager.clearQueue();
+  starMap.close();
+  input.clear();
+  gamePaused = false;
+  launched = true;
+  hud.classList.add('is-active', 'is-combat');
+  setControlHints('combat');
+  phaseChip.textContent = 'Combate';
+  sectorName.textContent = 'Órbita del Arca';
+  safeZoneReadout.textContent = 'Defensa activa';
+  threatReadout.textContent = 'Riesgo alto';
+  combatModeView.showLive();
+  requestGamePointerLock();
+  startAudio();
+}
+
+function startCombatSession(): void {
+  if (!gameModes.isCombat || combatSession) return;
+  const definition = getSelectedShipDefinition();
+  const scenario = combatScenarioCatalog.require(ARK_ORBIT_SURVIVAL.id);
+  combatSession = new CombatSession(
+    scenario,
+    'survival',
+    'normal',
+    playerProfile.id,
+    definition.id
+  );
+  combatResultsPresented = false;
+  combatProfileRecorded = false;
+  combatDisplayedVelocity = -1;
+  combatDisplayedArkDistance = -1;
+  prepareCombatWorld();
+  combatSession.start();
+  showPhaseBanner('COMBATE // ÓRBITA DEL ARCA', 'Supervivencia · tres oleadas');
+}
+
+function updateCombatSession(delta: number, elapsed: number, authorityDelta = delta): void {
+  const session = combatSession;
+  if (!session) return;
+  session.update(authorityDelta, coalitionDrones.activeCount);
+  const requested = session.consumeWaveRequest();
+  if (requested > 0) {
+    coalitionDrones.launchWave(requested);
+    showPhaseBanner(`OLEADA ${session.snapshot.wave}`, `${requested} contactos de la Coalición`);
+  }
+  coalitionDrones.update(
+    delta,
+    elapsed,
+    () => session.reportEnemyDestroyed(),
+    (_position, muzzlePosition) => {
+      const impact = emitEnemyCombatShot(muzzlePosition, ship.position, 'light', 5.5);
+      resources.hull = clampResource(resources.hull - 4.5);
+      shieldEffect.registerImpact(impact);
+      combatCameraImpulse.triggerReceived(impact, ship.position, camera);
+      flightCombatHud.registerDamageDirection(impact, ship.position, camera);
+      if (resources.hull <= 0) {
+        session.reportPlayerDestroyed();
+        coalitionDrones.clearAll();
+      }
+    }
+  );
+  const displayedVelocity = Math.round(velocity.length());
+  if (displayedVelocity !== combatDisplayedVelocity) {
+    combatDisplayedVelocity = displayedVelocity;
+    velocityReadout.textContent = `${displayedVelocity} m/s`;
+  }
+  const displayedArkDistance = Math.round(ship.position.distanceTo(mothership.group.position));
+  if (displayedArkDistance !== combatDisplayedArkDistance) {
+    combatDisplayedArkDistance = displayedArkDistance;
+    distanceReadout.textContent = formatDistance(displayedArkDistance);
+  }
+  const snapshot = session.snapshot;
+  combatModeView.update(snapshot, resources.hull);
+  if (snapshot.state === 'results' && !combatResultsPresented) {
+    combatResultsPresented = true;
+    gamePaused = true;
+    input.clear();
+    coalitionDrones.clearAll();
+    weaponSystem.clearTransient();
+    hostileContacts.hideAll();
+    if (!combatProfileRecorded && session.markProfileRecorded()) {
+      combatProfileRecorded = true;
+      playerProfile = profileRepository.recordCombatResult(snapshot.result === 'victory', snapshot.kills);
+    }
+    musicManager.setDebugTrack(snapshot.result === 'victory' ? 'music-final-orbit-resolution' : 'music-shadow-orbit');
+    combatModeView.showResults(snapshot);
+  }
+}
+
+function cleanupCombatWorld(): void {
+  if (phaseBannerTimer !== undefined) {
+    window.clearTimeout(phaseBannerTimer);
+    phaseBannerTimer = undefined;
+    phaseBanner.classList.remove('is-active');
+  }
+  coalitionDrones.clearAll();
+  coalitionDrones.clearNavigationObstacle();
+  weaponSystem.clearTransient();
+  weaponSystem.cancelReloads();
+  sfxManager.stopLoop('playerTorpedoEngine', 0.05);
+  enemyCombatVisuals.clearTransient();
+  combatCameraImpulse.reset();
+  enemyThreatWarningRemaining = 0;
+  enemyThreatWarningText = '';
+  hostileContacts.hideAll();
+  combatSession?.end();
+  combatSession = undefined;
+  combatResultsPresented = false;
+  combatProfileRecorded = false;
+  input.clear();
+  gamePaused = false;
+  launched = false;
+  hud.classList.remove('is-active', 'is-combat');
+  combatModeView.hide();
+  musicManager.stop(0.35);
+  engineAudio.stopAll(0.15);
+  restoreCombatWorldVisibility();
+}
+
+function replayCombatSession(): void {
+  cleanupCombatWorld();
+  void gameModes.enter('combat');
+  startCombatSession();
+}
+
+function exitCombatToMenu(): void {
+  cleanupCombatWorld();
+  void gameModes.enter('menu');
+  // Rebuild the Story world from its untouched save rather than trying to
+  // reverse every temporary combat transform in a mission-heavy scene.
+  window.location.reload();
+}
+
+function fingerprintText(value: string | null): string {
+  if (!value) return 'empty';
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${value.length}:${(hash >>> 0).toString(16)}`;
+}
+
+function getGameModesFoundationState(): Record<string, unknown> {
+  playerProfile = profileRepository.load();
+  let mothershipCount = 0;
+  let playerShipCount = 0;
+  let activeEnemyMinimumArkDistance = Number.POSITIVE_INFINITY;
+  scene.traverse((object) => {
+    if (object.name === mothership.group.name) mothershipCount += 1;
+    if (object.name === playerShip.group.name) playerShipCount += 1;
+  });
+  for (const target of coalitionDrones.targets) {
+    if (target.health <= 0 || !target.hostile) continue;
+    target.object.getWorldPosition(combatEnemyPositionScratch);
+    activeEnemyMinimumArkDistance = Math.min(
+      activeEnemyMinimumArkDistance,
+      combatEnemyPositionScratch.distanceTo(mothership.group.position)
+    );
+  }
+  const combat = combatSession?.snapshot;
+  return {
+    mode: gameModes.mode,
+    profile: {
+      version: playerProfile.version,
+      id: playerProfile.id,
+      identityProvider: playerProfile.identity.provider,
+      selectedShipId: playerProfile.selectedShipId,
+      ownedShipIds: ownedShipIds(playerProfile),
+      combatStats: { ...playerProfile.stats }
+    },
+    catalog: shipCatalog.list().map((definition) => ({
+      id: definition.id,
+      acquisition: definition.acquisition.type,
+      model: definition.model.garage
+    })),
+    garage: garageView?.state ?? null,
+    combat: combat ?? null,
+    story: {
+      missionId: buildSaveGameData().currentMissionId,
+      missionStep: buildSaveGameData().currentMissionStep,
+      saveFingerprint: fingerprintText(window.localStorage.getItem(SaveSystem.key))
+    },
+    world: {
+      mothershipUuid: mothership.group.uuid,
+      mothershipCount,
+      playerShipUuid: playerShip.group.uuid,
+      playerShipCount,
+      playerShipModelPath: playerShip.diagnostics.path,
+      activeEnemies: coalitionDrones.activeCount,
+      activeEnemyMinimumArkDistance: Number.isFinite(activeEnemyMinimumArkDistance)
+        ? activeEnemyMinimumArkDistance
+        : null,
+      combatVisibilityEntries: combatWorldVisibility.size
+    },
+    rendering: {
+      drawCalls: renderer.info.render.calls,
+      triangles: renderer.info.render.triangles,
+      fps: diagnostics.data.fps,
+      weapons: weaponSystem.getDiagnostics(),
+      enemyVisuals: enemyCombatVisuals.getDiagnostics()
+    },
+    cleanup: {
+      combatSessionActive: Boolean(combatSession),
+      combatTimersActive: combat?.timersActive ?? 0,
+      garageRafActive: garageView?.state.rafActive ?? false,
+      storyHudHiddenForCombat: hud.classList.contains('is-combat')
+    },
+    runtime: {
+      launched,
+      gamePaused,
+      dialogueId: dialogueManager.current?.id ?? '',
+      dialoguePausesGameplay: dialogueManager.current?.pausesGameplay === true
+    }
+  };
+}
+
 function returnToMainMenu(): void {
   saveProgress();
   gamePaused = false;
@@ -18191,19 +22541,23 @@ function returnToMainMenu(): void {
   input.clear();
   void document.exitPointerLock?.();
   launched = false;
+  void gameModes.enter('menu');
   hud.classList.remove('is-active');
-  bootScreen.classList.remove('is-hidden');
-  bootScreen.inert = false;
+  bootExperience.showMenu({
+    hasSave: saveSystem.hasSave(),
+    savedAt: saveSystem.lastSaveTime || undefined
+  });
+  refreshLoadGameSummary();
   dialogueManager.clearQueue();
-  launchButton.textContent = 'Continuar exploracion';
+  setLaunchButtonLabel('Continuar');
   launchButton.disabled = false;
   missionText.textContent = 'Progreso guardado. La expedicion puede continuar desde este punto.';
 }
 
 const pauseMenu = new PauseMenu({
   onResume: () => setGamePaused(false),
-  onSave: () => saveProgress(),
-  onReturnToMainMenu: returnToMainMenu,
+  onSave: () => { if (gameModes.isStory) saveProgress(); },
+  onReturnToMainMenu: () => gameModes.isCombat ? exitCombatToMenu() : returnToMainMenu(),
   onResetProgress: () => {
     saveSystem.clearSave();
     window.location.reload();
@@ -18215,11 +22569,17 @@ if (startPhase2Btn) {
   startPhase2Btn.addEventListener('click', () => enterSurfacePhase());
 }
 
-launchButton.addEventListener('click', () => {
+function setLaunchButtonLabel(label: string): void {
+  const labelElement = launchButton.querySelector<HTMLElement>('span');
+  if (labelElement) labelElement.textContent = label;
+  else launchButton.textContent = label;
+}
+
+async function launchFromMainMenu(loadExistingSave: boolean): Promise<void> {
   launchButton.blur();
   launchButton.disabled = true;
-  bootScreen.inert = true;
-  const savedGame = saveSystem.loadGame();
+  await gameModes.enter('story');
+  const savedGame = loadExistingSave ? saveSystem.loadGame() : undefined;
   if (savedGame) {
     applySaveGame(savedGame);
     requestGamePointerLock();
@@ -18229,16 +22589,17 @@ launchButton.addEventListener('click', () => {
   }
 
   launched = true;
-  bootScreen.classList.add('is-hidden');
+  expeditionStartedThisSession = true;
+  bootExperience.hide();
   hud.classList.add('is-active');
-  missionManager.start();
   requestCameraFollowSync('launch');
   // A new game now opens clamped to the Ark. The old opening line is the
   // commander talking to a pilot already in open space, so the prologue
   // replaces it with its own introduction; M01 itself is untouched and
-  // resumes at `scannerTutorial` the moment the corridor is cleared.
+  // starts its flight tutorial only when the corridor is cleared.
   beginArkDeparture();
   if (!arkDeparture.started || arkDeparture.completed) {
+    missionManager.start();
     triggerDialogue('m01_start_commander', 'mission-start');
   }
   missionText.textContent = saveSystem.lastWarning
@@ -18250,37 +22611,79 @@ launchButton.addEventListener('click', () => {
   requestGamePointerLock();
   startAudio();
   playTone(440, 0.22);
+}
+
+launchButton.addEventListener('click', () => { void launchFromMainMenu(true); });
+
+confirmLoadGameButton.addEventListener('click', () => { void launchFromMainMenu(true); });
+
+confirmNewGameButton.addEventListener('click', () => {
+  saveSystem.clearSave();
+  if (expeditionStartedThisSession) {
+    window.location.reload();
+    return;
+  }
+  void launchFromMainMenu(false);
 });
+
+garageModeButton.addEventListener('click', () => { void openGarage(); });
+garageBackButton.addEventListener('click', closeGarage);
+combatModeButton.addEventListener('click', () => { void openCombatSetup(); });
 
 scanButton.addEventListener('click', () => dispatchInputAction('scan', 'ScanButton'));
 
 window.addEventListener('keydown', (event) => {
   inputActionRouter.recordKey(event.code || event.key);
   if (event.code === 'Space' && launched) event.preventDefault();
+  if (gameModes.isCombat && combatSession?.snapshot.state === 'results') return;
   if (!event.repeat && event.code === 'Escape' && launched) {
     event.preventDefault();
     dispatchInputAction('pause', event.code);
     return;
   }
 
-  if (!event.repeat && event.code === 'Enter' && dialogueManager.current) {
+  if (gameModes.isStory && !event.repeat && event.code === 'Enter' && dialogueManager.current) {
     event.preventDefault();
     dialogueManager.advance();
     return;
   }
-  if (!event.repeat && event.code === 'Space' && dialogueManager.awaitingInput) {
+  if (gameModes.isStory && !event.repeat && event.code === 'Space' && dialogueManager.awaitingInput) {
     event.preventDefault();
     dialogueManager.advance();
     return;
   }
 
-  if (dialogueManager.current?.pausesGameplay && event.code !== 'KeyM') return;
+  if (gameModes.isStory && dialogueManager.current?.pausesGameplay && event.code !== 'KeyM') return;
 
-  if (!event.repeat && event.code === 'KeyM') {
+  if (gameModes.isCombat && event.code === 'KeyE') {
+    if (!event.repeat) input.add('e');
+    event.preventDefault();
+    return;
+  }
+
+  if (gameModes.isCombat && (event.code === 'KeyF' || event.code === 'KeyM')) {
+    event.preventDefault();
+    return;
+  }
+
+  if (gameModes.isStory && !event.repeat && event.code === 'KeyM') {
     dispatchInputAction('map', event.code);
     return;
   }
-  if (!event.repeat && event.code === 'KeyE') {
+  if (event.code === 'KeyE' && event.repeat) {
+    event.preventDefault();
+    return;
+  }
+  if (event.code === 'KeyE') {
+    // E is the interact key first. It doubles as vertical thrust in vacuum,
+    // but only when there is nothing to interact with: overloading it
+    // unconditionally meant syncing an Ark link also pushed the ship upward,
+    // out of the link's vertical range, so the sync stalled part-way.
+    const pendingInteraction = getLateMissionInteraction();
+    const interactHere = pendingInteraction !== undefined &&
+      lateMissionInteractionModeReady(pendingInteraction) &&
+      lateMissionInteractionInRange(pendingInteraction);
+    if (!interactHere) input.add('e');
     dispatchInputAction('scan', event.code);
     return;
   }
@@ -18303,6 +22706,29 @@ window.addEventListener('keydown', (event) => {
   // Weapons stay cold from the cradle until the exit corridor is behind us.
   if (!event.repeat && event.code === 'Space' && playerModeSystem.insideShip && !mission24.ascentActive && !arkDeparture.weaponsLocked) fireLaser();
   if (!event.repeat && key === 'r' && playerModeSystem.insideShip && !arkDeparture.weaponsLocked) fireMissile();
+  // Manual reload. G was re-audited as free before being taken: Space, R, T, E,
+  // F, V, M, Q, C, WASD and Shift are all bound elsewhere. `event.repeat` is
+  // already filtered above, so holding the key cannot restart a timer or drain
+  // the reserve twice.
+  if (!event.repeat && event.code === 'KeyG' && playerModeSystem.insideShip) {
+    weaponAudit.reloadRequestCount += 1;
+    const result = weaponSystem.requestReload();
+    if (result.message) {
+      weaponReloadMessage = result.message;
+      weaponReloadMessageAt = clock.elapsedTime;
+    }
+    if (result.primaryStarted || result.torpedoStarted) playTone(520, 0.06);
+  }
+  // Target selection. T was free: M/E/F/V/Space/R/WASD/Shift/Q/C are all taken,
+  // so this adds a binding rather than overriding one. First press picks the
+  // nearest contact ahead; further presses cycle by distance.
+  if (!event.repeat && key === 't' && playerModeSystem.insideShip) {
+    const forward = shipForwardScratch.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
+    const picked = hostileContacts.currentTargetId
+      ? hostileContacts.cycleTarget()
+      : hostileContacts.selectNearestAhead(forward);
+    if (picked) playTone(880, 0.05);
+  }
 });
 
 window.addEventListener('keyup', (event) => {
@@ -18355,6 +22781,8 @@ window.addEventListener('pagehide', (event) => {
   atmosphericAscentEffect.dispose();
   arkFinalPreparationNetwork.dispose();
   mission24AscentHud.dispose();
+  garageView?.dispose();
+  collisionWorld.dispose(scene);
 }, { once: true });
 
 type ShipAltitudeHoldTestResult = {
@@ -18403,6 +22831,169 @@ async function testShipAltitudeHold(): Promise<ShipAltitudeHoldTestResult> {
   };
 }
 
+function serializeCharacterCollision(result = characterCollisionResult) {
+  return {
+    position: result.position.toArray() as [number, number, number],
+    grounded: result.grounded,
+    slope: result.slopeDegrees,
+    contact: result.contact,
+    normal: result.normal.toArray() as [number, number, number],
+    penetration: result.penetration,
+    iterations: result.iterations,
+    candidates: result.candidates,
+    collidedWith: result.collidedWith,
+    lastSafePosition: result.lastSafePosition.toArray() as [number, number, number],
+    restoredToSafe: result.restoredToSafe
+  };
+}
+
+function serializeShipCollision(result = shipCollisionResult) {
+  return {
+    position: result.position.toArray() as [number, number, number],
+    impact: result.impact,
+    timeOfImpact: result.timeOfImpact,
+    normal: result.normal.toArray() as [number, number, number],
+    penetration: result.penetration,
+    iterations: result.iterations,
+    candidates: result.candidates,
+    substeps: result.substeps,
+    sweptDistance: result.sweptDistance,
+    collidedWith: result.collidedWith,
+    lastSafePosition: result.lastSafePosition.toArray() as [number, number, number],
+    restoredToSafe: result.restoredToSafe
+  };
+}
+
+function probeCharacterCollision(start: readonly number[], displacement: readonly number[]) {
+  if (start.length !== 3 || displacement.length !== 3) return undefined;
+  collisionProbeStart.set(start[0], start[1], start[2]);
+  collisionProbeDisplacement.set(displacement[0], displacement[1], displacement[2]);
+  collisionProbeVelocity.copy(collisionProbeDisplacement);
+  collisionWorld.moveCharacter(
+    collisionProbeStart,
+    collisionProbeDisplacement,
+    collisionProbeVelocity,
+    surfaceGroundHeight,
+    characterCollisionProbeResult
+  );
+  return {
+    ...serializeCharacterCollision(characterCollisionProbeResult),
+    velocity: collisionProbeVelocity.toArray() as [number, number, number]
+  };
+}
+
+function probeShipCollision(start: readonly number[], displacement: readonly number[], terrain = false) {
+  if (start.length !== 3 || displacement.length !== 3) return undefined;
+  collisionProbeStart.set(start[0], start[1], start[2]);
+  collisionProbeDisplacement.set(displacement[0], displacement[1], displacement[2]);
+  collisionProbeVelocity.copy(collisionProbeDisplacement);
+  collisionWorld.moveShip(
+    collisionProbeStart,
+    collisionProbeDisplacement,
+    collisionProbeVelocity,
+    ship.quaternion,
+    PLAYER_SHIP_COLLIDERS,
+    terrain ? surfaceGroundHeight : undefined,
+    shipCollisionProbeResult
+  );
+  return {
+    ...serializeShipCollision(shipCollisionProbeResult),
+    velocity: collisionProbeVelocity.toArray() as [number, number, number]
+  };
+}
+
+function moveCharacterByDebug(displacement: readonly number[]) {
+  if (displacement.length !== 3) return undefined;
+  collisionProbeDisplacement.set(displacement[0], displacement[1], displacement[2]);
+  collisionProbeVelocity.copy(collisionProbeDisplacement);
+  collisionWorld.moveCharacter(
+    surfaceCharacter.group.position,
+    collisionProbeDisplacement,
+    collisionProbeVelocity,
+    surfaceGroundHeight,
+    characterCollisionResult
+  );
+  surfaceCharacter.group.position.copy(characterCollisionResult.position);
+  surfaceCharacter.velocity.copy(collisionProbeVelocity);
+  return serializeCharacterCollision(characterCollisionResult);
+}
+
+function moveShipByDebug(displacement: readonly number[], terrain = false) {
+  if (displacement.length !== 3) return undefined;
+  collisionProbeDisplacement.set(displacement[0], displacement[1], displacement[2]);
+  collisionProbeVelocity.copy(collisionProbeDisplacement);
+  collisionWorld.moveShip(
+    ship.position,
+    collisionProbeDisplacement,
+    collisionProbeVelocity,
+    ship.quaternion,
+    PLAYER_SHIP_COLLIDERS,
+    terrain ? surfaceGroundHeight : undefined,
+    shipCollisionResult
+  );
+  ship.position.copy(shipCollisionResult.position);
+  velocity.copy(collisionProbeVelocity);
+  return serializeShipCollision(shipCollisionResult);
+}
+
+function getCollisionDebugState() {
+  return {
+    world: { ...collisionWorld.diagnostics },
+    character: serializeCharacterCollision(),
+    ship: serializeShipCollision(),
+    shipColliderCount: PLAYER_SHIP_COLLIDERS.length,
+    // Crew access: the egress foot's own terrain sample and how far it had to
+    // follow the ground. This is the measurement that caught the Aurora slope.
+    accessState: shipAccessLift.state,
+    hatchProgress: Number(shipAccessLift.hatchProgress.toFixed(3)),
+    ladderPrimaryProgress: Number(shipAccessLift.ladderPrimaryProgress.toFixed(3)),
+    ladderSecondaryProgress: Number(shipAccessLift.ladderSecondaryProgress.toFixed(3)),
+    footAdjustmentProgress: Number(shipAccessLift.footAdjustmentProgress.toFixed(3)),
+    accessVisualCounts: shipAccessLift.countAccessVisuals(),
+    accessEgressTerrainHeight: Number(shipAccessLift.egressTerrainHeight.toFixed(3)),
+    accessEgressGroundDifference: Number(shipAccessLift.egressGroundDifference.toFixed(3)),
+    accessEgressFootSafe: shipAccessLift.egressFootSafe,
+    accessBoardingAnchorWorld: shipAccessLift
+      .getBoardingAnchorWorld(boardingAnchorScratch)
+      .toArray()
+      .map((v) => Number(v.toFixed(3))) as [number, number, number],
+    // Scale provenance, so the probe can prove mesh and colliders share one
+    // source and that the factor is applied exactly once.
+    shipScaleFactor: PLAYER_SHIP_SCALE_FACTOR,
+    shipTargetMaxDimension: PLAYER_SHIP_TARGET_MAX_DIMENSION,
+    pilotHeightMetres: PILOT_HEIGHT_METRES,
+    shipColliderOffsets: PLAYER_SHIP_COLLIDERS.map(
+      (sphere) => sphere.offset.toArray().map((v) => Number(v.toFixed(3))) as [number, number, number]
+    ),
+    shipColliderRadii: PLAYER_SHIP_COLLIDERS.map((sphere) => Number(sphere.radius.toFixed(3))),
+    playerShipInstances: scene.children.reduce((count, child) => count + Number(child === ship), 0),
+    mothershipInstances: scene.children.reduce((count, child) => count + Number(child === mothership.group), 0),
+    mothershipUuid: mothership.group.uuid,
+    playerMode: playerModeSystem.mode,
+    missionId: buildSaveGameData().currentMissionId,
+    missionStep: buildSaveGameData().currentMissionStep
+  };
+}
+
+function getArkLaunchCorridorDebugState() {
+  const anchor = mothership.getLaunchAnchor();
+  if (!anchor) return undefined;
+  const worldPosition = new THREE.Vector3();
+  const localPosition = new THREE.Vector3();
+  const worldQuaternion = new THREE.Quaternion();
+  const outward = new THREE.Vector3(0, 0, 1);
+  anchor.getWorldPosition(worldPosition);
+  anchor.getWorldQuaternion(worldQuaternion);
+  outward.applyQuaternion(worldQuaternion).normalize();
+  localPosition.copy(worldPosition);
+  mothership.group.worldToLocal(localPosition);
+  return {
+    anchor: worldPosition.toArray() as [number, number, number],
+    anchorLocal: localPosition.toArray() as [number, number, number],
+    outward: outward.toArray() as [number, number, number]
+  };
+}
+
 if (urlParams.has('debug')) {
   void import('lil-gui').then(({ default: GUI }) => {
     const gui = new GUI();
@@ -18423,8 +23014,472 @@ if (diagnosticsMode) {
   // Renderer handle for the performance harness; diagnostics builds only.
   window.__arcaRenderer = renderer;
   window.__arcaDebug = {
+    getCollisionState: () => getCollisionDebugState(),
+    getArkLaunchCorridorState: () => getArkLaunchCorridorDebugState(),
+    getCollisionColliderState: (id) => collisionWorld.getColliderState(id),
+    probeCharacterCollision: (start, displacement) => probeCharacterCollision(start, displacement),
+    probeShipCollision: (start, displacement, terrain = false) => probeShipCollision(start, displacement, terrain),
+    moveCharacterBy: (displacement) => moveCharacterByDebug(displacement),
+    moveShipBy: (displacement, terrain = false) => moveShipByDebug(displacement, terrain),
+    getSurfaceGroundHeight: (x, z) => surfaceGroundHeight(x, z),
+    setCollisionDebug: (visible) => {
+      collisionWorld.setDebugVisible(
+        scene,
+        visible,
+        surfaceCharacter.group.position,
+        ship.position,
+        ship.quaternion,
+        PLAYER_SHIP_COLLIDERS
+      );
+      return collisionWorld.diagnostics.debugVisible;
+    },
+    normalizePlayerCollisions: () => {
+      const missionId = buildSaveGameData().currentMissionId;
+      const missionStep = buildSaveGameData().currentMissionStep;
+      normalizeRestoredCollisionPositions(playerModeSystem.onFootActive && parkedShipResolved);
+      return {
+        missionId,
+        missionStep,
+        afterMissionId: buildSaveGameData().currentMissionId,
+        afterMissionStep: buildSaveGameData().currentMissionStep,
+        character: serializeCharacterCollision(),
+        ship: serializeShipCollision()
+      };
+    },
+    setCharacterWorldPosition: (position) => {
+      if (position.length !== 3) return surfaceCharacter.group.position.toArray() as [number, number, number];
+      surfaceCharacter.group.position.set(position[0], position[1], position[2]);
+      surfaceCharacter.velocity.set(0, 0, 0);
+      return surfaceCharacter.group.position.toArray() as [number, number, number];
+    },
+    setShipWorldPosition: (position) => {
+      if (position.length !== 3) return ship.position.toArray() as [number, number, number];
+      ship.position.set(position[0], position[1], position[2]);
+      velocity.set(0, 0, 0);
+      return ship.position.toArray() as [number, number, number];
+    },
     setCameraMode: (mode) => setCameraMode(mode),
+    /**
+     * Pins the access at an exact opening/deployment and frames it.
+     * Angles in degrees; distance in metres from the boarding anchor.
+     */
+    inspectShipAccess: (
+      open: number,
+      lift: number,
+      azimuthDeg = 60,
+      elevationDeg = 12,
+      distance = 9,
+      focus: 'anchor' | 'hatch' = 'anchor'
+    ) => {
+      accessInspection = {
+        open: THREE.MathUtils.clamp(open, 0, 1),
+        lift: THREE.MathUtils.clamp(lift, 0, 1),
+        azimuth: THREE.MathUtils.degToRad(azimuthDeg),
+        elevation: THREE.MathUtils.degToRad(elevationDeg),
+        distance,
+        focus
+      };
+      return accessInspection.open;
+    },
+    clearShipAccessInspection: () => {
+      accessInspection = null;
+      return true;
+    },
+    /**
+     * Access geometry measured from the live scene: hatch aperture, ladder
+     * reach and where the foot sits relative to the terrain under it. Walks
+     * the access subtree, so it is a capture-time measurement, never a
+     * per-frame one.
+     */
+    measureShipAccess: () => shipAccessLift.measureGeometry(surfaceGroundHeight),
+    setLandingGearFraction: (fraction: number) => {
+      playerShipLandingGear.ensureBuilt(playerShip.hullBounds, playerShip.hullBottomLocalY);
+      return playerShipLandingGear.setDeploymentFraction(fraction);
+    },
+    setLandingGearRetraction: (fraction: number) => {
+      playerShipLandingGear.ensureBuilt(playerShip.hullBounds, playerShip.hullBottomLocalY);
+      return playerShipLandingGear.setRetractionFraction(fraction);
+    },
+    getLandingGearState: () => ({
+      landingGearState: playerShipLandingGear.currentState,
+      deploymentProgress: Number(playerShipLandingGear.deployProgress.toFixed(3)),
+      settlingProgress: Number(playerShipLandingGear.settleProgress.toFixed(3)),
+      phases: playerShipLandingGear.phaseReadout,
+      supports: playerShipLandingGear.auditLegs(),
+      legCount: playerShipLandingGear.legCount,
+      surfaceSafe: playerShipLandingGear.surfaceSafe,
+      takeoffPhase: shipTakeoffPhase,
+      footContactCount: playerShipLandingGear.footContactCount,
+      gearVisible: playerShipLandingGear.group.visible,
+      activeGearColliders: playerShipLandingGear.activeColliderCount,
+      doorProgress: Number(playerShipLandingGear.phaseReadout.door.toFixed(3)),
+      playerMode: playerModeSystem.mode,
+      accessState: shipAccessLift.state,
+      parkingState: parkedShipResolved ? 'parked' : 'airborne',
+      flightControlsEnabled: shipTakeoffPhase === 'none' && playerModeSystem.insideShip,
+      bellyClearance: Number(parkedShipTerrainSeparation.toFixed(3)),
+      footTravelConfigured: SHIP_ACCESS_FOOT_TRAVEL,
+      footTravelPeakRequested: shipAccessLift.peakFootTravel,
+      hatchDeckHeight: Number(shipAccessLift.hatchDeckHeight.toFixed(3)),
+      hatchSurfaceDistance: shipAccessLift.hatchSurfaceDistance,
+      hullBottomLocalY: Number(playerShip.hullBottomLocalY.toFixed(3)),
+      currentSurfaceId: getCurrentPhase()
+    }),
+    debugShipAccessFoot: () => shipAccessLift.debugFootChain(surfaceGroundHeight),
+    getOrbitalAscentState: () => ({
+      missionStep: mission20.step,
+      mission20Started: mission20.started,
+      ascentComplete: mission20.state.ascentComplete,
+      ascentProgress: Number(mission20.phaseProgress.toFixed(1)),
+      playerMode: playerModeSystem.mode,
+      insideShip: playerModeSystem.insideShip,
+      shipY: Number(ship.position.y.toFixed(2)),
+      altitudeAboveTerrain: Number(
+        (ship.position.y - surfaceGroundHeight(ship.position.x, ship.position.z)).toFixed(2)
+      ),
+      verticalSpeed: Number(velocity.y.toFixed(3)),
+      ascendInput: input.has(' ') ? 1 : 0,
+      surfaceCeiling: orbitalAscentAuthorized()
+        ? mission20Tuning.ascentAltitude + SURFACE_ORBITAL_ASCENT_HEADROOM
+        : SURFACE_FLIGHT_CEILING,
+      orbitalTransitionAltitude: mission20Tuning.ascentAltitude,
+      orbitalAscentAllowed: orbitalAscentAuthorized(),
+      precisionAssistActive: surfacePrecisionActive,
+      inSurfacePhase,
+      landingGearState: playerShipLandingGear.currentState,
+      transitionActive: mission20Transition.active,
+      transitionProgress: Number(mission20Transition.progress.toFixed(3)),
+      transitionHandedOver: mission20Transition.handedOver,
+      transitionStart: M20_TRANSITION_START,
+      transitionTop: M20_TRANSITION_TOP,
+      starOpacity: Number(mission20Transition.metrics.starOpacity.toFixed(3)),
+      curvature: Number(mission20Transition.metrics.curvature.toFixed(3)),
+      orbitalEnvironmentActive: mission24OrbitalEnvironmentActive,
+      arkVisible: mothership.group.visible,
+      arkDistance: Number(ship.position.distanceTo(mothership.group.position).toFixed(1)),
+      arkY: Number(mothership.group.position.y.toFixed(1))
+    }),
+    inspectShipFeature: (
+      feature: 'engines' | 'torpedoBay' | 'accessories' | 'shield',
+      azimuthDeg = 0,
+      elevationDeg = 0,
+      distance = 14
+    ) => {
+      const b = playerShip.hullBounds;
+      const local = feature === 'engines'
+        ? new THREE.Vector3(0, -b.y * 0.16, b.z * 0.48)
+        : feature === 'torpedoBay'
+          ? playerShip.getMissilePodOffset()
+          : new THREE.Vector3(0, 0, 0);
+      shipFeatureInspection = {
+        local,
+        azimuth: THREE.MathUtils.degToRad(azimuthDeg),
+        elevation: THREE.MathUtils.degToRad(elevationDeg),
+        distance
+      };
+      return [local.x, local.y, local.z].map((v) => Number(v.toFixed(3)));
+    },
+    clearShipFeatureInspection: () => {
+      shipFeatureInspection = null;
+      return true;
+    },
+    getShipHardpointState: () => {
+      const b = playerShip.hullBounds;
+      const round3 = (v: THREE.Vector3) => [v.x, v.y, v.z].map((n) => Number(n.toFixed(3)));
+      return {
+        bounds: round3(b),
+        shipScale: [ship.scale.x, ship.scale.y, ship.scale.z],
+        engines: playerShip.getEngineHardpoints().map((e) => ({
+          id: e.id,
+          position: round3(e.position),
+          direction: round3(e.direction),
+          radius: Number(e.radius.toFixed(3))
+        })),
+        cannonMuzzles: playerShip.getCannonOffsets().map(round3),
+        cannonMounts: playerShip.getCannonMountOffsets().map(round3),
+        torpedoTubes: playerShip.getMissileTubeOffsets().map(round3),
+        podOffset: round3(playerShip.getMissilePodOffset()),
+        shieldRadius: Number(shieldRadius(b).toFixed(3)),
+        shieldScale: [
+          shieldEffect.mesh.scale.x, shieldEffect.mesh.scale.y, shieldEffect.mesh.scale.z
+        ],
+        // What the weapon system is actually firing from, which must be the
+        // same list — a second copy is exactly the drift this pass removes.
+        weaponCannonOffsets: weaponSystem.debugCannonOffsets.map(round3),
+        weaponTubeOffsets: weaponSystem.debugTubeOffsets.map(round3)
+      };
+    },
+    getShipNavigationState: () => ({
+      linearSpeed: Number(velocity.length().toFixed(3)),
+      // Signed speed along the prow: the number braking actually acts on.
+      // Reverse thrust drives this negative while |velocity| grows, so the
+      // magnitude alone cannot tell braking from accelerating backwards.
+      forwardSpeed: Number(
+        velocity.dot(shipForwardScratch.set(0, 0, -1).applyQuaternion(ship.quaternion)).toFixed(3)
+      ),
+      planarSpeed: Number(Math.hypot(velocity.x, velocity.z).toFixed(3)),
+      verticalSpeed: Number(velocity.y.toFixed(3)),
+      yaw: Number(yaw.toFixed(4)),
+      smoothYaw: Number(smoothYaw.toFixed(4)),
+      position: [ship.position.x, ship.position.y, ship.position.z].map((v) => Number(v.toFixed(3))),
+      altitudeAboveTerrain: Number(
+        (ship.position.y - surfaceGroundHeight(ship.position.x, ship.position.z)).toFixed(3)
+      ),
+      brakingActive: surfaceBrakeActive,
+      spaceBrakeActive,
+      spaceThrustLevel: Number(spaceThrustLevel.toFixed(4)),
+      spaceBoostLevel: Number(spaceBoostLevel.toFixed(4)),
+      spaceCameraLag: Number(spaceCameraLag.toFixed(3)),
+      lastSpaceBrakeStartSpeed: Number(lastSpaceBrakeStartSpeed.toFixed(4)),
+      lastSpaceBrakeFirstSampleSpeed: Number(lastSpaceBrakeFirstSampleSpeed.toFixed(4)),
+      spaceBrakeActivations,
+      precisionActive: surfacePrecisionActive,
+      boostActive: input.has('shift'),
+      cameraDistance: Number(camera.position.distanceTo(ship.position).toFixed(2)),
+      cameraHeightAboveShip: Number((camera.position.y - ship.position.y).toFixed(2)),
+      cameraFov: Number(camera.fov.toFixed(2)),
+      cameraPrecisionBlend: Number(surfaceCameraPrecisionBlend.toFixed(3)),
+      insideShip: playerModeSystem.insideShip,
+      inSurfacePhase,
+      hudVelocity: velocityReadout.textContent
+    }),
+    /** Points the hull at a heading, so gunnery can be tested deterministically. */
+    setShipYaw: (heading: number) => {
+      yaw = heading;
+      smoothYaw = heading;
+      ship.rotation.set(smoothPitch, smoothYaw, bankRoll);
+      ship.updateMatrixWorld(true);
+      return yaw;
+    },
+    setShipVelocity: (x: number, y: number, z: number) => {
+      velocity.set(x, y, z);
+      return [velocity.x, velocity.y, velocity.z];
+    },
+    /**
+     * Puts the ship in the air above its current spot.
+     *
+     * M19's travel leg only accumulates while `airborne` — inside the ship and
+     * more than 12 m above the terrain. A harness that starts parked at 1.85 m
+     * never satisfies that, so `advanceTravel` never fires, the step never
+     * reaches `clearAirspace`, and the real wave launch is never reached. This
+     * establishes the precondition; the mission's own transition and its own
+     * spawn still do all the work.
+     */
+    liftShipToAltitude: (metres = 40) => {
+      shipTakeoffPhase = 'none';
+      playerShipLandingGear.forceRetracted();
+      playerModeSystem.forceShip(true, cameraModeSystem.mode === 'cockpit');
+      surfaceCharacter.setVisible(false);
+      shipAccessLift.state = 'retracted';
+      shipAccessLift.group.visible = false;
+      parkedShipResolved = false;
+      playerShip.setParkedVisualState(false);
+      const ground = surfaceGroundHeight(ship.position.x, ship.position.z);
+      ship.position.y = ground + metres;
+      shipAltitudeHoldY = ship.position.y;
+      shipPreviousY = ship.position.y;
+      velocity.set(0, 0, 0);
+      ship.updateMatrixWorld(true);
+      collisionWorld.setSafeShipPosition(ship.position);
+      return Number((ship.position.y - ground).toFixed(2));
+    },
+    getMission19SpawnTrace: () => ({
+      mission19Started: mission19.started,
+      activeMissionStep: mission19.step,
+      airborne:
+        playerModeSystem.insideShip &&
+        !playerModeSystem.transitionActive &&
+        ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z) > 12,
+      altitudeAboveTerrain: Number(
+        (ship.position.y - planetaryWorld.getHeightAt(ship.position.x, ship.position.z)).toFixed(2)
+      ),
+      insideShip: playerModeSystem.insideShip,
+      airWaveLatched: mission19AnnouncedBeats.has('wave:air'),
+      groundWaveLatched: mission19AnnouncedBeats.has('wave:ground'),
+      scoutTargetCount: coalitionDrones.activeCount,
+      breachTargetCount: coalitionBreachDrones.activeCount,
+      hostileTrackerInputCount: hostileContacts.contacts.length,
+      intrudersActive: mission19.readout.intrudersActive,
+      defencesActive: mission19.readout.defensesActive,
+      atlasIntegrity: mission19.readout.atlasStability,
+      nereidaIntegrity: mission19.readout.nereidaIntegrity
+    }),
+    getHostileContactState: () => {
+      const list = hostileContacts.contacts;
+      const selected = list.find((c) => c.selected);
+      let nearest: (typeof list)[number] | undefined;
+      for (const c of list) if (!nearest || c.distance < nearest.distance) nearest = c;
+      return {
+        activeEnemyCount: coalitionBreachDrones.activeCount + coalitionDrones.activeCount +
+          Number(mission20.jammerExposed && coalitionJammer.alive),
+        trackedContactCount: list.length,
+        renderedEnemyCount: hostileContacts.renderedCount,
+        culledEnemyCount: hostileContacts.culledCount,
+        domMarkerCount: document.querySelectorAll('.contact-marker').length,
+        currentTargetId: hostileContacts.currentTargetId,
+        currentTargetDistance: selected ? Number(selected.distance.toFixed(1)) : null,
+        currentTargetHealth: selected ? selected.health : null,
+        currentTargetLineOfSight: selected ? selected.visibility : null,
+        nearestEnemyId: nearest ? nearest.id : null,
+        nearestEnemyDistance: nearest ? Number(nearest.distance.toFixed(1)) : null,
+        contacts: list.map((c) => ({
+          id: c.id,
+          type: c.type,
+          world: [c.world.x, c.world.y, c.world.z].map((v) => Number(v.toFixed(1))),
+          distanceToPlayer: Number(c.distance.toFixed(1)),
+          projectedScreenPosition: [Math.round(c.screenX), Math.round(c.screenY)],
+          isOnScreen: c.onScreen,
+          isBehindCamera: c.behindCamera,
+          isOccluded: c.visibility === 'sensor',
+          health: c.health,
+          selected: c.selected
+        }))
+      };
+    },
+    selectNearestHostile: () => {
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
+      return hostileContacts.selectNearestAhead(forward);
+    },
+    cycleHostileTarget: () => hostileContacts.cycleTarget(),
+    /** Fires through the real trigger path, so costs and gates all apply. */
+    firePrimaryOnce: () => {
+      const before = resources.energy;
+      fireLaser();
+      return { fired: resources.energy < before, energy: resources.energy };
+    },
+    fireTorpedoOnce: () => {
+      const before = weaponSystem.state.missileAmmo;
+      fireMissile();
+      return { fired: weaponSystem.state.missileAmmo < before, ammo: weaponSystem.state.missileAmmo };
+    },
+    setWeaponEnergy: (value: number) => {
+      resources.energy = clampResource(value);
+      return resources.energy;
+    },
+    resetWeaponAudit: () => {
+      weaponAudit.primaryFireEvents = 0;
+      weaponAudit.primaryShotsCreated = 0;
+      weaponAudit.primaryChargesSpent = 0;
+      weaponAudit.torpedoLaunchEvents = 0;
+      weaponAudit.torpedoesCreated = 0;
+      weaponAudit.torpedoTubesConsumed = 0;
+      weaponAudit.reloadRequestCount = 0;
+      weaponAudit.lastBlockReason = 'none';
+      return true;
+    },
+    requestWeaponReload: () => {
+      weaponAudit.reloadRequestCount += 1;
+      const result = weaponSystem.requestReload();
+      if (result.message) {
+        weaponReloadMessage = result.message;
+        weaponReloadMessageAt = clock.elapsedTime;
+      }
+      return result;
+    },
+    /** Deterministic reload-clock step for headless probes only. */
+    advanceWeaponReload: (seconds = PLAYER_TORPEDO_TUBES.reloadSecondsPerTube) => {
+      weaponSystem.updateReloads(THREE.MathUtils.clamp(seconds, 0, 5));
+      const tubes = weaponSystem.torpedoTubeState;
+      weaponSystem.state.missileReady =
+        weaponSystem.state.missileCooldown === 0 && !tubes.reloading && tubes.loadedCount > 0;
+      updateHud(Number.POSITIVE_INFINITY);
+      return { loadedCount: tubes.loadedCount, reloading: tubes.reloading, progress: tubes.progress };
+    },
+    setWeaponAmmo: (data: {
+      primaryMagazine?: number; primaryReserve?: number;
+      torpedoTubes?: boolean[]; torpedoReserve?: number; torpedoTotal?: number;
+    }) => {
+      weaponSystem.restoreAmmo(data);
+      updateHud(Number.POSITIVE_INFINITY);
+      return weaponSystem.ammoSnapshot;
+    },
+    refillWeaponStores: () => {
+      weaponSystem.refillWeaponStores();
+      return weaponSystem.ammoSnapshot;
+    },
+    /**
+     * Every early return the keydown handler can take before reaching the
+     * weapon bindings. Added because the reload report was "G does nothing",
+     * which is indistinguishable, from outside, between a broken reload and a
+     * key that never arrives.
+     */
+    getInputGateState: () => ({
+      insideShip: playerModeSystem.insideShip,
+      playerMode: playerModeSystem.mode,
+      transitionActive: playerModeSystem.transitionActive,
+      gamePaused,
+      starMapActive: starMap.active,
+      dialogueActive: Boolean(dialogueManager.current),
+      dialoguePausesGameplay: Boolean(dialogueManager.current?.pausesGameplay),
+      dialogueAwaitingInput: dialogueManager.awaitingInput,
+      launched,
+      weaponsLocked: arkDeparture.weaponsLocked,
+      expeditionStartedThisSession
+    }),
+    getWeaponResourceState: () => {
+      const mag = weaponSystem.primaryMagazineState;
+      const tubes = weaponSystem.torpedoTubeState;
+      return {
+        // --- Primary ------------------------------------------------------
+        primaryResourceType: 'pulse-capacitor',
+        primaryMagazineCurrent: mag.current,
+        primaryMagazineMaximum: mag.maximum,
+        primaryReserveCurrent: mag.reserve,
+        primaryReserveMaximum: mag.reserveMaximum,
+        primaryReloading: mag.reloading,
+        primaryReloadProgress: mag.progress,
+        primaryReloadDuration: mag.duration,
+        primaryShotsCreated: weaponAudit.primaryShotsCreated,
+        primaryChargesSpent: weaponAudit.primaryChargesSpent,
+        primaryFireEvents: weaponAudit.primaryFireEvents,
+        primaryCooldown: Number(weaponSystem.state.laserCooldown.toFixed(3)),
+        primaryReady: weaponSystem.state.laserReady,
+        primaryLastBlockReason: mag.blockReason,
+        // Player-weapon combat outcomes. None of this was observable before, so
+        // "did that shot hit?" could not be answered from outside the renderer.
+        weaponImpacts: weaponSystem.events.impacts,
+        weaponDestructions: weaponSystem.events.destructions,
+        lastImpactKind: weaponSystem.events.lastImpactKind,
+        hitFeedback: weaponSystem.state.hitFeedback,
+        aimAssistEngaged: weaponSystem.aimAssistEngaged,
+        lockedContactId: hostileContacts.currentTargetId,
+        // --- Torpedoes ----------------------------------------------------
+        torpedoTubeStates: tubes.tubes,
+        torpedoLoadedCount: tubes.loadedCount,
+        torpedoTubeCapacity: tubes.tubeCapacity,
+        torpedoReserveCurrent: tubes.reserve,
+        torpedoReserveMaximum: tubes.reserveMaximum,
+        torpedoReloadSource: 'onboard-fabricator',
+        torpedoReloading: tubes.reloading,
+        torpedoReloadProgress: tubes.progress,
+        torpedoReloadTargetCount: tubes.targetCount,
+        torpedoesCreated: weaponAudit.torpedoesCreated,
+        torpedoTubesConsumed: weaponAudit.torpedoTubesConsumed,
+        torpedoLaunchEvents: weaponAudit.torpedoLaunchEvents,
+        torpedoTotal: weaponSystem.torpedoTotal,
+        torpedoCooldown: Number(weaponSystem.state.missileCooldown.toFixed(3)),
+        torpedoReady: weaponSystem.state.missileReady,
+        torpedoLastBlockReason: tubes.blockReason,
+        // --- Input / shared -----------------------------------------------
+        reloadKey: 'KeyG',
+        reloadRequestCount: weaponAudit.reloadRequestCount,
+        shipEnergy: Number(resources.energy.toFixed(2)),
+        currentWeaponMode: combatWeaponMode,
+        playerMode: playerModeSystem.mode,
+        focusedElementTag: document.activeElement?.tagName ?? 'NONE',
+        reloadMessage: weaponReloadMessage,
+        hudPrimary: laserStatus.textContent,
+        hudTorpedo: missileStatus.textContent
+      };
+    },
+    resetFootTravelPeak: () => shipAccessLift.resetPeakFootTravel(),
     setCameraLookAt: (target) => setDebugCameraLookAt(target),
+    frameCameraTarget: (target, offset, lookHeight = 0) =>
+      frameDebugCameraTarget(target, offset, lookHeight),
+    clearCameraLookAt: () => {
+      debugCameraProbe = undefined;
+      return true;
+    },
     lookAtDefenseBeacon: (index) => {
       const beacon = defensiveBeacons[Math.floor(index)];
       return beacon ? setDebugCameraLookAt(beacon.site.name) : undefined;
@@ -18504,7 +23559,10 @@ if (diagnosticsMode) {
       launched = true;
       hud.classList.add('is-active');
       bootScreen.classList.add('is-hidden');
-      missionManager.start();
+      // The M01 onboarding made start() intentionally non-monotonic. This
+      // legacy probe may be called after the tutorial, so never rewind a real
+      // advanced step back to flightOrientation.
+      if (missionManager.step === 'briefing') missionManager.start();
       missionManager.activateScanner();
       descentSafetyGate.markE01Detected();
       missionManager.reachPlanetRange();
@@ -18533,6 +23591,10 @@ if (diagnosticsMode) {
       orbitalMarker.flashHighlight();
       triggerDialogue('m01_descent_authorized', 'debug-atlas-decoded');
       missionText.textContent = orbitalMarkerLore.decoded;
+      // Keep the focused entry probe independent from cold-start frame rate.
+      // Normal play still reaches this framing through the damped camera update.
+      camera.fov = 66;
+      camera.updateProjectionMatrix();
       updateHud(Number.POSITIVE_INFINITY);
       return missionManager.step;
     },
@@ -18631,14 +23693,14 @@ if (diagnosticsMode) {
     setPlayerMode: (mode) => {
       if (!inSurfacePhase) window.__arcaDebug?.startSurfacePhase();
       if (mode === 'onFoot') {
-        transitionGroundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+        transitionGroundHeight = surfaceGroundHeight(ship.position.x, ship.position.z);
         // Debug on-foot parks the hull like a real disembark so screenshots
         // match live play.
-        settleParkedShipOnTerrain(true);
+        parkShipOnTerrain(ship.position, true);
         previousVerticalInput = 0;
         shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
         const exitPosition = shipAccessLift.getGroundExitPosition();
-        exitPosition.y = planetaryWorld.getHeightAt(exitPosition.x, exitPosition.z) + 0.04;
+        exitPosition.y = surfaceGroundHeight(exitPosition.x, exitPosition.z) + 0.04;
         surfaceCharacter.placeAt(exitPosition, smoothYaw - Math.PI / 2);
         orientOnFootCameraAwayFromShip(surfaceCharacter.group.position);
         surfaceCharacter.setVisible(true);
@@ -18650,6 +23712,10 @@ if (diagnosticsMode) {
       } else {
         parkedShipResolved = false;
         playerShip.setParkedVisualState(false);
+        // Instant debug/test route into flight: stow the gear outright rather
+        // than leaving an animation to finish after the jump.
+        shipTakeoffPhase = 'none';
+        playerShipLandingGear.forceRetracted();
         playerModeSystem.forceShip(true, cameraModeSystem.mode === 'cockpit');
         surfaceCharacter.setVisible(false);
         shipAccessLift.state = 'retracted';
@@ -18673,7 +23739,7 @@ if (diagnosticsMode) {
       const habitat = planetaryWorld.colonyModule.group.position;
       const x = habitat.x + 7.2;
       const z = habitat.z;
-      surfaceCharacter.placeAt(new THREE.Vector3(x, planetaryWorld.getHeightAt(x, z) + 0.04, z), -Math.PI / 2);
+      surfaceCharacter.placeAt(new THREE.Vector3(x, surfaceGroundHeight(x, z) + 0.04, z), -Math.PI / 2);
       updateHud(Number.POSITIVE_INFINITY);
       return [x, surfaceCharacter.group.position.y, z] as [number, number, number];
     },
@@ -18683,7 +23749,7 @@ if (diagnosticsMode) {
       if (!node) return undefined;
       const x = node.interactionPosition.x;
       const z = node.interactionPosition.z;
-      surfaceCharacter.placeAt(new THREE.Vector3(x, planetaryWorld.getHeightAt(x, z) + 0.04, z), -Math.PI / 2);
+      surfaceCharacter.placeAt(new THREE.Vector3(x, surfaceGroundHeight(x, z) + 0.04, z), -Math.PI / 2);
       updateHud(Number.POSITIVE_INFINITY);
       return [x, surfaceCharacter.group.position.y, z] as [number, number, number];
     },
@@ -18717,7 +23783,7 @@ if (diagnosticsMode) {
       window.__arcaDebug?.setPlayerMode('onFoot');
       const x = node.interactionPosition.x;
       const z = node.interactionPosition.z;
-      surfaceCharacter.placeAt(new THREE.Vector3(x, planetaryWorld.getHeightAt(x, z) + 0.04, z));
+      surfaceCharacter.placeAt(new THREE.Vector3(x, surfaceGroundHeight(x, z) + 0.04, z));
       surfaceResourceSystem.scanNearby(surfaceCharacter.group.position, colonyManager, resourceInventory, 14, true);
       surfaceMission.updateFromColonyState(colonyManager.state);
       triggerResourceDialogue();
@@ -18824,7 +23890,7 @@ if (diagnosticsMode) {
         const target = pleyadanRelayBeacon.interactionPosition;
         const x = target.x - (playerModeSystem.onFootActive ? 0 : 18);
         const z = target.z + (playerModeSystem.onFootActive ? 0 : 12);
-        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        const y = surfaceGroundHeight(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
         if (playerModeSystem.onFootActive) surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
         else {
           ship.position.set(x, y, z);
@@ -18859,15 +23925,16 @@ if (diagnosticsMode) {
       },
       returnToBaseForTranslation: () => {
         const target = planetaryWorld.colonyModule.group.position;
-        const x = target.x + 7.2;
+        const x = target.x + (playerModeSystem.onFootActive ? 7.2 : 12.5);
         const z = target.z;
-        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        const y = surfaceGroundHeight(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
         if (playerModeSystem.onFootActive) surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), Math.PI / 2);
         else {
           ship.position.set(x, y, z);
           shipAltitudeHoldY = y;
           shipPreviousY = y;
           previousVerticalInput = 0;
+          collisionWorld.setSafeShipPosition(ship.position);
         }
         velocity.set(0, 0, 0);
         updateHud(Number.POSITIVE_INFINITY);
@@ -18951,7 +24018,7 @@ if (diagnosticsMode) {
         const target = beacon.interactionPosition;
         const x = target.x - (playerModeSystem.onFootActive ? 0 : 18);
         const z = target.z + (playerModeSystem.onFootActive ? 0 : 12);
-        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        const y = surfaceGroundHeight(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
         if (playerModeSystem.onFootActive) {
           surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
         } else {
@@ -18999,6 +24066,16 @@ if (diagnosticsMode) {
         syncMission04Visuals();
         saveProgress();
         updateHud(Number.POSITIVE_INFINITY);
+        const networkVisuals = getDefenseNetworkVisualState();
+        diagnostics.update(renderer, 0, {
+          mission04Step: mission04.step,
+          defenseSyncProgress: mission04.state.defenseSyncProgress,
+          defenseLinksActive: networkVisuals.defenseLinksActive,
+          defenseLinksUnstable: networkVisuals.defenseLinksUnstable,
+          defenseLinksOnline: networkVisuals.defenseLinksOnline,
+          defenseNetworkVisible: networkVisuals.defenseNetworkVisible,
+          activeDefenseLinkCount: networkVisuals.activeDefenseLinkCount
+        });
         return mission04.state.defenseSyncProgress;
       },
       detectThreatSignature: () => {
@@ -19128,7 +24205,7 @@ if (diagnosticsMode) {
         if (!projector) return undefined;
         const x = projector.group.position.x + 6;
         const z = projector.group.position.z + 6;
-        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        const y = surfaceGroundHeight(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
         if (playerModeSystem.onFootActive) {
           surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), Math.PI / 2);
         } else {
@@ -19187,7 +24264,7 @@ if (diagnosticsMode) {
         if (!mission07.started) startMission07IfReady();
         const x = atlasSeedArchive.interactionPosition.x + 12;
         const z = atlasSeedArchive.interactionPosition.z + 8;
-        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        const y = surfaceGroundHeight(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
         if (playerModeSystem.onFootActive) {
           surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
         } else {
@@ -19272,7 +24349,7 @@ if (diagnosticsMode) {
         const center = getSignalFractureCenter();
         const x = center.x + 12;
         const z = center.z + 8;
-        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        const y = surfaceGroundHeight(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
         if (playerModeSystem.onFootActive) {
           surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
         } else {
@@ -19360,7 +24437,7 @@ if (diagnosticsMode) {
         if (mission09.step === 'analyzeResidual') mission09.forceRouteDecoded();
         const x = beacon.interactionPosition.x + 10;
         const z = beacon.interactionPosition.z + 10;
-        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        const y = surfaceGroundHeight(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
         if (playerModeSystem.onFootActive) {
           surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), -Math.PI / 2);
         } else {
@@ -19412,7 +24489,7 @@ if (diagnosticsMode) {
         const threshold = getAuroraThresholdCenter();
         const x = threshold.x;
         const z = threshold.z + 40;
-        const y = planetaryWorld.getHeightAt(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
+        const y = surfaceGroundHeight(x, z) + (playerModeSystem.onFootActive ? 0.04 : surfaceHoverHeight);
         if (playerModeSystem.onFootActive) {
           surfaceCharacter.placeAt(new THREE.Vector3(x, y, z), Math.PI);
         } else {
@@ -19511,7 +24588,7 @@ if (diagnosticsMode) {
         syncMission10Visuals();
         const x = probe.interactionPosition.x + 3;
         const z = probe.interactionPosition.z + 3;
-        const y = planetaryWorld.getHeightAt(x, z);
+        const y = surfaceGroundHeight(x, z);
         // Bring the ship along, then the pilot: an on-foot teleport that
         // leaves the ship 4 km away strands the player mid-probe.
         ship.position.set(x + 12, y + surfaceHoverHeight, z + 12);
@@ -19610,7 +24687,7 @@ if (diagnosticsMode) {
                   : auroraHabitatModule.interactionPosition.clone();
         const x = target.x + 2;
         const z = target.z + 2;
-        const y = planetaryWorld.getHeightAt(x, z);
+        const y = surfaceGroundHeight(x, z);
         // Keep the ship with the pilot so a station teleport never strands.
         ship.position.set(x + 12, y + surfaceHoverHeight, z + 12);
         velocity.set(0, 0, 0);
@@ -19745,7 +24822,7 @@ if (diagnosticsMode) {
         const pad = getAuroraLandingZone();
         const x = pad.x + 3;
         const z = pad.z + 3;
-        const y = planetaryWorld.getHeightAt(x, z);
+        const y = surfaceGroundHeight(x, z);
         // Bring the ship along so an on-foot teleport never strands anyone.
         ship.position.set(x + 14, y + surfaceHoverHeight, z + 14);
         velocity.set(0, 0, 0);
@@ -19850,7 +24927,7 @@ if (diagnosticsMode) {
                   : auroraStormStations.shieldPosition;
         const x = target.x + 2;
         const z = target.z + 2;
-        const y = planetaryWorld.getHeightAt(x, z);
+        const y = surfaceGroundHeight(x, z);
         // Keep the ship with the pilot so a station teleport never strands.
         ship.position.set(x + 14, y + surfaceHoverHeight, z + 14);
         velocity.set(0, 0, 0);
@@ -19940,7 +25017,7 @@ if (diagnosticsMode) {
                   : auroraTraceNodes.terminalPosition;
         const x = target.x + 2;
         const z = target.z + 2;
-        const y = planetaryWorld.getHeightAt(x, z);
+        const y = surfaceGroundHeight(x, z);
         // Keep the ship with the pilot so a station teleport never strands.
         ship.position.set(x + 14, y + surfaceHoverHeight, z + 14);
         velocity.set(0, 0, 0);
@@ -20047,7 +25124,7 @@ if (diagnosticsMode) {
                       : auroraParasiteNodes.positions[2];
         const x = target.x + 2;
         const z = target.z + 2;
-        const y = planetaryWorld.getHeightAt(x, z);
+        const y = surfaceGroundHeight(x, z);
         // Keep the ship with the pilot so a station teleport never strands.
         ship.position.set(x + 14, y + surfaceHoverHeight, z + 14);
         velocity.set(0, 0, 0);
@@ -20513,7 +25590,15 @@ if (diagnosticsMode) {
         return mission19.completed;
       },
       getMission19State: () => mission19.snapshot(),
-      getNereidaDefenseReadout: () => ({ ...mission19.readout }),
+      getNereidaDefenseReadout: () => ({
+        ...mission19.readout,
+        // Wave bookkeeping: without these the only symptom of a stalled wave
+        // is "no enemies appear", which is indistinguishable from a spawn bug.
+        airWaveAnnounced: mission19AnnouncedBeats.has('wave:air'),
+        groundWaveAnnounced: mission19AnnouncedBeats.has('wave:ground'),
+        airDronesActive: coalitionDrones.activeCount,
+        breachDronesActive: coalitionBreachDrones.activeCount
+      }),
       // --- Mission 20: Batalla por el Arca ---
       startMission20: () => {
         if (!mission19.completed) window.__arcaDebug?.completeMission19();
@@ -20639,6 +25724,30 @@ if (diagnosticsMode) {
       },
       getMission20State: () => mission20.snapshot(),
       getArkBattleReadout: () => ({ ...mission20.readout }),
+      /**
+       * Where the M20 hull stations actually resolve to, and whether the ship
+       * is inside the interaction gate. Exists because the stall at 67% was a
+       * geometry defect: the readout said 94 m and there was no way to see,
+       * from the game, that the target sat off the hull.
+       */
+      getArkStationState: () => {
+        const interaction = getLateMissionInteraction();
+        const station = getMission20StationPosition();
+        return {
+          step: mission20.step,
+          linksRestored: [...mission20.state.arkLinksRestored],
+          activeLinkIndex: mission20.activeLinkIndex,
+          arkPosition: mothership.group.position.toArray().map((n) => Number(n.toFixed(2))),
+          arkRotation: mothership.group.rotation.toArray().slice(0, 3).map((n) => Number(Number(n).toFixed(4))),
+          stationPosition: station.toArray().map((n) => Number(n.toFixed(2))),
+          shipPosition: ship.position.toArray().map((n) => Number(n.toFixed(2))),
+          distance: Number(ship.position.distanceTo(station).toFixed(2)),
+          stationRange: mission20Tuning.stationRange,
+          interactionRange: interaction?.horizontalRange ?? -1,
+          inRange: lateMissionStepInRange('mission20', getActivePlayerPosition(), false),
+          phaseProgress: Number(mission20.phaseProgress.toFixed(1))
+        };
+      },
       // --- Mission 21: La ruptura del Silencio ---
       startMission21: () => {
         if (!mission20.completed) window.__arcaDebug?.completeMission20();
@@ -20753,6 +25862,7 @@ if (diagnosticsMode) {
       },
       getMission21State: () => mission21.snapshot(),
       getMission21Readout: () => ({ ...mission21.readout }),
+      getMission21TargetState,
       // --- Mission 22: Frentes rotos ---
       startMission22: () => {
         const started = startMission22IfReady();
@@ -20832,6 +25942,7 @@ if (diagnosticsMode) {
       },
       getMission22State: () => mission22.snapshot(),
       getMission22Readout: () => ({ ...mission22.readout }),
+      getMission22TargetState,
       // --- Mission 23: La contraofensiva ---
       startMission23: () => {
         if (!mission22.completed) window.__arcaDebug?.completeMission22();
@@ -21109,6 +26220,178 @@ if (diagnosticsMode) {
         return commitMission24DebugMutation();
       },
       getMission24State: () => mission24.snapshot(),
+      // --- Mission 25: La ultima orbita ---
+      startMission25: () => {
+        if (!mission24.completed) return false;
+        mission25.unlockFrom(mission24.snapshot(), mission22.snapshot(), mission23.snapshot());
+        releaseMission24ResourcesForM25();
+        const started = mission25.start(mission24.snapshot(), mission22.snapshot(), mission23.snapshot());
+        if (started) {
+          mission25TransitionElapsed = 0;
+          mission25TransitionStartedAt = 0;
+          mission25AnnouncedBeats.clear();
+          triggerDialogue('m25_start', 'mission25-start');
+          showPhaseBanner('MISION 25: LA ULTIMA ORBITA', 'Defensa final del Arca Epsilon');
+        }
+        commitMission25DebugMutation();
+        return started || mission25.started;
+      },
+      advanceMission25Interaction: () => {
+        performMission25Interaction(ship.position);
+        return commitMission25DebugMutation();
+      },
+      teleportToMission25Target: () => {
+        const target = getMission25TargetPosition();
+        const range = mission25.step === 'commandTargetExposed' || mission25.step === 'finalAssault'
+          ? Math.min(420, mission25Tuning.finalAssaultRange * 0.65)
+          : Math.min(70, mission25Tuning.interactionRange * 0.6);
+        mission25DebugOffset.copy(ship.position).sub(target);
+        if (mission25DebugOffset.lengthSq() < 0.01) mission25DebugOffset.set(0, 0, 1);
+        mission25DebugOffset.setLength(range);
+        ship.position.copy(target).add(mission25DebugOffset);
+        velocity.set(0, 0, 0);
+        requestCameraFollowSync('mission25-debug-target');
+        updateHud(Number.POSITIVE_INFINITY);
+        return ship.position.toArray() as [number, number, number];
+      },
+      completeMission25Wave: () => {
+        if (!mission25.waveActive) return mission25.snapshot();
+        coalitionDrones.clearAll();
+        mission25.forceWaveComplete();
+        announceMission25WaveTransition();
+        return commitMission25DebugMutation();
+      },
+      applyMission25SystemDamage: (index, amount = mission25Tuning.systemDamagePerPass) => {
+        mission25.damageSystem(Math.floor(index), Math.max(0, amount));
+        return commitMission25DebugMutation();
+      },
+      prepareMission25Counterattack: () => {
+        mission25.forceTo('counterattackPreparation');
+        mission25.prepareCounterattack();
+        return commitMission25DebugMutation();
+      },
+      locateMission25CommandTarget: () => {
+        mission25.forceTo('commandTargetLocated');
+        mission25.locateCommandTarget();
+        return commitMission25DebugMutation();
+      },
+      destroyMission25CommandNode: (index) => {
+        mission25.forceTo('commandTargetProtected');
+        mission25.destroyCommandNode(Math.floor(index));
+        return commitMission25DebugMutation();
+      },
+      destroyAllMission25CommandNodes: () => {
+        mission25.forceNodesDestroyed();
+        return commitMission25DebugMutation();
+      },
+      beginMission25FinalAssault: () => {
+        mission25.forceNodesDestroyed();
+        mission25.beginFinalAssault();
+        return commitMission25DebugMutation();
+      },
+      damageMission25CommandCore: (amount) => {
+        if (mission25.step !== 'finalAssault' || !coalitionSiegeCommand.coreTarget.hostile) return mission25.snapshot();
+        coalitionSiegeCommand.coreTarget.health = Math.max(0, coalitionSiegeCommand.coreTarget.health - Math.max(0, amount));
+        updateMission25CommandDamage();
+        syncMission25Visuals();
+        saveProgress();
+        return mission25.snapshot();
+      },
+      destroyMission25CommandCore: () => {
+        mission25.forceNodesDestroyed();
+        mission25.beginFinalAssault();
+        mission25.setCoreIntegrity(0);
+        coalitionDrones.clearAll();
+        weaponSystem.clearTransient();
+        return commitMission25DebugMutation();
+      },
+      completeMission25Collapse: () => {
+        mission25.forceTo('threatCollapse');
+        mission25.updateThreatCollapse(mission25Tuning.collapseSeconds + 0.1);
+        coalitionDrones.clearAll();
+        weaponSystem.clearTransient();
+        return commitMission25DebugMutation();
+      },
+      completeMission25Stabilization: () => {
+        mission25.forceTo('arkStabilization');
+        mission25.updateArkStabilization(mission25Tuning.stabilizationSeconds + 0.1, true);
+        return commitMission25DebugMutation();
+      },
+      completeMission25: () => {
+        mission25.forceComplete();
+        saveProgress();
+        showChapterEndScreenOnce();
+        return mission25.snapshot();
+      },
+      continueAfterChapterEnd: () => {
+        continueExploringAfterChapter();
+        return mission25.snapshot();
+      },
+      getMission25State: () => mission25.snapshot(),
+      getMission25Target: () => ({
+        name: getMission25TargetLabel(),
+        position: getMission25TargetPosition().toArray() as [number, number, number],
+        distance: ship.position.distanceTo(getMission25TargetPosition())
+      }),
+      getMission25VisualState: () => ({
+        defenseNetworkBuilt: arkFinalDefenseNetwork.isBuilt,
+        defenseNetworkVisible: arkFinalDefenseNetwork.isVisible,
+        defendableSystemCount: arkFinalDefenseNetwork.systemCount,
+        relaysVisible: arkFinalDefenseNetwork.relayVisible,
+        alliedSupportVisible: arkFinalDefenseNetwork.alliedSupportVisible,
+        contactSignaturesVisible: arkFinalDefenseNetwork.contactSignaturesVisible,
+        commandTargetBuilt: coalitionSiegeCommand.isBuilt,
+        commandTargetVisible: coalitionSiegeCommand.isVisible,
+        commandActiveNodes: coalitionSiegeCommand.activeNodeCount,
+        commandCoreExposed: coalitionSiegeCommand.coreExposed,
+        hudMounted: mission25Hud.mounted,
+        hudVisible: mission25Hud.visible,
+        chapterEndMounted: chapterEndScreen.mounted,
+        chapterEndVisible: chapterEndScreen.visible,
+        resourcesReleased: mission25ResourcesReleased,
+        mothershipSceneInstances: scene.children.filter((object) => object === mothership.group).length,
+        playerShipSceneInstances: countSceneObjectsByName(playerShip.group.name)
+      }),
+      getMission25Diagnostics: () => {
+        const enemyPositions: [number, number, number][] = [];
+        let minimumEnemyArkDistance = Number.POSITIVE_INFINITY;
+        for (let index = 0; index < coalitionDrones.targets.length; index += 1) {
+          const target = coalitionDrones.targets[index];
+          if (target.health <= 0) continue;
+          enemyPositions.push(target.object.position.toArray() as [number, number, number]);
+          minimumEnemyArkDistance = Math.min(minimumEnemyArkDistance, target.object.position.distanceTo(mothership.group.position));
+        }
+        return {
+          activeMission: mission25.started && !mission25.completed ? mission25.missionId : mission25.completed ? 'chapter-1-completed' : mission24.missionId,
+          state: mission25.step,
+          mothershipUuid: mothership.group.uuid,
+          mothershipCount: scene.children.filter((object) => object === mothership.group).length,
+          playerShipCount: countSceneObjectsByName(playerShip.group.name),
+          distanceToArk: Number(ship.position.distanceTo(mothership.group.position).toFixed(2)),
+          activeEnemies: coalitionDrones.activeCount,
+          enemiesByType: { scouts: coalitionDrones.activeCount, siegeCommand: Number(coalitionSiegeCommand.isVisible) },
+          enemyPositions,
+          minimumEnemyArkDistance: Number.isFinite(minimumEnemyArkDistance) ? Number(minimumEnemyArkDistance.toFixed(2)) : -1,
+          enemiesDestroyed: mission25.state.mission25EnemiesDestroyed,
+          wave: mission25.state.mission25Wave,
+          activeProjectiles: weaponSystem.state.activeMissiles + weaponSystem.state.activeBeams,
+          defendableSystems: [...MISSION25_SYSTEM_LABELS],
+          systemIntegrities: [...mission25.state.mission25SystemIntegrities],
+          arkIntegrity: mission25.state.mission25ArkIntegrity,
+          inheritedM22Priority: mission25.state.mission25InheritedM22Priority,
+          inheritedM23Support: mission25.state.mission25InheritedM23Support,
+          finalTargetActive: coalitionSiegeCommand.isVisible,
+          nodesDestroyed: mission25.destroyedNodeCount,
+          coreExposed: mission25.state.mission25CommandTargetExposed,
+          targetIntegrity: mission25.state.mission25CommandCoreIntegrity,
+          threatNeutralized: mission25.state.mission25ThreatNeutralized,
+          chapterEndVisible: chapterEndScreen.visible,
+          musicCue: musicManager.requestedTrack ?? 'none',
+          activeTimers: mission25.activeTimers,
+          resourcesReleased: mission25ResourcesReleased,
+          saveRestored: saveSystem.lastLoadStatus === 'loaded' || saveSystem.lastLoadStatus === 'migrated'
+        };
+      },
       /**
        * Everything the onboarding probe asserts on.
        *
@@ -21122,17 +26405,70 @@ if (diagnosticsMode) {
         const alignmentTarget = !mission01Tutorial.completed && mission01MarkerValid
           ? mission01MarkerAnchor
           : beaconPosition;
+        const shipWorld = ship.getWorldPosition(mission01DiagnosticShipWorld);
+        const objectiveWorld = mission01DiagnosticObjectiveWorld.copy(getMissionObjectivePosition());
+        const shipProjected = mission01DiagnosticProjection.copy(shipWorld).project(camera);
+        const shipViewport: [number, number] = [
+          Number(((shipProjected.x + 1) * 0.5).toFixed(4)),
+          Number(((1 - shipProjected.y) * 0.5).toFixed(4))
+        ];
+        const objectiveProjected = mission01DiagnosticProjection.copy(objectiveWorld).project(camera);
+        const objectiveViewport: [number, number] = [
+          Number(((objectiveProjected.x + 1) * 0.5).toFixed(4)),
+          Number(((1 - objectiveProjected.y) * 0.5).toFixed(4))
+        ];
+        let alignmentYawError = 0;
+        let alignmentPitchError = 0;
+        if (alignmentTarget) {
+          const toTarget = mission01Scratch.copy(alignmentTarget).sub(shipWorld);
+          const targetDistance = toTarget.length();
+          if (targetDistance > 0.001) {
+            const targetYaw = Math.atan2(-toTarget.x, -toTarget.z);
+            const targetPitch = Math.asin(THREE.MathUtils.clamp(toTarget.y / targetDistance, -1, 1));
+            alignmentYawError = Math.atan2(
+              Math.sin(targetYaw - smoothYaw),
+              Math.cos(targetYaw - smoothYaw)
+            );
+            alignmentPitchError = targetPitch - smoothPitch;
+          }
+        }
+        const dialoguePausesGameplay = dialogueManager.current?.pausesGameplay === true;
         return {
           missionStep: missionManager.step,
           objective: missionManager.currentObjective,
+          controlsEnabled:
+            launched &&
+            !gamePaused &&
+            !starMap.active &&
+            !dialoguePausesGameplay &&
+            playerModeSystem.insideShip &&
+            !playerModeSystem.transitionActive &&
+            !arkDeparture.translationLocked,
+          dialoguePausesGameplay,
+          dialogueAwaitingInput: dialogueManager.awaitingInput,
+          cameraMode: cameraModeSystem.mode,
+          flightMode: mission24.ascentActive ? 'atmosphericAscent' : inSurfacePhase ? 'surface' : 'space',
+          arkDepartureStep: arkDeparture.step,
+          arkTranslationLocked: arkDeparture.translationLocked,
+          arkThrustLimit: Number(arkDeparture.thrustLimit.toFixed(3)),
           assistLevel: mission01Assist.level,
           assistActive: mission01Assist.active,
-          cameraDistance: Number(camera.position.distanceTo(ship.position).toFixed(2)),
+          cameraDistance: Number(camera.position.distanceTo(shipWorld).toFixed(2)),
+          framingActive: mission01FlightFramingActive(),
           cameraFraming: Number(mission01Camera.distance.toFixed(2)),
           shipScreenFraction: Number(mission01Camera.screenFraction(getPlayerShipHullLength()).toFixed(4)),
           cameraFov: Number(camera.fov.toFixed(2)),
           speed: Number(velocity.length().toFixed(2)),
           acceleration: Number(spaceThrustLevel.toFixed(3)),
+          thrustInput: input.has('w') || input.has(' ') ? 1 : 0,
+          spool: Number(spaceThrustLevel.toFixed(3)),
+          shipPosition: shipWorld.toArray().map((value) => Number(value.toFixed(3))) as [number, number, number],
+          shipVelocity: velocity.toArray().map((value) => Number(value.toFixed(3))) as [number, number, number],
+          shipViewport,
+          objectiveViewport,
+          cameraFollowError: Number(cameraTargetCurrent.distanceTo(shipWorld).toFixed(3)),
+          alignmentYawError: Number(alignmentYawError.toFixed(5)),
+          alignmentPitchError: Number(alignmentPitchError.toFixed(5)),
           pitch: Number(smoothPitch.toFixed(4)),
           yaw: Number(smoothYaw.toFixed(4)),
           roll: Number(bankRoll.toFixed(4)),
@@ -21192,8 +26528,10 @@ if (diagnosticsMode) {
       attemptMission01Descent: () => {
         const blocker = descentSafetyGate.primaryBlocker;
         if (!blocker) return false;
-        missionManager.denyDescent(blocker.objective, blocker.reason);
+        // Same order as the played path: reveal first, then record the refusal,
+        // so the objective the pilot reads survives the step change.
         if (blocker.id === 'orbitalScanComplete') revealMission01Beacon();
+        missionManager.denyDescent(blocker.objective, blocker.reason);
         return true;
       },
       approachMission01Beacon: () => {
@@ -21233,10 +26571,35 @@ if (diagnosticsMode) {
         dockingAssemblyBuilt: arkDockingAssembly.isBuilt,
         currentDialogue: dialogueManager.getState().currentDialogueId || 'none'
       }),
+      getArkPlatformVisualState: () => getArkPlatformVisualDebugState(),
       advanceArkDeparture: () => handleArkDepartureInteraction(),
       forceArkPreflight: () => {
         arkDeparture.forcePreflight();
         return arkDeparture.step;
+      },
+      /**
+       * Walks the prologue to its handover point.
+       *
+       * Drives the real transitions in order — introduction, context, checklist,
+       * clamp release, separation — rather than assigning the end state, so the
+       * onboarding probe starts from a sequence that genuinely ran. The ship is
+       * not teleported: `undockShipFromArk` hands the hull back at the pose it
+       * already occupies, exactly as the played path does.
+       */
+      completeArkDeparture: () => {
+        if (!arkDeparture.started) arkDeparture.start();
+        arkDeparture.advanceIntroduction();
+        arkDeparture.advanceContext();
+        arkDeparture.forcePreflight();
+        arkDeparture.beginClampRelease();
+        arkDeparture.updateClampRelease(arkDepartureTuning.clampReleaseSeconds + 0.1);
+        undockShipFromArk();
+        if (arkDeparture.updateSeparation(arkDepartureTuning.safeDistance + 1)) {
+          arkDockingAssembly.dispose();
+          mothership.setPlatformPower(0);
+          beginMission01Onboarding();
+        }
+        return arkDeparture.completed;
       },
       getMission24AscentState: () => ({ ...atmosphericAscent.metrics }),
       getMission24Target: () => ({
@@ -21284,7 +26647,14 @@ if (diagnosticsMode) {
           visibleNodeCount: threeFrontCommandNetwork.visibleNodeCount,
           jointNetworkVisible: threeFrontCommandNetwork.jointNetworkVisible,
           activeAirHostiles: coalitionDrones.activeCount,
-          activeBreachHostiles: coalitionBreachDrones.activeCount
+          activeBreachHostiles: coalitionBreachDrones.activeCount,
+          breachHostileHealth: coalitionBreachDrones.targets
+            .filter((target) => target.hostile && target.health > 0)
+            .map((target) => Number(target.health.toFixed(1))),
+          breachHostilePositions: coalitionBreachDrones.targets
+            .filter((target) => target.hostile && target.health > 0)
+            .map((target) => target.object.position.toArray()),
+          defenseCooldowns: Array.from(mission22DefenseCooldowns, (value) => Number(value.toFixed(2)))
         };
       },
       getCoalitionCapitalVisualState: () => {
@@ -21443,9 +26813,10 @@ if (diagnosticsMode) {
       },
       getDialogueState: () => dialogueManager.getState(),
       getShipBoardingState: () => {
-        const groundHeight = planetaryWorld.getHeightAt(ship.position.x, ship.position.z);
+        const groundHeight = surfaceGroundHeight(ship.position.x, ship.position.z);
         if (playerModeSystem.onFootActive) refreshParkedShipMetrics(groundHeight);
         const proximity = getBoardingProximity();
+        const player = surfaceCharacter.group.position;
         return {
           shipPosition: ship.position.toArray() as [number, number, number],
           terrainHeight: groundHeight,
@@ -21456,13 +26827,28 @@ if (diagnosticsMode) {
           verticalDifference: proximity.vertical,
           boardingAvailable: proximity.available,
           parked: playerModeSystem.onFootActive && parkedShipResolved,
+          surfaceZone: getSurfaceZoneAt(player.x, player.z),
+          parkingState: playerModeSystem.transitionActive
+            ? 'transition'
+            : playerModeSystem.onFootActive && parkedShipResolved
+              ? 'parked'
+              : 'flight',
+          // The belly no longer rests on the terrain: it hangs from the gear.
+          // Reporting the gear's settled target keeps this diagnostic honest
+          // about what the ship is actually standing on.
+          clearanceTarget: playerShipLandingGear.targetBellyClearance,
+          visualOscillationActive: playerShip.visualOscillationActive,
+          fConsumed: shipAccessFConsumed,
+          characterPosition: player.toArray() as [number, number, number],
+          restoreChecked: parkedShipRestoreChecked,
+          saveCorrected: parkedShipSaveCorrected,
           playerShipInstances: countSceneObjectsByName(playerShip.group.name)
         };
       },
-      reconcileParkedShip: () => settleParkedShipOnTerrain(false),
+      reconcileParkedShip: () => parkShipOnTerrain(ship.position, false),
       setPlayerPosition: (x, y, z) => {
         if (playerModeSystem.onFootActive) {
-          surfaceCharacter.placeAt(new THREE.Vector3(x, planetaryWorld.getHeightAt(x, z) + 0.04, z));
+          surfaceCharacter.placeAt(new THREE.Vector3(x, surfaceGroundHeight(x, z) + 0.04, z));
         } else {
           // A world-coordinate teleport is incompatible with being clamped to
           // the Ark, where the ship's position is anchor-local.
@@ -21484,6 +26870,7 @@ if (diagnosticsMode) {
       listLoadedAssets: () => getRuntimeAssetAudit().filter((asset) => asset.status === 'loaded'),
       getAssetAudit: () => getRuntimeAssetAudit(),
       getPerformanceSnapshot: () => ({ ...diagnostics.data, ...getPerformanceDiagnosticsPatch(true) }),
+      getNereidaProceduralState: () => planetaryWorld.getProceduralDiagnostics(),
       validateNoDuplicateCharacterMeshes: () => surfaceCharacter.visibleMeshCount <= 1,
       validateNoDuplicateCockpitMeshes: () => cockpitInterior.visibleMeshCount <= 1,
       listActiveHighPolyAssets: () => getActiveHighPolyAssets(),
@@ -21543,6 +26930,335 @@ if (diagnosticsMode) {
     };
   }
 
+if (window.__arcaDebug) {
+  Object.assign(window.__arcaDebug, {
+    getGameModesFoundationState: () => getGameModesFoundationState(),
+    getGarageState: () => garageView?.state ?? null,
+    setGarageView: (yaw: number, pitch?: number) => garageView?.setView(yaw, pitch) ?? null,
+    openGarageMode: async () => {
+      await openGarage();
+      return garageView?.state ?? null;
+    },
+    closeGarageMode: () => {
+      closeGarage();
+      return gameModes.mode;
+    },
+    openCombatMode: async () => {
+      await openCombatSetup();
+      return getGameModesFoundationState();
+    },
+    startOfflineCombat: () => {
+      startCombatSession();
+      return combatSession?.snapshot ?? null;
+    },
+    destroyCurrentCombatWave: () => {
+      let destroyed = 0;
+      while (coalitionDrones.activeCount > 0 && destroyed < 24) {
+        const activeBefore = coalitionDrones.activeCount;
+        if (!coalitionDrones.damageNearest(ship.position, Number.POSITIVE_INFINITY, 100_000)) break;
+        coalitionDrones.update(0, clock.elapsedTime, () => combatSession?.reportEnemyDestroyed(), () => undefined);
+        if (coalitionDrones.activeCount >= activeBefore) break;
+        destroyed += 1;
+      }
+      return { destroyed, session: combatSession?.snapshot ?? null };
+    },
+    defeatOfflineCombat: () => {
+      resources.hull = 0;
+      combatSession?.reportPlayerDestroyed();
+      coalitionDrones.clearAll();
+      return combatSession?.snapshot ?? null;
+    },
+    showOfflineCombatResults: () => {
+      combatSession?.showResultsImmediately();
+      updateCombatSession(0, clock.elapsedTime);
+      return combatSession?.snapshot ?? null;
+    },
+    getFlightCombatHudState: () => flightCombatHud.getDiagnostics(),
+    getCombatPacingState: () => coalitionDrones.getCombatDiagnostics(),
+    damageNearestScoutDrone: (amount = mission18Tuning.droneHealth) =>
+      coalitionDrones.damageNearest(ship.position, Number.POSITIVE_INFINITY, Math.max(0, amount)),
+    getActiveWeaponTargetIds: () => getWeaponTargets().map((target) => target.id ?? target.object.uuid),
+    setCombatWeaponMode: (mode: CombatWeaponMode) => {
+      combatWeaponMode = mode === 'torpedo' ? 'torpedo' : 'laser';
+      return combatWeaponMode;
+    },
+    setupCombatHudProbe: () => {
+      combatPacingProbeActive = false;
+      coalitionDrones.clearAll();
+      combatHudProbeActive = true;
+      combatWeaponMode = 'laser';
+      weaponSystem.clearTransient();
+      weaponProbeTarget.health = 180;
+      weaponProbeTarget.hostile = true;
+      weaponProbeObject.userData.combatMaximumHealth = 180;
+      weaponProbeObject.visible = true;
+      weaponProbeObject.scale.setScalar(1);
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ship.quaternion).normalize();
+      weaponProbeObject.position.copy(ship.position).addScaledVector(forward, 420).addScaledVector(right, 72);
+      weaponProbeVelocity.copy(right).multiplyScalar(34).addScaledVector(forward, 4);
+      return flightCombatHud.getDiagnostics();
+    },
+    setCombatHudTargetMotion: (x: number, y: number, z: number) => {
+      weaponProbeVelocity.set(x, y, z);
+      return weaponProbeVelocity.toArray() as [number, number, number];
+    },
+    setCombatProbeShipVelocity: (x: number, y: number, z: number) => {
+      velocity.set(x, y, z);
+      return velocity.toArray() as [number, number, number];
+    },
+    setupCombatPacingProbe: (count = 4) => {
+      combatHudProbeActive = false;
+      combatJammerProbeActive = false;
+      coalitionJammer.clear();
+      weaponProbeTarget.health = 0;
+      weaponProbeTarget.hostile = false;
+      weaponProbeObject.visible = false;
+      combatPacingProbeActive = true;
+      coalitionDrones.clearAll();
+      coalitionDrones.clearNavigationObstacle();
+      coalitionDrones.setOrigin(ship.position.x, ship.position.y, ship.position.z);
+      coalitionDrones.launchWave(Math.max(1, Math.min(6, Math.floor(count))));
+      return coalitionDrones.getCombatDiagnostics();
+    },
+    stepCombatPacingProbe: (seconds = 1) => {
+      const step = 1 / 30;
+      const iterations = Math.max(1, Math.min(1800, Math.ceil(Math.max(0, seconds) / step)));
+      for (let index = 0; index < iterations; index += 1) {
+        coalitionDrones.update(step, clock.elapsedTime + index * step, () => undefined, () => undefined);
+      }
+      return coalitionDrones.getCombatDiagnostics();
+    },
+    clearCombatProbes: () => {
+      combatHudProbeActive = false;
+      combatPacingProbeActive = false;
+      combatJammerProbeActive = false;
+      combatHudJammingProbeActive = false;
+      weaponProbeTarget.health = 0;
+      weaponProbeTarget.hostile = false;
+      weaponProbeVelocity.set(0, 0, 0);
+      weaponProbeObject.visible = false;
+      coalitionDrones.clearAll();
+      coalitionDrones.clearNavigationObstacle();
+      coalitionJammer.clear();
+      weaponSystem.clearTransient();
+      return true;
+    },
+    setCombatJammingProbe: (active: boolean) => {
+      combatHudJammingProbeActive = Boolean(active);
+      return isCombatJammingActive();
+    },
+    orientShipToCombatTarget: () => {
+      const target = mission20.jammerExposed && coalitionJammer.alive
+        ? coalitionJammer.target
+        : weaponSystem.selectedTarget ??
+          (combatHudProbeActive ? weaponProbeTarget : coalitionDrones.nearestActiveTarget(ship.position));
+      if (!target) return '';
+      const targetPosition = new THREE.Vector3();
+      target.object.getWorldPosition(targetPosition);
+      targetPosition.sub(ship.position);
+      const distance = targetPosition.length();
+      if (distance <= 0.001) return '';
+      targetPosition.multiplyScalar(1 / distance);
+      yaw = Math.atan2(-targetPosition.x, -targetPosition.z);
+      pitch = Math.asin(THREE.MathUtils.clamp(targetPosition.y, -1, 1));
+      smoothYaw = yaw;
+      smoothPitch = pitch;
+      bankRoll = 0;
+      ship.rotation.set(pitch, yaw, 0);
+      requestCameraFollowSync('combat-target');
+      return target.id ?? target.object.name;
+    },
+    getWeaponVisualState: () => ({
+      ...weaponSystem.getDiagnostics(),
+      shield: shieldEffect.getDiagnostics(),
+      resources: getWeaponResourceDiagnostics(),
+      targetPosition: weaponProbeObject.position.toArray() as [number, number, number],
+      targetHealth: weaponProbeTarget.health,
+      targetSurface: String(weaponProbeObject.userData.combatSurface ?? 'none')
+    }),
+    getEnemyCombatVisualState: () => ({
+      ...enemyCombatVisuals.getDiagnostics(),
+      weaponVisuals: weaponSystem.getDiagnostics(),
+      camera: combatCameraImpulse.getDiagnostics(),
+      scouts: coalitionDrones.getVisualDiagnostics(),
+      shield: shieldEffect.getDiagnostics(),
+      resources: getEnemyCombatResourceDiagnostics(),
+      threatWarningActive: enemyThreatWarningRemaining > 0,
+      threatWarningText: enemyThreatWarningText,
+      emitterCenter: weaponProbeObject.position.toArray() as [number, number, number],
+      emitterRadius: 12 * weaponProbeObject.scale.x,
+      activeEnemies: coalitionDrones.activeCount + coalitionBreachDrones.activeCount + Number(coalitionJammer.isActive),
+      mothershipInstances: scene.children.reduce((count, child) => count + Number(child === mothership.group), 0),
+      playerShipInstances: scene.children.reduce((count, child) => count + Number(child === ship), 0)
+    }),
+    getWeaponAnchorPositions: () => ({
+      cannons: playerShip.getCannonOffsets().map((offset) =>
+        offset.applyQuaternion(ship.quaternion).add(ship.position).toArray() as [number, number, number]
+      ),
+      missilePod: playerShip.getMissilePodOffset().applyQuaternion(ship.quaternion).add(ship.position).toArray() as [number, number, number],
+      missileTubes: playerShip.getMissileTubeOffsets().map((offset) =>
+        offset.applyQuaternion(ship.quaternion).add(ship.position).toArray() as [number, number, number]
+      )
+    }),
+    fireWeaponVisualProbe: (
+      weapon: 'laser' | 'missile',
+      surface: 'shield' | 'hull' | 'structure' = 'hull',
+      destructive = false
+    ) => fireWeaponVisualProbe(weapon, surface, destructive),
+    fireEnemyCombatVisualProbe: (
+      scenario: EnemyCombatProbeScenario = 'muzzle',
+      weapon: EnemyWeaponClass = 'light'
+    ) => fireEnemyCombatVisualProbe(scenario, weapon),
+    showEnemyCombatVisualProbe: (mass: 'light' | 'medium' | 'heavy' = 'light') => {
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward).normalize();
+      weaponProbeObject.position.copy(camera.position).addScaledVector(forward, mass === 'heavy' ? 105 : 82);
+      weaponProbeObject.scale.setScalar(mass === 'heavy' ? 2.2 : mass === 'medium' ? 1.45 : 1);
+      weaponProbeObject.visible = true;
+      weaponProbeObject.userData.combatMass = mass;
+      weaponProbeMaterial.wireframe = false;
+      weaponProbeMaterial.color.setHex(0x1d2024);
+      weaponProbeMaterial.emissive.setHex(0x24110e);
+      return enemyCombatVisuals.getDiagnostics();
+    },
+    triggerEnemyDamageVisualProbe: (
+      integrity: number,
+      mass: 'light' | 'medium' | 'heavy' = 'light',
+      surface: 'shield' | 'hull' | 'structure' = 'hull'
+    ) => triggerEnemyDamageVisualProbe(integrity, mass, surface),
+    getScoutDroneMuzzlePosition: () => {
+      const muzzle = new THREE.Vector3();
+      return coalitionDrones.getMuzzlePositionNear(camera.position, muzzle)
+        ? muzzle.toArray() as [number, number, number]
+        : null;
+    },
+    fireScoutDroneCombatProbe: () => {
+      const muzzle = new THREE.Vector3();
+      if (!coalitionDrones.getMuzzlePositionNear(camera.position, muzzle)) return false;
+      emitEnemyCombatShot(muzzle, getMission18StationPosition(), 'light', 7);
+      return true;
+    },
+    spawnScoutDroneVisualProbe: () => {
+      combatHudProbeActive = false;
+      combatJammerProbeActive = false;
+      coalitionJammer.clear();
+      combatPacingProbeActive = true;
+      coalitionDrones.clearAll();
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward).normalize();
+      // Keep enough firing distance for the real GLB's wide cannon baseline;
+      // close-up inspection is provided by the independent camera probe.
+      const origin = camera.position.clone().addScaledVector(forward, 360);
+      coalitionDrones.setOrigin(origin.x, origin.y - mission18Tuning.droneAltitude, origin.z);
+      coalitionDrones.launchWave(1);
+      const target = coalitionDrones.nearestActiveTarget(camera.position);
+      if (target) {
+        target.object.position.copy(origin);
+        target.velocity?.set(0, 0, 0);
+      }
+      coalitionDrones.update(1, clock.elapsedTime, () => undefined, () => undefined);
+      return coalitionDrones.activeCount;
+    },
+    setScoutDroneIntegrity: (integrity: number) => {
+      const target = coalitionDrones.nearestActiveTarget(ship.position);
+      if (!target) return null;
+      const clamped = THREE.MathUtils.clamp(integrity, 0, 1);
+      target.health = mission18Tuning.droneHealth * clamped;
+      coalitionDrones.update(1 / 30, clock.elapsedTime, () => undefined, () => undefined);
+      return coalitionDrones.getVisualDiagnostics();
+    },
+    getScoutDroneVisualProbePosition: () => {
+      const target = coalitionDrones.nearestActiveTarget(ship.position);
+      if (!target) return null;
+      target.object.getWorldPosition(enemyCombatImpactScratch);
+      return enemyCombatImpactScratch.toArray() as [number, number, number];
+    },
+    fireAtScoutVisualProbe: () => {
+      const target = coalitionDrones.nearestActiveTarget(ship.position);
+      if (!target) return false;
+      target.object.getWorldPosition(enemyCombatImpactScratch);
+      const offsets = weaponSystem.debugCannonOffsets;
+      const nextHardpoint = (weaponSystem.activeHardpointIndex + 1) % offsets.length;
+      const localMuzzle = offsets[nextHardpoint];
+      const probeOrientation = ship.quaternion.clone();
+      const probeMuzzle = new THREE.Vector3();
+      const probeForward = new THREE.Vector3(0, 0, -1);
+      // Solve from the actual lateral hardpoint, not from the ship centre.
+      for (let iteration = 0; iteration < 3; iteration += 1) {
+        probeMuzzle.copy(localMuzzle).applyQuaternion(probeOrientation).add(ship.position);
+        enemyCombatDirectionScratch.copy(enemyCombatImpactScratch).sub(probeMuzzle).normalize();
+        probeOrientation.setFromUnitVectors(probeForward, enemyCombatDirectionScratch);
+      }
+      ship.quaternion.copy(probeOrientation);
+      weaponSystem.setAimAssistTarget(enemyCombatImpactScratch);
+      const healthBefore = target.health;
+      const fired = weaponSystem.fireLaser(ship, [target]);
+      if (fired) combatCameraImpulse.triggerFire('laser', ship.quaternion);
+      return fired && target.health < healthBefore;
+    },
+    showJammerVisualProbe: (state: 'active' | 'damaged' | 'neutralized' = 'active') => {
+      combatHudProbeActive = false;
+      combatPacingProbeActive = false;
+      coalitionDrones.clearAll();
+      coalitionJammer.clear();
+      combatJammerProbeActive = true;
+      const forward = new THREE.Vector3();
+      camera.getWorldDirection(forward).normalize();
+      const desired = camera.position.clone().addScaledVector(forward, 135);
+      coalitionJammer.setOrigin(
+        desired.x - Math.cos(0.7) * 760,
+        desired.y - 120,
+        desired.z - Math.sin(0.7) * 760
+      );
+      coalitionJammer.deploy();
+      if (state !== 'active') coalitionJammer.target.health = mission20Tuning.jammerHealth * 0.28;
+      coalitionJammer.update(1 / 30, clock.elapsedTime, () => undefined);
+      if (state === 'neutralized') {
+        coalitionJammer.target.health = 0;
+        coalitionJammer.update(1 / 30, clock.elapsedTime, () => undefined);
+      }
+      return coalitionJammer.getVisualDiagnostics();
+    },
+    getJammerVisualState: () => coalitionJammer.getVisualDiagnostics(),
+    clearJammerVisualProbe: () => {
+      combatJammerProbeActive = false;
+      coalitionJammer.clear();
+      return coalitionJammer.getVisualDiagnostics();
+    },
+    triggerPlayerShieldImpact: (side: -1 | 1 = 1) => {
+      const point = weaponProbeObject.position.copy(ship.position).add(new THREE.Vector3(side * 6, 0.5, -1));
+      shieldEffect.registerImpact(point);
+      combatCameraImpulse.triggerReceived(point, ship.position, camera);
+      flightCombatHud.registerDamageDirection(point, ship.position, camera);
+      return shieldEffect.getDiagnostics();
+    },
+    clearWeaponVisualProbe: () => {
+      weaponProbeTarget.health = 0;
+      weaponProbeTarget.hostile = false;
+      weaponProbeObject.visible = false;
+      weaponProbeObject.scale.setScalar(1);
+      weaponProbeObject.userData.combatMaximumHealth = 0;
+      weaponSystem.clearTransient();
+      combatCameraImpulse.reset();
+      return weaponSystem.getDiagnostics();
+    },
+    clearEnemyCombatVisualProbe: () => {
+      weaponProbeTarget.health = 0;
+      weaponProbeTarget.hostile = false;
+      weaponProbeObject.visible = false;
+      weaponProbeObject.scale.setScalar(1);
+      weaponSystem.clearTransient();
+      combatCameraImpulse.reset();
+      enemyNearMissCursor = enemyCombatVisuals.events.nearMisses;
+      enemyHeavyDestructionCursor = enemyCombatVisuals.events.heavyDestructions;
+      enemyThreatWarningRemaining = 0;
+      enemyThreatWarningText = '';
+      return enemyCombatVisuals.getDiagnostics();
+    }
+  });
+}
+
 updateDiscoveryList();
 updateHud(Number.POSITIVE_INFINITY);
 
@@ -21554,8 +27270,59 @@ declare global {
     __arcaRenderer?: THREE.WebGLRenderer;
     __arcaMissionState?: ReturnType<MissionManager['update']>;
     __arcaDebug?: {
+      getCollisionState: () => unknown;
+      getArkLaunchCorridorState: () => unknown;
+      getCollisionColliderState: (id: string) => unknown;
+      probeCharacterCollision: (start: readonly number[], displacement: readonly number[]) => unknown;
+      probeShipCollision: (start: readonly number[], displacement: readonly number[], terrain?: boolean) => unknown;
+      moveCharacterBy: (displacement: readonly number[]) => unknown;
+      moveShipBy: (displacement: readonly number[], terrain?: boolean) => unknown;
+      getSurfaceGroundHeight: (x: number, z: number) => number;
+      setCollisionDebug: (visible: boolean) => boolean;
+      normalizePlayerCollisions: () => unknown;
+      setCharacterWorldPosition: (position: readonly number[]) => [number, number, number];
+      setShipWorldPosition: (position: readonly number[]) => [number, number, number];
       setCameraMode: (mode: CameraMode) => CameraMode;
+      inspectShipAccess: (open: number, lift: number, azimuthDeg?: number, elevationDeg?: number, distance?: number, focus?: 'anchor' | 'hatch') => number;
+      clearShipAccessInspection: () => boolean;
+      measureShipAccess: () => import('./entities/ShipAccessLift').ShipAccessMeasurement;
+      setLandingGearFraction: (fraction: number) => string;
+      getLandingGearState: () => Record<string, unknown>;
+      debugShipAccessFoot: () => Record<string, unknown>;
+      resetFootTravelPeak: () => void;
+      getOrbitalAscentState: () => Record<string, unknown>;
+      inspectShipFeature: (feature: 'engines' | 'torpedoBay' | 'accessories' | 'shield', azimuthDeg?: number, elevationDeg?: number, distance?: number) => number[];
+      clearShipFeatureInspection: () => boolean;
+      getShipHardpointState: () => Record<string, unknown>;
+      getShipNavigationState: () => Record<string, unknown>;
+      setShipYaw: (heading: number) => number;
+      setShipVelocity: (x: number, y: number, z: number) => number[];
+      liftShipToAltitude: (metres?: number) => number;
+      getMission19SpawnTrace: () => Record<string, unknown>;
+      getHostileContactState: () => Record<string, unknown>;
+      selectNearestHostile: () => string | null;
+      cycleHostileTarget: () => string | null;
+      setLandingGearRetraction: (fraction: number) => string;
+      firePrimaryOnce: () => { fired: boolean; energy: number };
+      requestWeaponReload: () => { primaryStarted: boolean; torpedoStarted: boolean; message: string };
+      advanceWeaponReload: (seconds?: number) => { loadedCount: number; reloading: boolean; progress: number };
+      setWeaponAmmo: (data: {
+        primaryMagazine?: number; primaryReserve?: number;
+        torpedoTubes?: boolean[]; torpedoReserve?: number; torpedoTotal?: number;
+      }) => { primaryMagazine: number; primaryReserve: number; torpedoTubes: boolean[]; torpedoReserve: number };
+      refillWeaponStores: () => { primaryMagazine: number; primaryReserve: number; torpedoTubes: boolean[]; torpedoReserve: number };
+      fireTorpedoOnce: () => { fired: boolean; ammo: number };
+      setWeaponEnergy: (value: number) => number;
+      resetWeaponAudit: () => boolean;
+      getWeaponResourceState: () => Record<string, unknown>;
+      getInputGateState: () => Record<string, unknown>;
       setCameraLookAt: (target: CameraLookAtInput) => CameraProbeResult | undefined;
+      frameCameraTarget: (
+        target: CameraLookAtInput,
+        offset: readonly [number, number, number],
+        lookHeight?: number
+      ) => CameraProbeResult | undefined;
+      clearCameraLookAt: () => boolean;
       lookAtDefenseBeacon: (index: number) => CameraProbeResult | undefined;
       lookAtThreatSignature: () => CameraProbeResult | undefined;
       getDefenseNetworkVisualState: () => DefenseNetworkVisualState;
@@ -21820,7 +27587,7 @@ declare global {
       recoverNereidaWreckage: () => boolean;
       completeMission19: () => boolean;
       getMission19State: () => Mission19DebugState;
-      getNereidaDefenseReadout: () => import('./game/Mission19NereidaUnderAttack').NereidaDefenseReadout;
+      getNereidaDefenseReadout: () => import('./game/Mission19NereidaUnderAttack').NereidaDefenseReadout & { airWaveAnnounced: boolean; groundWaveAnnounced: boolean; airDronesActive: number; breachDronesActive: number };
       startMission20: () => boolean;
       completeArkAscent: () => boolean;
       rendezvousWithArk: () => boolean;
@@ -21837,6 +27604,20 @@ declare global {
       completeMission20: () => boolean;
       getMission20State: () => Mission20DebugState;
       getArkBattleReadout: () => import('./game/Mission20ArkBattle').ArkBattleReadout;
+      getArkStationState: () => {
+        step: string;
+        linksRestored: boolean[];
+        activeLinkIndex: number;
+        arkPosition: number[];
+        arkRotation: number[];
+        stationPosition: number[];
+        shipPosition: number[];
+        distance: number;
+        stationRange: number;
+        interactionRange: number;
+        inRange: boolean;
+        phaseProgress: number;
+      };
       startMission21: () => boolean;
       alignMission21Channel: (index: number) => number;
       decryptCoalitionTransmission: () => boolean;
@@ -21853,6 +27634,17 @@ declare global {
       completeMission21: () => boolean;
       getMission21State: () => Mission21DebugState;
       getMission21Readout: () => import('./game/Mission21SilenceRupture').Mission21Readout;
+      getMission21TargetState: () => {
+        step: Mission21DebugState['mission21Step'];
+        targetId: string;
+        targetLabel: string;
+        targetPosition: number[];
+        shipPosition: number[];
+        distance: number;
+        range: number;
+        inRange: boolean;
+        phaseProgress: number;
+      };
       startMission22: () => boolean;
       acknowledgeMission22Alarm: () => string;
       accessMission22CommandTerminal: () => string;
@@ -21871,6 +27663,19 @@ declare global {
       completeMission22: () => Mission22DebugState;
       getMission22State: () => Mission22DebugState;
       getMission22Readout: () => import('./game/Mission22BrokenFronts').Mission22Readout;
+      getMission22TargetState: () => {
+        step: Mission22DebugState['mission22Step'];
+        targetId: string;
+        targetLabel: string;
+        targetPosition: number[];
+        shipPosition: number[];
+        distance: number;
+        range: number;
+        inRange: boolean;
+        waveRequired: number;
+        waveDestroyed: number;
+        waveRemaining: number;
+      };
       startMission23: () => boolean;
       completeMission23Council: () => Mission23DebugState;
       synchronizeMission23Forces: () => Mission23DebugState;
@@ -21933,7 +27738,29 @@ declare global {
       detectMission24FinalFleet: () => Mission24DebugState;
       completeMission24: () => Mission24DebugState;
       getMission24State: () => Mission24DebugState;
+      startMission25: () => boolean;
+      advanceMission25Interaction: () => Mission25DebugState;
+      teleportToMission25Target: () => [number, number, number];
+      completeMission25Wave: () => Mission25DebugState;
+      applyMission25SystemDamage: (index: number, amount?: number) => Mission25DebugState;
+      prepareMission25Counterattack: () => Mission25DebugState;
+      locateMission25CommandTarget: () => Mission25DebugState;
+      destroyMission25CommandNode: (index: number) => Mission25DebugState;
+      destroyAllMission25CommandNodes: () => Mission25DebugState;
+      beginMission25FinalAssault: () => Mission25DebugState;
+      damageMission25CommandCore: (amount: number) => Mission25DebugState;
+      destroyMission25CommandCore: () => Mission25DebugState;
+      completeMission25Collapse: () => Mission25DebugState;
+      completeMission25Stabilization: () => Mission25DebugState;
+      completeMission25: () => Mission25DebugState;
+      continueAfterChapterEnd: () => Mission25DebugState;
+      getMission25State: () => Mission25DebugState;
+      getMission25Target: () => { name: string; position: [number, number, number]; distance: number };
+      getMission25VisualState: () => Mission25VisualDebugState;
+      getMission25Diagnostics: () => Mission25Diagnostics;
       getArkDepartureState: () => ArkDepartureDebugState;
+      getArkPlatformVisualState: () => ArkPlatformVisualDebugState;
+      completeArkDeparture: () => boolean;
       getMission01OnboardingState: () => Mission01OnboardingDebugState;
       advanceMission01To: (step: string) => boolean;
       completeMission01Tutorial: () => boolean;
@@ -22022,6 +27849,14 @@ declare global {
         verticalDifference: number;
         boardingAvailable: boolean;
         parked: boolean;
+        surfaceZone: 'space' | 'nereida' | 'aurora' | 'surface-transit';
+        parkingState: 'flight' | 'transition' | 'parked';
+        clearanceTarget: number;
+        visualOscillationActive: boolean;
+        fConsumed: boolean;
+        characterPosition: [number, number, number];
+        restoreChecked: boolean;
+        saveCorrected: boolean;
         playerShipInstances: number;
       };
       reconcileParkedShip: () => boolean;
@@ -22030,6 +27865,7 @@ declare global {
       listLoadedAssets: () => RuntimeAssetAuditEntry[];
       getAssetAudit: () => RuntimeAssetAuditEntry[];
       getPerformanceSnapshot: () => ArcaDiagnostics;
+      getNereidaProceduralState: () => ReturnType<PlanetaryWorld['getProceduralDiagnostics']>;
       validateNoDuplicateCharacterMeshes: () => boolean;
       validateNoDuplicateCockpitMeshes: () => boolean;
       listActiveHighPolyAssets: () => string[];

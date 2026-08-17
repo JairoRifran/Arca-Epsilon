@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.22.0",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc && vite build",
@@ -16,6 +17,7 @@
     "audio:generate:music:failed": "node scripts/generate-elevenlabs-audio.mjs --category=music --failed-only",
     "audio:manifest": "node scripts/generate-elevenlabs-audio.mjs --manifest-only",
     "audio:generate:sfx": "node scripts/generate-elevenlabs-audio.mjs --category=sfx",
+    "audio:generate:weapons": "node scripts/generate-elevenlabs-audio.mjs --category=sfx --only=sfx-player-laser-burst-a,sfx-player-laser-burst-b,sfx-player-laser-burst-heavy,sfx-player-laser-charge-short,sfx-player-laser-mechanical-release,sfx-player-torpedo-eject,sfx-player-torpedo-ignite,sfx-player-torpedo-engine,sfx-player-torpedo-near-miss,sfx-player-torpedo-impact,sfx-player-torpedo-detonation",
     "audio:generate:voices": "node scripts/generate-elevenlabs-voices.mjs",
     "audio:generate:m13": "node scripts/generate-m13-audio.mjs",
     "audio:generate:m13:music": "node scripts/generate-m13-audio.mjs --category=music",

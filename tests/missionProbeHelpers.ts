@@ -49,8 +49,13 @@ export async function reloadAndAwaitRestore<T>(
     return window.__arcaDebug !== undefined;
   }, undefined, { timeout: 180000 });
 
+  let restoredState: T | undefined;
   await expect
-    .poll(async () => isRestored(await readState(page)), {
+    .poll(async () => {
+      const state = await readState(page);
+      if (isRestored(state)) restoredState = state;
+      return isRestored(state);
+    }, {
       timeout: 180000,
       intervals: [1000],
       message: `${label} was never restored after reload`
@@ -66,5 +71,5 @@ export async function reloadAndAwaitRestore<T>(
   }).toBe(true);
   await page.waitForLoadState('networkidle', { timeout: 30000 });
 
-  return readState(page);
+  return restoredState;
 }

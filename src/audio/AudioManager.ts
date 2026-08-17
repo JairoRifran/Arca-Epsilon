@@ -244,6 +244,10 @@ export class AudioManager {
     return { ...this.settings };
   }
 
+  setSettings(update: Partial<AudioSettings>): void {
+    this.updateSettings(update);
+  }
+
   onSettingsChanged(listener: (settings: Readonly<AudioSettings>) => void): () => void {
     this.listeners.add(listener);
     listener(this.getSettings());

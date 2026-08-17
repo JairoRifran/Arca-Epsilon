@@ -75,10 +75,27 @@ export type ArcaDiagnostics = {
   shipBoardingVerticalDifference: number;
   shipBoardingAvailable: boolean;
   shipParked: boolean;
+  surfaceZone: 'space' | 'nereida' | 'aurora' | 'surface-transit';
+  shipParkingState: 'flight' | 'transition' | 'parked';
+  parkedShipClearanceTarget: number;
+  shipVisualOscillationActive: boolean;
+  shipAccessFConsumed: boolean;
+  parkedShipRestoreChecked: boolean;
+  parkedShipSaveCorrected: boolean;
   playerShipInstances: number;
   shipAltitudeResetForce: number;
   shipCameraJumpDistance: number;
   verticalThrustActive: boolean;
+  shipCollisionCollidersActive: number;
+  shipCollisionSweptDistance: number;
+  shipCollisionImpact: boolean;
+  shipCollisionTimeOfImpact: number;
+  shipCollisionNormal: [number, number, number];
+  shipCollisionPenetration: number;
+  shipCollisionObject: string;
+  shipCollisionCandidates: number;
+  shipCollisionSubsteps: number;
+  shipCollisionLastSafePosition: [number, number, number];
   orbitalMarkerStatus: string;
   orbitalMarkerPath: string;
   orbitalMarkerMeshCount: number;
@@ -173,6 +190,14 @@ export type ArcaDiagnostics = {
   characterPosition: [number, number, number];
   characterSpeed: number;
   characterGrounded: boolean;
+  characterColliderActive: boolean;
+  characterCollisionSlope: number;
+  characterCollisionContact: boolean;
+  characterCollisionNormal: [number, number, number];
+  characterCollisionPenetration: number;
+  characterCollisionIterations: number;
+  characterCollisionCandidates: number;
+  characterCollisionLastSafePosition: [number, number, number];
   liftRideState: string;
   characterOnLift: boolean;
   characterFootLockActive: boolean;
@@ -504,6 +529,33 @@ export type ArcaDiagnostics = {
   mission24ActiveTimers: number;
   mission24MothershipUuid: string;
   mission24MothershipInstances: number;
+  mission25Started: boolean;
+  mission25State: string;
+  mission25DefensePhase: number;
+  mission25Wave: number;
+  mission25ArkIntegrity: number;
+  mission25SystemIntegrities: number[];
+  mission25InheritedM22Priority: string;
+  mission25InheritedM23Support: boolean;
+  mission25CommandNodesDestroyed: boolean[];
+  mission25CommandCoreIntegrity: number;
+  mission25ActiveEnemies: number;
+  mission25EnemiesDestroyed: number;
+  mission25BattleState: string;
+  mission25EndingStarted: boolean;
+  mission25EndingCompleted: boolean;
+  mission25Completed: boolean;
+  chapterCompleted: boolean;
+  mission25DefenseNetworkBuilt: boolean;
+  mission25DefenseNetworkVisible: boolean;
+  mission25CommandBuilt: boolean;
+  mission25CommandVisible: boolean;
+  mission25ActiveTimers: number;
+  mission25MothershipUuid: string;
+  mission25MothershipInstances: number;
+  mission25PlayerShipInstances: number;
+  mission25MusicCue: string;
+  mission25SaveRestored: boolean;
   mission12Started: boolean;
   mission12Step: string;
   auroraFirstCrewAuthorized: boolean;
@@ -628,6 +680,16 @@ export type ArcaDiagnostics = {
   saveExists: boolean;
   lastSaveTime: number;
   saveLoadStatus: string;
+  collisionWorldReady: boolean;
+  collisionStaticColliders: number;
+  collisionDynamicColliders: number;
+  collisionTriggers: number;
+  collisionQueriesThisFrame: number;
+  collisionQueryCandidates: number;
+  collisionTimeMs: number;
+  collisionRestoreCorrections: number;
+  collisionDuplicateRegistrations: number;
+  collisionResourcesReleased: number;
   saveWarning: string;
   scannerPulses: number;
   activeBeams: number;
@@ -706,10 +768,27 @@ export class Diagnostics {
     shipBoardingVerticalDifference: Number.POSITIVE_INFINITY,
     shipBoardingAvailable: false,
     shipParked: false,
+    surfaceZone: 'space',
+    shipParkingState: 'flight',
+    parkedShipClearanceTarget: 0.12,
+    shipVisualOscillationActive: true,
+    shipAccessFConsumed: false,
+    parkedShipRestoreChecked: false,
+    parkedShipSaveCorrected: false,
     playerShipInstances: 1,
     shipAltitudeResetForce: 0,
     shipCameraJumpDistance: 0,
     verticalThrustActive: false,
+    shipCollisionCollidersActive: 0,
+    shipCollisionSweptDistance: 0,
+    shipCollisionImpact: false,
+    shipCollisionTimeOfImpact: 1,
+    shipCollisionNormal: [0, 0, 0],
+    shipCollisionPenetration: 0,
+    shipCollisionObject: '',
+    shipCollisionCandidates: 0,
+    shipCollisionSubsteps: 1,
+    shipCollisionLastSafePosition: [0, 0, 0],
     orbitalMarkerStatus: 'idle',
     orbitalMarkerPath: '',
     orbitalMarkerMeshCount: 0,
@@ -796,6 +875,14 @@ export class Diagnostics {
     characterPosition: [0, 0, 0],
     characterSpeed: 0,
     characterGrounded: false,
+    characterColliderActive: false,
+    characterCollisionSlope: 0,
+    characterCollisionContact: false,
+    characterCollisionNormal: [0, 1, 0],
+    characterCollisionPenetration: 0,
+    characterCollisionIterations: 0,
+    characterCollisionCandidates: 0,
+    characterCollisionLastSafePosition: [0, 0, 0],
     liftRideState: 'idle',
     characterOnLift: false,
     characterFootLockActive: false,
@@ -1123,6 +1210,33 @@ export class Diagnostics {
     mission24ActiveTimers: 0,
     mission24MothershipUuid: '',
     mission24MothershipInstances: 1,
+    mission25Started: false,
+    mission25State: 'inactive',
+    mission25DefensePhase: 0,
+    mission25Wave: 0,
+    mission25ArkIntegrity: 100,
+    mission25SystemIntegrities: [100, 100, 100],
+    mission25InheritedM22Priority: 'none',
+    mission25InheritedM23Support: false,
+    mission25CommandNodesDestroyed: [false, false, false],
+    mission25CommandCoreIntegrity: 100,
+    mission25ActiveEnemies: 0,
+    mission25EnemiesDestroyed: 0,
+    mission25BattleState: 'inactive',
+    mission25EndingStarted: false,
+    mission25EndingCompleted: false,
+    mission25Completed: false,
+    chapterCompleted: false,
+    mission25DefenseNetworkBuilt: false,
+    mission25DefenseNetworkVisible: false,
+    mission25CommandBuilt: false,
+    mission25CommandVisible: false,
+    mission25ActiveTimers: 0,
+    mission25MothershipUuid: '',
+    mission25MothershipInstances: 1,
+    mission25PlayerShipInstances: 1,
+    mission25MusicCue: 'none',
+    mission25SaveRestored: false,
     mission12Started: false,
     mission12Step: 'inactive',
     auroraFirstCrewAuthorized: false,
@@ -1247,6 +1361,16 @@ export class Diagnostics {
     saveExists: false,
     lastSaveTime: 0,
     saveLoadStatus: 'idle',
+    collisionWorldReady: false,
+    collisionStaticColliders: 0,
+    collisionDynamicColliders: 0,
+    collisionTriggers: 0,
+    collisionQueriesThisFrame: 0,
+    collisionQueryCandidates: 0,
+    collisionTimeMs: 0,
+    collisionRestoreCorrections: 0,
+    collisionDuplicateRegistrations: 0,
+    collisionResourcesReleased: 0,
     saveWarning: '',
     scannerPulses: 0,
     activeBeams: 0,

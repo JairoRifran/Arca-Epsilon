@@ -8,6 +8,7 @@ export type StarMapEntity = {
   status?: string;
   signalRange?: number;
   isCurrentTarget?: boolean;
+  showLabel?: boolean;
 };
 
 export class StarMap {
@@ -386,7 +387,7 @@ export class StarMap {
       ctx.font = '10px monospace';
       // Escalonar las etiquetas evita que entidades co-ubicadas (pad y
       // hábitat comparten el centro) pinten sus nombres uno sobre otro.
-      ctx.fillText(e.name, 12, 4 + (entityIndex % 3) * 11);
+      if (e.showLabel !== false) ctx.fillText(e.name, 12, 4 + (entityIndex % 3) * 11);
       ctx.restore();
     }
   }

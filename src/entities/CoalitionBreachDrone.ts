@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import {
+  coalitionPalette,
+  createCoalitionFacetedHullGeometry,
+  createCoalitionSweptWingGeometry
+} from '../assets/coalitionVisualLanguage';
 import { INCURSION_LANES, mission19Tuning } from '../assets/mission19Definitions';
 
 /** Lifecycle of one ground breach unit. */
@@ -18,6 +23,8 @@ type BreachSlot = {
   active: boolean;
   /** True for the single heavier extraction unit. */
   extraction: boolean;
+  deathVisual: boolean;
+  deathAge: number;
 };
 
 /** Deterministic hash: a slot always walks the same lane the same way. */
@@ -71,11 +78,20 @@ export class CoalitionBreachDrone {
     if (this.built) return;
     this.built = true;
 
-    this.chassisMaterial = new THREE.MeshStandardMaterial({ color: 0x1c2023, roughness: 0.58, metalness: 0.7 });
-    this.legMaterial = new THREE.MeshStandardMaterial({ color: 0x2c3237, roughness: 0.5, metalness: 0.78 });
+    // Nereida's ground is a dark warm brown under a hazy green sky. A near
+    // black, mid-rough chassis sat in exactly that luminance band and vanished
+    // against the hills. These shift cool and drop roughness so the shell
+    // catches a specular edge the terrain never does — contrast from the
+    // lighting response, not from painting the unit a flat hostile red.
+    this.chassisMaterial = new THREE.MeshStandardMaterial({
+      color: coalitionPalette.hull, roughness: 0.54, metalness: 0.82
+    });
+    this.legMaterial = new THREE.MeshStandardMaterial({
+      color: coalitionPalette.armor, roughness: 0.42, metalness: 0.76
+    });
 
-    const bodyGeometry = new THREE.OctahedronGeometry(1.15, 0);
-    const shellGeometry = new THREE.BoxGeometry(1.9, 0.44, 1.35);
+    const bodyGeometry = createCoalitionFacetedHullGeometry(2.1, 1.55, 2.8);
+    const shellGeometry = createCoalitionSweptWingGeometry(1.35, 1.6, 0.28, 0.18);
     const legGeometry = new THREE.CylinderGeometry(0.1, 0.14, 1.25, 6);
     const slitGeometry = new THREE.BoxGeometry(0.62, 0.12, 0.1);
 
@@ -85,7 +101,6 @@ export class CoalitionBreachDrone {
       unit.visible = false;
 
       const body = new THREE.Mesh(bodyGeometry, this.chassisMaterial!);
-      body.scale.set(1, 0.68, 1.1);
       body.position.y = 1.15;
       unit.add(body);
 
@@ -105,10 +120,12 @@ export class CoalitionBreachDrone {
         unit.add(leg);
       }
 
+      // Sensor slit: the faction tell. Localised emissive, no PointLight — one
+      // light per unit would cost more than every other change here combined.
       const eyeMaterial = new THREE.MeshStandardMaterial({
         color: 0x150c0c,
-        emissive: 0x8f2616,
-        emissiveIntensity: 0.4,
+        emissive: coalitionPalette.signal,
+        emissiveIntensity: 0.9,
         roughness: 0.32,
         metalness: 0.3
       });
@@ -116,9 +133,6 @@ export class CoalitionBreachDrone {
       slit.position.set(0, 1.22, -0.72);
       unit.add(slit);
 
-      unit.traverse((child) => {
-        if (child instanceof THREE.Mesh) child.frustumCulled = false;
-      });
 
       this.slots.push({
         group: unit,
@@ -131,8 +145,14 @@ export class CoalitionBreachDrone {
         laneIndex: 0,
         stateAge: 0,
         active: false,
-        extraction: false
+        extraction: false,
+        deathVisual: false,
+        deathAge: 0
       });
+      unit.userData.combatSurface = 'hull';
+      unit.userData.combatMass = 'medium';
+      unit.userData.combatEngineAnchors = [[0, 0.6, 1.5]];
+      unit.userData.combatVisualGeneration = 0;
       this.targets.push({ object: unit, radius: mission19Tuning.breachDroneRadius, health: 0, hostile: true });
       this.group.add(unit);
     }
@@ -169,8 +189,12 @@ export class CoalitionBreachDrone {
       slot.progress = -hash(i * 3.1) * 0.22;
       slot.stateAge = 0;
       slot.group.visible = true;
+      slot.deathVisual = false;
+      slot.deathAge = 0;
+      slot.group.userData.combatVisualGeneration = Number(slot.group.userData.combatVisualGeneration ?? 0) + 1;
+      slot.group.userData.combatVisualKick = 0;
       slot.group.scale.setScalar(isExtractor ? 1.5 : 1);
-      slot.eyeMaterial.emissiveIntensity = 0.4;
+      slot.eyeMaterial.emissiveIntensity = 0.9;
       this.targets[i].health = slot.health;
       this.targets[i].radius = mission19Tuning.breachDroneRadius * (isExtractor ? 1.5 : 1);
       this.targets[i].hostile = true;
@@ -183,15 +207,24 @@ export class CoalitionBreachDrone {
     this.group.visible = false;
   }
 
-  private deactivate(index: number): void {
+  private deactivate(index: number, preserveDeathVisual = false): void {
     const slot = this.slots[index];
     if (!slot) return;
     slot.active = false;
-    slot.state = 'idle';
+    slot.state = preserveDeathVisual ? 'destroyed' : 'idle';
     slot.health = 0;
+    // Mirror it into the shared target list immediately. `update()` is what
+    // normally syncs these, and it stops running once a wave ends, so a
+    // cleared fleet left stale live-looking targets behind for every consumer
+    // — the contact tracker kept drawing markers for drones that were gone.
+    if (this.targets[index]) this.targets[index].health = 0;
     slot.extraction = false;
-    slot.group.visible = false;
+    slot.deathVisual = preserveDeathVisual;
+    slot.deathAge = 0;
+    slot.group.visible = preserveDeathVisual;
+    slot.group.userData.combatVisualKick = 0;
     this.targets[index].health = 0;
+    this.targets[index].hostile = false;
   }
 
   /**
@@ -214,7 +247,20 @@ export class CoalitionBreachDrone {
 
     for (let i = 0; i < this.slots.length; i += 1) {
       const slot = this.slots[i];
-      if (!slot.active) continue;
+      if (!slot.active) {
+        if (slot.deathVisual) {
+          slot.deathAge += delta;
+          slot.group.rotation.z += delta * 2.2;
+          slot.body.position.y = Math.max(0.35, 1.15 - slot.deathAge * 1.35);
+          slot.eyeMaterial.emissiveIntensity *= Math.exp(-9 * delta);
+          if (slot.deathAge >= 0.46) {
+            slot.deathVisual = false;
+            slot.group.visible = false;
+            slot.body.position.y = 1.15;
+          }
+        }
+        continue;
+      }
       const target = this.targets[i];
 
       // Damage written by the ship's WeaponSystem or Nereida's defences.
@@ -228,9 +274,8 @@ export class CoalitionBreachDrone {
       if (slot.health <= 0 && slot.state !== 'destroyed') {
         const wasExtraction = slot.extraction;
         slot.state = 'destroyed';
-        this.deactivate(i);
+        this.deactivate(i, true);
         onDestroyed(wasExtraction);
-        if (this.activeCount === 0) this.group.visible = false;
         continue;
       }
 
@@ -251,6 +296,12 @@ export class CoalitionBreachDrone {
       slot.group.position.set(x, y, z);
       this.scratch.set(this.goal.x, y, this.goal.z);
       slot.group.lookAt(this.scratch);
+      const impactKick = Number(slot.group.userData.combatVisualKick ?? 0);
+      if (impactKick > 0.0001) {
+        const impactDirection = Number(slot.group.userData.combatVisualKickDirection ?? 1);
+        slot.group.rotateZ(impactDirection * impactKick * 1.2);
+        slot.group.userData.combatVisualKick = impactKick * Math.exp(-6.5 * delta);
+      }
       // Legs bob as it walks: cheap, deterministic, no allocation.
       for (let l = 0; l < slot.legs.length; l += 1) {
         slot.legs[l].position.y = 0.6 + Math.sin(elapsed * 5 + l * 2.1 + i) * 0.06 * speedScale;
@@ -287,8 +338,10 @@ export class CoalitionBreachDrone {
 
       const maxHealth = slot.extraction ? mission19Tuning.extractionUnitHealth : mission19Tuning.breachDroneHealth;
       const hurt = 1 - Math.max(0, slot.health) / maxHealth;
+      // Raised so the sensor still reads at engagement range; the wounded
+      // falloff and the slow pulse are unchanged, so a damaged unit still dims.
       slot.eyeMaterial.emissiveIntensity =
-        (slot.state === 'extract' ? 0.75 : 0.4) * (1 - hurt * 0.6) + Math.sin(elapsed * 4 + i) * 0.05;
+        (slot.state === 'extract' ? 1.35 : 0.82) * (1 - hurt * 0.6) + Math.sin(elapsed * 4 + i) * 0.1;
       slot.body.rotation.y += delta * 0.25;
     }
   }

@@ -1135,7 +1135,21 @@ export class AsteroidField {
 
   readonly instanceCount: number;
 
+  readonly particleCount: number;
+
   private readonly heroes: AsteroidHero[] = [];
+
+  private readonly nearInstances: THREE.InstancedMesh[] = [];
+
+  private lowDetailMesh?: THREE.InstancedMesh;
+
+  private dust?: THREE.Points;
+
+  private readonly highDetailDistance: number;
+
+  private readonly heroDistance: number;
+
+  private highDetailActive = true;
 
   private readonly beltSpeed: number;
 
@@ -1151,6 +1165,9 @@ export class AsteroidField {
     this.random = new SeededRandom(seed);
     this.beltSpeed = options.beltSpeed ?? 0.0045;
     this.instanceCount = Math.max(0, Math.floor(options.count));
+    this.particleCount = Math.max(0, Math.floor(options.dustCount ?? 320));
+    this.highDetailDistance = options.radius + options.thickness + 360;
+    this.heroDistance = options.radius + options.thickness + 250;
     this.material = createGeologicalRockMaterial({
       seed,
       lightColor: 0x70675e,
@@ -1170,12 +1187,25 @@ export class AsteroidField {
 
     this.addInstancedBelt(options, variants, clusters);
     this.addHeroes(options, options.heroCount ?? 6, seed);
-    this.addDust(options, options.dustCount ?? 320);
+    this.addDust(options, this.particleCount);
   }
 
-  update(delta: number): void {
+  update(delta: number, viewerPosition?: THREE.Vector3): void {
+    if (!this.group.visible) return;
+    const distance = viewerPosition ? viewerPosition.distanceTo(this.group.position) : 0;
+    const useHighDetail = distance <= this.highDetailDistance;
+    if (useHighDetail !== this.highDetailActive) {
+      this.highDetailActive = useHighDetail;
+      for (const mesh of this.nearInstances) mesh.visible = useHighDetail;
+      if (this.lowDetailMesh) this.lowDetailMesh.visible = !useHighDetail;
+    }
+    const heroesVisible = useHighDetail && distance <= this.heroDistance;
+    for (const hero of this.heroes) hero.mesh.visible = heroesVisible;
+    if (this.dust) this.dust.visible = distance <= this.highDetailDistance + 180;
+
     this.group.rotation.y += delta * this.beltSpeed;
 
+    if (!heroesVisible) return;
     for (const hero of this.heroes) {
       hero.mesh.rotation.x += delta * hero.spin.x;
       hero.mesh.rotation.y += delta * hero.spin.y;
@@ -1275,6 +1305,12 @@ export class AsteroidField {
     const position = new THREE.Vector3();
     const scale = new THREE.Vector3();
     const tint = new THREE.Color();
+    const lowGeometry = new THREE.IcosahedronGeometry(1, 0);
+    const lowMesh = new THREE.InstancedMesh(lowGeometry, this.material, this.instanceCount);
+    lowMesh.name = 'AsteroidField_LowLOD';
+    lowMesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+    lowMesh.visible = false;
+    let lowIndex = 0;
 
     variants.forEach((geometry, variantIndex) => {
       const variantInstanceCount = baseCount + (variantIndex < remainder ? 1 : 0);
@@ -1334,6 +1370,8 @@ export class AsteroidField {
 
         matrix.compose(position, quaternion, scale);
         mesh.setMatrixAt(index, matrix);
+        lowMesh.setMatrixAt(lowIndex, matrix);
+        lowIndex += 1;
         tint.setHSL(
           this.random.range(0.055, 0.105),
           this.random.range(0.08, 0.22),
@@ -1347,7 +1385,14 @@ export class AsteroidField {
       mesh.computeBoundingBox();
       mesh.computeBoundingSphere();
       this.group.add(mesh);
+      this.nearInstances.push(mesh);
     });
+
+    lowMesh.instanceMatrix.needsUpdate = true;
+    lowMesh.computeBoundingBox();
+    lowMesh.computeBoundingSphere();
+    this.lowDetailMesh = lowMesh;
+    this.group.add(lowMesh);
   }
 
   private addHeroes(options: AsteroidFieldOptions, heroCount: number, seed: number): void {
@@ -1435,6 +1480,7 @@ export class AsteroidField {
 
     const dust = new THREE.Points(geometry, material);
     dust.name = 'AsteroidDust';
+    this.dust = dust;
     this.group.add(dust);
   }
 }

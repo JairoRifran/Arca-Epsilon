@@ -26,8 +26,11 @@ test('Base Nereida parks the real hull on terrain and boards only near its ancho
 
   let state = await page.evaluate(() => window.__arcaDebug?.getShipBoardingState());
   expect(state?.parked).toBe(true);
-  expect(state?.terrainSeparation).toBeGreaterThanOrEqual(0.04);
-  expect(state?.terrainSeparation).toBeLessThanOrEqual(0.3);
+  // Belly clearance is now set by the landing gear, not by the hull resting
+  // on the terrain: the ship stands on three legs so a ventral hatch fits
+  // underneath. Band matches LANDING_GEAR_TUNING min/max belly clearance.
+  expect(state?.terrainSeparation).toBeGreaterThanOrEqual(1.7);
+  expect(state?.terrainSeparation).toBeLessThanOrEqual(2.1);
   expect(state?.hullBottom).toBeCloseTo((state?.terrainHeight ?? 0) + (state?.terrainSeparation ?? 0), 3);
   expect(state?.playerShipInstances).toBe(1);
   expect(state?.horizontalDistance).toBeLessThan(1);
@@ -73,8 +76,11 @@ test('Base Nereida parks the real hull on terrain and boards only near its ancho
   await page.waitForFunction(() => window.__arcaDiagnostics?.onFootActive === true);
   state = await page.evaluate(() => window.__arcaDebug?.getShipBoardingState());
   expect(state?.shipPosition[1]).toBeLessThan(corruptedY - 10);
-  expect(state?.terrainSeparation).toBeGreaterThanOrEqual(0.04);
-  expect(state?.terrainSeparation).toBeLessThanOrEqual(0.3);
+  // Belly clearance is now set by the landing gear, not by the hull resting
+  // on the terrain: the ship stands on three legs so a ventral hatch fits
+  // underneath. Band matches LANDING_GEAR_TUNING min/max belly clearance.
+  expect(state?.terrainSeparation).toBeGreaterThanOrEqual(1.7);
+  expect(state?.terrainSeparation).toBeLessThanOrEqual(2.1);
   const restoredCharacter = await page.evaluate(() => window.__arcaDiagnostics?.characterPosition);
   expect(restoredCharacter?.[0]).toBeCloseTo(beforeCharacter?.[0] ?? 0, 1);
   expect(restoredCharacter?.[2]).toBeCloseTo(beforeCharacter?.[2] ?? 0, 1);

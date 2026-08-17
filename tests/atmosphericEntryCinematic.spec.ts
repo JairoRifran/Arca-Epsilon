@@ -71,6 +71,17 @@ test('atmospheric entry: stage order, cinematic pacing and surface continuity', 
   await ready(page);
   await page.locator('#launch-button').click();
   await page.evaluate(() => window.__arcaDebug?.clearDialogueQueue());
+  // M01 now has a mandatory flight onboarding before the Atlas chain. Reach
+  // the existing descent authorization through its real debug transitions so
+  // this focused cinematic probe starts from the same valid precondition.
+  expect(await page.evaluate(() => window.__arcaDebug?.completeArkDeparture())).toBe(true);
+  expect(await page.evaluate(() => window.__arcaDebug?.advanceMission01To('descentAuthorized'))).toBe(true);
+  expect(await page.evaluate(() => window.__arcaDebug?.decodeMarker())).toBe('approachPlanet');
+  await page.waitForFunction(
+    () => Math.abs((window.__arcaDiagnostics?.cameraFov ?? 0) - 66) < 0.75,
+    undefined,
+    { timeout: 10000 }
+  );
 
   const canvas = page.locator('#game-canvas');
 

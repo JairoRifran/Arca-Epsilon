@@ -4,6 +4,97 @@ import { createSoftParticleTexture } from '../assets/materials';
 export type ShipAccessState = 'retracted' | 'deploying' | 'deployed' | 'boarding';
 
 /**
+ * How far the egress foot may follow the terrain away from the bay's datum.
+ * Sized to absorb the slope of a valid parking spot (Aurora's valley floor
+ * diverged by ~0.81 m) without letting the access stretch over a ledge.
+ */
+export const SHIP_ACCESS_MAX_GROUND_DROP = 1.35;
+
+/**
+ * Ladder geometry, sized against the 1.78 m pilot rather than the hull.
+ *
+ * 0.68 m of clear width is a real crew ladder — wide enough to climb with a
+ * pack, narrow enough to stow inside the bay. Four treads per 1.22 m section
+ * puts the pitch at ~0.30 m, the spacing a person actually climbs.
+ */
+export const SHIP_ACCESS_LADDER_WIDTH = 0.68;
+export const SHIP_ACCESS_LADDER_SECTION_LENGTH = 1.22;
+/**
+ * How far the ground step may travel to meet the terrain.
+ *
+ * Measured per surface with the ship parked on its landing gear, recording the
+ * peak pre-clamp correction the step asks for (`tests/footTravelBudget.spec.ts`):
+ *
+ *   Base Nereida  0.546 m   <- the demanding case, rougher ground under the bay
+ *   Aurora soil   0.209 m
+ *
+ * 0.42 m would clamp Nereida short, so the budget stays above it — but at the
+ * measured maximum plus ~0.08 m of margin, not the 0.75 m that was previously
+ * set by trial. An earlier note here claimed a 0.67 m shortfall; that reading
+ * predated both the world-to-local step correction and the landing gear, and
+ * did not survive re-measurement.
+ */
+export const SHIP_ACCESS_FOOT_TRAVEL = 0.63;
+
+/**
+ * How far the hatch frame sits below the hull skin: just enough to seat the
+ * collar on the surface without z-fighting against the GLB.
+ */
+export const SHIP_ACCESS_HATCH_SURFACE_OFFSET = 0.06;
+/** Floor for the hatch height, so a belly landing cannot invert the bay. */
+export const SHIP_ACCESS_MIN_DECK_HEIGHT = 0.35;
+
+/** Where the ground step should rest above the terrain it stands on. */
+export const SHIP_ACCESS_FOOT_CLEARANCE = 0.03;
+
+/**
+ * Outboard offset from the bottom step to where the pilot actually stands.
+ *
+ * Deliberate and centralised: the interaction point is beside the ladder, not
+ * on top of it, so the character is never placed inside the structure. Any
+ * difference between step and anchor should come from here and nowhere else.
+ */
+export const SHIP_ACCESS_BOARDING_APPROACH_OFFSET = 0.35;
+
+/** Access geometry measured from the live scene at capture time. */
+export type ShipAccessMeasurement = {
+  hatchOpeningWidth: number;
+  hatchOpeningHeight: number;
+  leafGapClosed: number;
+  ladderTopWorld: [number, number, number];
+  ladderMidWorld: [number, number, number];
+  ladderBottomWorld: [number, number, number];
+  ladderTotalLength: number;
+  ladderUsefulWidth: number;
+  stepSpacing: number;
+  terrainHeightAtLadderBottom: number;
+  footClearance: number;
+  footSafe: boolean;
+  boardingAnchorWorld: [number, number, number];
+  anchorToFootDistance: number;
+};
+
+/**
+ * Hatch leaf swing, and the folded/deployed angles of each ladder section.
+ *
+ * The deployed angles are not styling — they are solved from the geometry the
+ * access has to span. Measured on a parked hull, the ladder root sits 2.55 m
+ * above the terrain and the egress foot sits 2.60 m outboard of it, so the run
+ * is a 3.64 m hypotenuse at ~45° from vertical. Three 1.22 m sections give
+ * 3.66 m, which is why the deployed pose is a near-straight inclined ladder
+ * with the fold living in the *stowed* pose instead.
+ *
+ * The first calibration pass used 0.52/-0.16/-0.20, which put the chain only
+ * ~9° off vertical: the foot buried itself 0.88 m into the ground and still
+ * landed 1.79 m short of the boarding anchor.
+ */
+export const SHIP_ACCESS_HATCH_SWING = 1.42;
+export const SHIP_ACCESS_LADDER_STOWED_ANGLE = 2.62;
+export const SHIP_ACCESS_LADDER_UPPER_ANGLE = 1.2;
+export const SHIP_ACCESS_LADDER_MID_ANGLE = 0;
+export const SHIP_ACCESS_LADDER_LOWER_ANGLE = 0;
+
+/**
  * Ventral access bay of the scout: a hatch collar seated against the hull,
  * a telescopic column that physically connects the belly to the platform at
  * every moment of the ride, and an egress ramp with directional chevrons.
@@ -16,6 +107,33 @@ export class ShipAccessLift {
 
   state: ShipAccessState = 'retracted';
 
+  /**
+   * Terrain height at an arbitrary world X/Z, injected by the game.
+   *
+   * The bay group is planted at the ship's own ground height, so every child
+   * inherits that one sample. The egress point sits 6.25 m off the centreline,
+   * and on sloped ground — Aurora's valley floor being the case that actually
+   * broke — the surface under the pilot's feet is not the surface under the
+   * ship. Sampling at the foot's own position is what keeps the exit on the
+   * ground instead of floating above or sinking into it.
+   */
+  private groundSampler?: (x: number, z: number) => number;
+
+  /** Live foot metrics, for diagnostics and the boarding gate. */
+  private footTerrainHeight = 0;
+  private footGroundDifference = 0;
+  private footSafe = true;
+
+  /** Reused every frame: the access update must not allocate. */
+  private readonly footWorldScratch = new THREE.Vector3();
+  private readonly footTargetScratch = new THREE.Vector3();
+
+  /**
+   * Y of the hull's underside relative to the ship origin, injected once from
+   * PlayerShip. Keeps the hatch on the real skin across any rescale.
+   */
+  private hullBottomOffset = -2.6;
+
   private readonly bayCollar: THREE.Group;
 
   private readonly bayThroat: THREE.Mesh;
@@ -24,11 +142,27 @@ export class ShipAccessLift {
 
   private readonly doorRight: THREE.Mesh;
 
-  private readonly columnSegments: THREE.Mesh[] = [];
+  /** Pivot groups for the two hatch leaves; rotating them swings the panel. */
+  private readonly hatchHinges: THREE.Group[] = [];
 
-  private readonly platform: THREE.Group;
-
-  private readonly groundRamp: THREE.Group;
+  /**
+   * Folding ladder, outboard from the hatch. Three hinged sections: an upper
+   * stringer pair that swings out of the bay, a mid section that unfolds from
+   * it, and a lower section carrying the ground step. Each is a pivot group so
+   * the fold is rotation, never scaling — nothing stretches.
+   */
+  private readonly ladderRoot = new THREE.Group();
+  private readonly ladderUpper = new THREE.Group();
+  private readonly ladderMid = new THREE.Group();
+  private readonly ladderLower = new THREE.Group();
+  private readonly ladderFoot = new THREE.Group();
+  /** Largest fully-deployed step correction requested, before clamping. */
+  private peakFootTravelRequested = 0;
+  /** Live 0..1 progress per section, for diagnostics. */
+  private hatchProgressValue = 0;
+  private ladderPrimaryProgressValue = 0;
+  private ladderSecondaryProgressValue = 0;
+  private footAdjustmentProgressValue = 0;
 
   private readonly bayGlow: THREE.Mesh;
 
@@ -39,12 +173,6 @@ export class ShipAccessLift {
   private readonly edgeLightMaterial: THREE.MeshStandardMaterial;
 
   private lensMaterial!: THREE.MeshStandardMaterial;
-
-  private safetyBandMaterial!: THREE.MeshStandardMaterial;
-
-  private readonly sleeveLips: THREE.Mesh[] = [];
-
-  private readonly chevronMaterials: THREE.MeshStandardMaterial[] = [];
 
   private readonly touchdownPuffs: THREE.Sprite[] = [];
 
@@ -157,12 +285,45 @@ export class ShipAccessLift {
     this.bayThroat.position.y = 0.28;
     this.bayCollar.add(this.bayThroat);
 
-    // Iris doors sliding sideways inside the frame — they never protrude.
-    this.doorLeft = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.09, 1.52), hull);
-    this.doorRight = this.doorLeft.clone();
-    this.doorLeft.position.set(-0.49, 0.02, 0);
-    this.doorRight.position.set(0.49, 0.02, 0);
-    this.bayCollar.add(this.doorLeft, this.doorRight);
+    // --- Hatch panel: a clamshell pair hinged at the frame's long edges ---
+    // Each leaf is a real machined panel — outer skin, dark inner face, a
+    // compressible seal bead and a hinge boss — pivoting about its own edge
+    // rather than sliding, so the opening reads as hull hardware.
+    this.doorLeft = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.11, 1.52), hull);
+    this.doorRight = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.11, 1.52), hull);
+    for (const [leaf, side] of [[this.doorLeft, -1], [this.doorRight, 1]] as [THREE.Mesh, number][]) {
+      leaf.name = `Access Hatch Leaf ${side < 0 ? 'Port' : 'Starboard'}`;
+      // Dark inner face: what you see once the leaf swings down.
+      const inner = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 1.44), darkMetal);
+      inner.position.y = -0.062;
+      leaf.add(inner);
+      // Seal bead around the mating edge.
+      const seal = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 1.46), grip);
+      seal.position.set(side * 0.46, -0.045, 0);
+      leaf.add(seal);
+      // Stiffening ribs across the outer skin.
+      for (const z of [-0.44, 0.44]) {
+        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.03, 0.07), darkMetal);
+        rib.position.set(0, 0.07, z);
+        leaf.add(rib);
+      }
+      // Hinge bosses at the outboard edge, where the leaf pivots.
+      for (const z of [-0.58, 0.58]) {
+        const boss = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.18, 8), darkMetal);
+        boss.rotation.z = Math.PI / 2;
+        boss.position.set(side * 0.94, 0.0, z);
+        leaf.add(boss);
+      }
+      // The pivot lives at the outboard edge: offset the geometry inside a
+      // hinge group so rotating the group swings the leaf about that edge.
+      const hinge = new THREE.Group();
+      hinge.name = `Access Hatch Hinge ${side < 0 ? 'Port' : 'Starboard'}`;
+      hinge.position.set(side * 0.98, 0.02, 0);
+      leaf.position.set(-side * 0.49, 0, 0);
+      hinge.add(leaf);
+      this.hatchHinges.push(hinge);
+      this.bayCollar.add(hinge);
+    }
 
     // Door servo housings and the guide rails the platform locks into —
     // small, purposeful mechanics visible through the parted doors.
@@ -177,132 +338,24 @@ export class ShipAccessLift {
 
     this.group.add(this.bayCollar);
 
-    // --- Telescopic column: three nested sleeves, collar to platform ---
-    const sleeveProfiles = [0.66, 0.5, 0.36];
-    for (const [index, side] of sleeveProfiles.entries()) {
-      const sleeve = new THREE.Mesh(new THREE.BoxGeometry(side, 1, side), index === 0 ? darkMetal : hull);
-      sleeve.name = `Access Lift Column Sleeve ${index}`;
-      this.columnSegments.push(sleeve);
-      this.group.add(sleeve);
-      // Overlap lip at each sleeve mouth: the telescoping joint reads as a
-      // machined collar instead of one box sliding through another.
-      const lip = new THREE.Mesh(new THREE.BoxGeometry(side + 0.07, 0.07, side + 0.07), darkMetal);
-      lip.name = `Access Lift Sleeve Lip ${index}`;
-      this.sleeveLips.push(lip);
-      this.group.add(lip);
-    }
+    this.buildFoldingLadder(hull, darkMetal, grip);
 
-    // --- Platform: octagonal deck with amber safety edge ---
-    this.platform = new THREE.Group();
-    this.platform.name = 'Access Lift Platform';
-    const deck = new THREE.Mesh(new THREE.CylinderGeometry(1.02, 1.08, 0.15, 8), darkMetal);
-    this.platform.add(deck);
-    const deckGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.82, 0.82, 0.05, 8), grip);
-    deckGrip.position.y = 0.09;
-    this.platform.add(deckGrip);
-    // Beveled underskirt and the spindle hub that receives the telescopic
-    // column: the deck reads as machined, not extruded.
-    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(1.08, 0.9, 0.14, 8), hull);
-    skirt.position.y = -0.13;
-    this.platform.add(skirt);
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 0.2, 8), darkMetal);
-    hub.position.y = 0.16;
-    this.platform.add(hub);
-    for (let i = 0; i < 8; i += 1) {
-      const angle = (i / 8) * Math.PI * 2 + Math.PI / 8;
-      const edgeLamp = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.032, 0.05), this.edgeLightMaterial);
-      edgeLamp.position.set(Math.cos(angle) * 0.99, 0.055, Math.sin(angle) * 0.99);
-      edgeLamp.rotation.y = -angle + Math.PI / 2;
-      this.platform.add(edgeLamp);
-    }
-    // Continuous translucent safety band wrapping the deck rim: a diffused
-    // glow layer over the lamps instead of hard emissive blocks.
-    this.safetyBandMaterial = new THREE.MeshStandardMaterial({
-      color: 0xcaa87e,
-      emissive: 0xd6a672,
-      emissiveIntensity: 0,
-      roughness: 0.3,
-      metalness: 0.1,
-      transparent: true,
-      opacity: 0.32,
-      side: THREE.DoubleSide
-    });
-    const safetyBand = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.055, 1.055, 0.045, 8, 1, true),
-      this.safetyBandMaterial
-    );
-    safetyBand.position.y = 0.055;
-    this.platform.add(safetyBand);
-    // Radial tread strips over the grip disc: machined anti-slip relief.
-    const treadMetal = new THREE.MeshStandardMaterial({ color: 0x1d242a, roughness: 0.82, metalness: 0.42 });
-    for (let i = 0; i < 8; i += 1) {
-      const angle = (i / 8) * Math.PI * 2;
-      const tread = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.012, 0.05), treadMetal);
-      tread.position.set(Math.cos(angle) * 0.45, 0.12, Math.sin(angle) * 0.45);
-      tread.rotation.y = -angle;
-      this.platform.add(tread);
-    }
-    // Corner gussets tying the skirt into the spindle hub.
-    for (let i = 0; i < 4; i += 1) {
-      const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
-      const gusset = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.045, 0.1), treadMetal);
-      gusset.position.set(Math.cos(angle) * 0.55, -0.085, Math.sin(angle) * 0.55);
-      gusset.rotation.y = -angle;
-      this.platform.add(gusset);
-    }
-    // Subtle wear: dark scuff patches where boots land, barely above deck.
-    const scuffMaterial = new THREE.MeshBasicMaterial({
-      color: 0x0a0d10,
-      transparent: true,
-      opacity: 0.28,
-      depthWrite: false
-    });
-    for (const [sx, sz, sr] of [
-      [0.22, -0.14, 0.16],
-      [-0.18, 0.2, 0.12],
-      [0.05, 0.32, 0.09]
-    ] as [number, number, number][]) {
-      const scuff = new THREE.Mesh(new THREE.CircleGeometry(sr, 10), scuffMaterial);
-      scuff.rotation.x = -Math.PI / 2;
-      scuff.position.set(sx, 0.128, sz);
-      this.platform.add(scuff);
-    }
-    this.group.add(this.platform);
-
-    // --- Egress ramp: tapered plate with directional chevrons ---
-    this.groundRamp = new THREE.Group();
-    this.groundRamp.name = 'Access Lift Ground Ramp';
-    const rampPlate = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.09, 1.34), darkMetal);
-    this.groundRamp.add(rampPlate);
-    for (const side of [-1, 1]) {
-      const curb = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.14, 0.09), hull);
-      curb.position.set(0, 0.05, side * 0.66);
-      this.groundRamp.add(curb);
-    }
-    for (let i = 0; i < 3; i += 1) {
-      const chevronMaterial = this.edgeLightMaterial.clone();
-      this.chevronMaterials.push(chevronMaterial);
-      for (const side of [-1, 1]) {
-        const stroke = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, 0.07), chevronMaterial);
-        stroke.position.set(-0.7 + i * 0.7, 0.062, side * 0.14);
-        stroke.rotation.y = side * 0.62;
-        this.groundRamp.add(stroke);
-      }
-    }
-    this.groundRamp.position.set(4.95, 0.1, 1.05);
-    this.groundRamp.rotation.z = -0.045;
-    this.group.add(this.groundRamp);
 
     // --- Soft bay light spilling to the ground while the lift is open ---
+    // A cone of open-ended geometry was tried first and read as a hard-edged
+    // tan slab hanging under the belly: untextured additive faces have a
+    // silhouette, and a silhouette is the one thing spill light must not have.
+    // A soft-textured pool on the ground has no edge to give itself away.
     this.bayGlowMaterial = new THREE.MeshBasicMaterial({
+      map: createSoftParticleTexture(64),
       color: 0xe3bc93,
       transparent: true,
       opacity: 0,
       depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide
+      blending: THREE.AdditiveBlending
     });
-    this.bayGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 1.15, 1, 12, 1, true), this.bayGlowMaterial);
+    this.bayGlow = new THREE.Mesh(new THREE.CircleGeometry(1.15, 20), this.bayGlowMaterial);
+    this.bayGlow.rotation.x = -Math.PI / 2;
     this.bayGlow.name = 'Access Bay Light Spill';
     this.group.add(this.bayGlow);
 
@@ -353,6 +406,96 @@ export class ShipAccessLift {
     });
   }
 
+  /**
+   * Builds the folding ladder once, as three nested pivot groups.
+   *
+   * Nesting is what makes the fold mechanical: `mid` hangs off the end of
+   * `upper`, `lower` off the end of `mid`, and the foot off the end of
+   * `lower`. Deployment is therefore three rotations — no scaling, no
+   * stretching, no geometry rebuilt per frame. Sized for a 1.78 m pilot:
+   * 0.68 m clear width and 0.30 m tread pitch.
+   */
+  private buildFoldingLadder(
+    hull: THREE.MeshStandardMaterial,
+    darkMetal: THREE.MeshStandardMaterial,
+    grip: THREE.MeshStandardMaterial
+  ): void {
+    const SECTION = SHIP_ACCESS_LADDER_SECTION_LENGTH;
+    const HALF_WIDTH = SHIP_ACCESS_LADDER_WIDTH * 0.5;
+    const TREADS_PER_SECTION = 4;
+
+    // One geometry set shared by every section.
+    const stringerGeometry = new THREE.BoxGeometry(0.07, SECTION, 0.055);
+    const treadGeometry = new THREE.BoxGeometry(0.055, 0.03, SHIP_ACCESS_LADDER_WIDTH - 0.06);
+    const gripGeometry = new THREE.BoxGeometry(0.045, 0.012, SHIP_ACCESS_LADDER_WIDTH - 0.12);
+    const hingeGeometry = new THREE.CylinderGeometry(0.05, 0.05, SHIP_ACCESS_LADDER_WIDTH + 0.04, 8);
+
+    const buildSection = (group: THREE.Group, name: string): void => {
+      group.name = name;
+      // Two stringers, pivoting from their top end: shift the geometry down
+      // by half a section so the group's origin is the hinge line.
+      for (const side of [-1, 1]) {
+        const stringer = new THREE.Mesh(stringerGeometry, darkMetal);
+        stringer.position.set(0, -SECTION * 0.5, side * HALF_WIDTH);
+        stringer.castShadow = true;
+        group.add(stringer);
+      }
+      // Hinge barrel across the top of the section.
+      const barrel = new THREE.Mesh(hingeGeometry, hull);
+      barrel.rotation.x = Math.PI / 2;
+      group.add(barrel);
+      // Treads with real thickness plus an anti-slip strip on each.
+      for (let i = 0; i < TREADS_PER_SECTION; i += 1) {
+        const y = -SECTION * ((i + 0.6) / TREADS_PER_SECTION);
+        const tread = new THREE.Mesh(treadGeometry, hull);
+        tread.position.set(0, y, 0);
+        tread.castShadow = true;
+        group.add(tread);
+        const strip = new THREE.Mesh(gripGeometry, grip);
+        strip.position.set(0, y + 0.021, 0);
+        group.add(strip);
+      }
+    };
+
+    buildSection(this.ladderUpper, 'Access Ladder Upper Section');
+    buildSection(this.ladderMid, 'Access Ladder Mid Section');
+    buildSection(this.ladderLower, 'Access Ladder Lower Section');
+
+    // Ground step at the bottom of the lower section: a wider foot plate with
+    // a shallow lip, so the last step reads as something you stand on.
+    this.ladderFoot.name = 'Access Ladder Ground Step';
+    const footPlate = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 0.045, SHIP_ACCESS_LADDER_WIDTH + 0.1),
+      darkMetal
+    );
+    footPlate.castShadow = true;
+    this.ladderFoot.add(footPlate);
+    const footGrip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.26, 0.012, SHIP_ACCESS_LADDER_WIDTH),
+      grip
+    );
+    footGrip.position.y = 0.028;
+    this.ladderFoot.add(footGrip);
+    for (const side of [-1, 1]) {
+      const gusset = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.05), darkMetal);
+      gusset.position.set(0, 0.09, side * HALF_WIDTH);
+      this.ladderFoot.add(gusset);
+    }
+
+    // Nest the sections so folding is pure rotation.
+    this.ladderFoot.position.y = -SECTION;
+    this.ladderLower.add(this.ladderFoot);
+    this.ladderMid.position.y = -SECTION;
+    this.ladderMid.add(this.ladderLower);
+    this.ladderUpper.position.y = -SECTION;
+    this.ladderUpper.add(this.ladderMid);
+
+    this.ladderRoot.name = 'Access Folding Ladder';
+    this.ladderRoot.add(this.ladderUpper);
+    this.ladderRoot.visible = false;
+    this.group.add(this.ladderRoot);
+  }
+
   updateAnchor(
     shipPosition: THREE.Vector3,
     shipYaw: number,
@@ -367,7 +510,19 @@ export class ShipAccessLift {
     this.group.position.set(shipPosition.x, groundHeight, shipPosition.z);
     this.group.rotation.y = shipYaw;
 
-    this.deckHeight = Math.max(2.75, shipPosition.y - groundHeight - 1.18);
+    // Hatch height derives from the hull's real underside, not a constant.
+    //
+    // This used to be `Math.max(2.75, shipPosition.y - groundHeight - 1.18)`.
+    // The 2.75 floor was tuned for the pre-rescale hull; after the ×1.7 the
+    // frame ended up ~2.5 m above the belly, i.e. buried inside the fuselage,
+    // which is why the under-hull captures showed no hatch at all. Now the
+    // frame sits on the skin: ship origin + hull bottom offset, minus a small
+    // surface gap to avoid z-fighting against the GLB.
+    const hullBottomWorldY = shipPosition.y + this.hullBottomOffset;
+    this.deckHeight = Math.max(
+      SHIP_ACCESS_MIN_DECK_HEIGHT,
+      hullBottomWorldY - groundHeight - SHIP_ACCESS_HATCH_SURFACE_OFFSET
+    );
     this.hatchLocal.y = this.deckHeight;
     this.liftBaseLocal.y = 0.18;
 
@@ -375,75 +530,142 @@ export class ShipAccessLift {
     // the deployment reads through doors, column and platform instead.
     this.bayCollar.position.copy(this.hatchLocal);
 
-    // Two-phase doors: they first drop clear of the frame (unlock), then
-    // slide apart — real hatch kinematics instead of one linear glide.
-    const doorDrop = THREE.MathUtils.smoothstep(open, 0.02, 0.14) * 0.055;
-    const doorTravel = THREE.MathUtils.smoothstep(open, 0.14, 0.6) * 0.78;
-    this.doorLeft.position.set(-0.49 - doorTravel, 0.02 - doorDrop, 0);
-    this.doorRight.position.set(0.49 + doorTravel, 0.02 - doorDrop, 0);
-    // Unlock flicker: the bay light stutters awake while the doors part,
-    // then eases into a steady service glow — gentle, like a real fixture.
+    // --- Hatch: unlock, crack the seal, then swing the leaves down -------
+    // Reuses the existing open progress; no timers of its own.
+    this.hatchProgressValue = open;
+    const sealCrack = THREE.MathUtils.smoothstep(open, 0.02, 0.16) * 0.05;
+    const leafSwing = THREE.MathUtils.smoothstep(open, 0.16, 0.72) * SHIP_ACCESS_HATCH_SWING;
+    for (const [index, hinge] of this.hatchHinges.entries()) {
+      // Port leaf swings one way, starboard the other: a clamshell.
+      hinge.rotation.z = (index === 0 ? 1 : -1) * leafSwing;
+      hinge.position.y = 0.02 - sealCrack;
+    }
+    // Unlock flicker while the latches release, then a steady service glow.
     const wake = open > 0.03 && open < 0.35 ? 0.84 + Math.sin(elapsed * 26) * 0.16 : 1;
     const serviceGlow = THREE.MathUtils.smoothstep(open, 0.2, 0.9);
     this.throatMaterial.emissiveIntensity = serviceGlow * 0.85 * wake;
     this.lensMaterial.emissiveIntensity = serviceGlow * 0.6 * wake;
     this.lensMaterial.opacity = 0.35 + serviceGlow * 0.2;
 
-    const riding = liftDown > 0.03 && liftDown < 0.97;
-    // Faint servo vibration while the column is driving the deck.
-    const servo = riding ? Math.sin(elapsed * 41) * 0.011 : 0;
-    const platformY = THREE.MathUtils.lerp(this.deckHeight - 0.72, this.liftBaseLocal.y, liftDown) + servo;
-    this.platform.position.set(this.hatchLocal.x, platformY, this.hatchLocal.z);
-    this.platform.visible = open > 0.3;
+    // --- Ladder: three sections unfolding in order ------------------------
+    // Gated behind the hatch so the ladder can never deploy through a closed
+    // panel, and staged so each section finishes before the next begins.
+    const hatchOpenEnough = THREE.MathUtils.smoothstep(open, 0.55, 0.85);
+    const deploy = liftDown * hatchOpenEnough;
+    this.ladderPrimaryProgressValue = THREE.MathUtils.smoothstep(deploy, 0.0, 0.45);
+    this.ladderSecondaryProgressValue = THREE.MathUtils.smoothstep(deploy, 0.35, 0.8);
+    const lowerProgress = THREE.MathUtils.smoothstep(deploy, 0.7, 1.0);
 
-    // Contact shadow deepens as the deck closes on the ground.
-    const proximity = THREE.MathUtils.clamp(1 - (platformY - this.liftBaseLocal.y) / 2.6, 0, 1);
-    this.contactShadow.visible = this.platform.visible;
-    this.contactShadow.position.set(this.hatchLocal.x, 0.06, this.hatchLocal.z);
-    this.contactShadow.scale.setScalar(1.35 - proximity * 0.35);
-    this.contactShadowMaterial.opacity = proximity * proximity * 0.34;
+    this.ladderRoot.visible = deploy > 0.01;
+    this.ladderRoot.position.set(this.hatchLocal.x, this.hatchLocal.y - 0.18, this.hatchLocal.z);
 
-    // Telescopic sleeves: each covers a third of the collar-to-platform
-    // span with a slight overlap, so hull and deck stay physically linked.
-    const columnTop = this.deckHeight + 0.2;
-    const span = Math.max(0.24, columnTop - platformY - 0.1);
-    for (const [index, sleeve] of this.columnSegments.entries()) {
-      const segment = span / this.columnSegments.length;
-      const overlap = 1.16;
-      sleeve.visible = open > 0.3;
-      sleeve.scale.y = segment * overlap;
-      sleeve.position.set(
-        this.hatchLocal.x,
-        columnTop - segment * index - (segment * overlap) * 0.5,
-        this.hatchLocal.z
-      );
-      // Lip rides the mouth (bottom) of its sleeve, marking the joint.
-      const lip = this.sleeveLips[index];
-      lip.visible = sleeve.visible;
-      lip.position.set(
-        this.hatchLocal.x,
-        sleeve.position.y - (segment * overlap) * 0.5 + 0.035,
-        this.hatchLocal.z
+    // Stowed, the sections are folded back up inside the bay; deploying
+    // rotates each one down and outboard. Pure rotation — nothing stretches.
+    this.ladderUpper.rotation.z = THREE.MathUtils.lerp(
+      SHIP_ACCESS_LADDER_STOWED_ANGLE, SHIP_ACCESS_LADDER_UPPER_ANGLE, this.ladderPrimaryProgressValue
+    );
+    this.ladderMid.rotation.z = THREE.MathUtils.lerp(
+      -SHIP_ACCESS_LADDER_STOWED_ANGLE, SHIP_ACCESS_LADDER_MID_ANGLE, this.ladderSecondaryProgressValue
+    );
+    this.ladderLower.rotation.z = THREE.MathUtils.lerp(
+      -SHIP_ACCESS_LADDER_STOWED_ANGLE, SHIP_ACCESS_LADDER_LOWER_ANGLE, lowerProgress
+    );
+
+    // Re-seat the egress foot on its own terrain, not the ship's. This is the
+    // existing terrain-aware correction — not a second ground calculation.
+    this.reseatEgressFoot();
+
+    // --- Foot: meet the ground the ladder actually stands on --------------
+    // Only the last section adapts, and only within a bounded travel: the
+    // ship never moves and the 0.12 m parked clearance is untouched. An
+    // unsafe surface holds the deployment short instead of stretching to it.
+    // Settle the ground step onto the terrain beneath it.
+    //
+    // The step hangs off the lower ladder section, which is rotated ~68° from
+    // vertical when deployed. Local Y is therefore NOT world up: measured,
+    // one unit of local Y buys only 0.362 of world Y (and −0.92 of world X).
+    // An earlier version added the world gap straight onto `position.y`, so
+    // roughly a third of the correction landed and the step settled at a fixed
+    // residual — which is why widening the travel limit changed nothing: the
+    // limit was never the binding constraint.
+    //
+    // The fix is to build the target in world space and convert it into the
+    // parent's local space, so the correction is expressed on the axis it is
+    // actually applied to.
+    this.ladderFoot.position.set(0, -SHIP_ACCESS_LADDER_SECTION_LENGTH, 0);
+    this.ladderFoot.updateWorldMatrix(true, false);
+    this.footWorldScratch.setFromMatrixPosition(this.ladderFoot.matrixWorld);
+    const groundUnderStep = this.groundSampler
+      ? this.groundSampler(this.footWorldScratch.x, this.footWorldScratch.z)
+      : this.group.position.y;
+    this.footAdjustmentProgressValue = this.footSafe ? lowerProgress : 0;
+
+    // Desired world point: same ground position, resting just above terrain.
+    const desiredWorldY = groundUnderStep + SHIP_ACCESS_FOOT_CLEARANCE;
+    const requestedCorrection = desiredWorldY - this.footWorldScratch.y;
+    // The step is rebuilt from its rest pose every frame, so this request is
+    // absolute rather than incremental: its peak is exactly the travel the
+    // clamp has to allow. Tracked so the budget can be measured per surface
+    // instead of guessed.
+    if (this.footAdjustmentProgressValue > 0.99) {
+      this.peakFootTravelRequested = Math.max(
+        this.peakFootTravelRequested,
+        Math.abs(requestedCorrection)
       );
     }
+    const worldCorrection = THREE.MathUtils.clamp(
+      requestedCorrection,
+      -SHIP_ACCESS_FOOT_TRAVEL,
+      SHIP_ACCESS_FOOT_TRAVEL
+    ) * this.footAdjustmentProgressValue;
+    this.footTargetScratch.set(
+      this.footWorldScratch.x,
+      this.footWorldScratch.y + worldCorrection,
+      this.footWorldScratch.z
+    );
+    const stepParent = this.ladderFoot.parent;
+    if (stepParent) {
+      // `worldToLocal` reuses a shared internal matrix — no allocation here.
+      stepParent.updateWorldMatrix(true, false);
+      stepParent.worldToLocal(this.footTargetScratch);
+      this.ladderFoot.position.copy(this.footTargetScratch);
+    }
 
-    // Bay light cone stretches from collar to ground while open.
-    const glowHeight = Math.max(0.3, this.deckHeight - 0.2);
-    this.bayGlow.scale.set(1, glowHeight, 1);
-    this.bayGlow.position.set(this.hatchLocal.x, glowHeight * 0.5, this.hatchLocal.z);
-    this.bayGlowMaterial.opacity = THREE.MathUtils.smoothstep(open, 0.35, 1) * 0.042;
+    // Once the ladder is down, the boarding anchor is derived from where the
+    // step actually settled plus a deliberate outboard offset, so the pilot
+    // stands beside the bottom step rather than inside it. Before that it
+    // keeps the stowed egress point that `reseatEgressFoot` maintains — the
+    // two must never disagree by accident.
+    if (this.footSafe && lowerProgress > 0.9) {
+      this.ladderFoot.updateWorldMatrix(true, false);
+      this.footTargetScratch.setFromMatrixPosition(this.ladderFoot.matrixWorld);
+      this.group.worldToLocal(this.footTargetScratch);
+      this.footTargetScratch.x += SHIP_ACCESS_BOARDING_APPROACH_OFFSET;
+      this.boardingAnchor.position.copy(this.footTargetScratch);
+    }
+    this.ladderFoot.rotation.z = -this.ladderLower.rotation.z * 0.6;
+    this.ladderFoot.visible = this.footSafe;
 
-    // Ramp unfolds outward; chevrons chase toward the exit direction.
-    this.groundRamp.scale.x = THREE.MathUtils.smoothstep(open, 0.28, 0.92);
-    this.groundRamp.visible = open > 0.28;
-    // Edge lighting breathes slowly instead of strobing; the translucent
-    // safety band carries most of the glow at a fraction of the intensity.
+    // Contact shadow sits under the deployed foot rather than a platform.
+    const contactStrength = lowerProgress * (this.footSafe ? 1 : 0);
+    this.contactShadow.visible = contactStrength > 0.02;
+    this.contactShadow.position.set(this.groundExitLocal.x, 0.06, this.groundExitLocal.z);
+    this.contactShadow.scale.setScalar(0.85 + contactStrength * 0.25);
+    this.contactShadowMaterial.opacity = contactStrength * contactStrength * 0.3;
+
+    // Bay light reaches the ground as a pool under the hatch. Local y = 0 is
+    // the terrain, as the contact shadow above uses; sit just under it so the
+    // two never fight for the same depth.
+    this.bayGlow.position.set(this.hatchLocal.x, 0.045, this.hatchLocal.z);
+    this.bayGlow.scale.setScalar(1);
+    // Only lit while the hatch is genuinely open; fully off when sealed.
+    this.bayGlowMaterial.opacity = THREE.MathUtils.smoothstep(open, 0.5, 1) * 0.16;
+    this.bayGlow.visible = open > 0.5;
+    // Frame lighting breathes slowly instead of strobing. The safety band and
+    // ramp chevrons belonged to the platform and ramp that the hatch and
+    // ladder replaced, so only the frame fixtures are driven now.
     const breathe = Math.sin(elapsed * 2.4) * 0.5 + 0.5;
     this.edgeLightMaterial.emissiveIntensity = open * (0.5 + breathe * 0.34);
-    this.safetyBandMaterial.emissiveIntensity = open * (0.22 + breathe * 0.14);
-    for (const [index, material] of this.chevronMaterials.entries()) {
-      material.emissiveIntensity = open * (0.32 + Math.max(0, Math.sin(elapsed * 2.7 - index * 1.05)) * 0.85);
-    }
 
     // Ground dust: a firm puff when the platform settles (liftDown crossing
     // 0.97 downward) and a fainter stir when it lifts off the ground again.
@@ -491,10 +713,10 @@ export class ShipAccessLift {
     if (progress < 0.76) {
       // The pilot's feet use the live platform transform. This keeps them
       // mechanically locked to the deck throughout the vertical ride.
-      local = new THREE.Vector3(this.hatchLocal.x, this.platform.position.y + 0.14, this.hatchLocal.z);
+      local = new THREE.Vector3(this.hatchLocal.x, this.hatchLocal.y - 0.32, this.hatchLocal.z);
     } else {
       const t = THREE.MathUtils.smoothstep(progress, 0.76, 1);
-      local = new THREE.Vector3(this.hatchLocal.x, this.platform.position.y + 0.14, this.hatchLocal.z)
+      local = new THREE.Vector3(this.hatchLocal.x, this.hatchLocal.y - 0.32, this.hatchLocal.z)
         .lerp(this.groundExitLocal, t);
     }
     return this.group.localToWorld(local);
@@ -502,8 +724,17 @@ export class ShipAccessLift {
 
   getPlatformStandPosition(): THREE.Vector3 {
     return this.group.localToWorld(
-      new THREE.Vector3(this.hatchLocal.x, this.platform.position.y + 0.14, this.hatchLocal.z)
+      new THREE.Vector3(this.hatchLocal.x, this.hatchLocal.y - 0.32, this.hatchLocal.z)
     );
+  }
+
+  /**
+   * World centre of the hatch aperture itself. The inspection camera framed the
+   * boarding anchor, which sits on the ground: the hatch was never actually in
+   * shot, which is why it kept being reported as "not visually confirmed".
+   */
+  getHatchWorldPosition(target = new THREE.Vector3()): THREE.Vector3 {
+    return target.copy(this.group.localToWorld(this.hatchLocal.clone()));
   }
 
   getBoardingCameraPosition(): THREE.Vector3 {
@@ -514,6 +745,225 @@ export class ShipAccessLift {
     const local = this.hatchLocal.clone().lerp(this.liftBaseLocal, 0.46);
     local.x += 0.45;
     return this.group.localToWorld(local);
+  }
+
+  /**
+   * Installs the terrain probe. Called once at start-up; the sampler is the
+   * same source `parkShipOnTerrain` uses, so the egress foot and the hull
+   * agree about where the ground is.
+   */
+  setGroundSampler(sampler: (x: number, z: number) => number): void {
+    this.groundSampler = sampler;
+  }
+
+  /** Hull underside offset from the ship origin, in ship-local units. */
+  setHullBottomOffset(offset: number): void {
+    this.hullBottomOffset = offset;
+  }
+
+  /** Distance from the hatch frame to the hull skin. Diagnostics. */
+  get hatchSurfaceDistance(): number {
+    return SHIP_ACCESS_HATCH_SURFACE_OFFSET;
+  }
+
+  /** Deck height above terrain, i.e. where the threshold sits. */
+  get hatchDeckHeight(): number {
+    return this.deckHeight;
+  }
+
+  /**
+   * Re-seats the egress foot on the terrain beneath it.
+   *
+   * Called from `updateAnchor`, i.e. only while the bay is being driven —
+   * never as a standalone per-frame pass. Costs one terrain sample and no
+   * allocation. The correction is clamped: past the limit the surface is too
+   * broken to step onto and the foot is reported unsafe rather than stretched
+   * to reach, so the pilot is never dropped into a hole.
+   */
+  private reseatEgressFoot(): void {
+    if (!this.groundSampler) {
+      this.footTerrainHeight = this.group.position.y;
+      this.footGroundDifference = 0;
+      this.footSafe = true;
+      return;
+    }
+    // World position of the foot with its current local Y, then ask the
+    // terrain what it is standing over.
+    this.footWorldScratch.copy(this.groundExitLocal);
+    this.group.localToWorld(this.footWorldScratch);
+    this.footTerrainHeight = this.groundSampler(this.footWorldScratch.x, this.footWorldScratch.z);
+
+    // How far the terrain under the foot sits from the bay's own datum.
+    const datum = this.group.position.y;
+    const rawDifference = this.footTerrainHeight - datum;
+    this.footGroundDifference = rawDifference;
+    this.footSafe = Math.abs(rawDifference) <= SHIP_ACCESS_MAX_GROUND_DROP;
+
+    // Only the foot moves — the bay, the ship and the 0.12 m parked clearance
+    // are untouched. Clamped so a cliff edge cannot stretch the access.
+    const correction = THREE.MathUtils.clamp(
+      rawDifference,
+      -SHIP_ACCESS_MAX_GROUND_DROP,
+      SHIP_ACCESS_MAX_GROUND_DROP
+    );
+    this.boardingAnchor.position.set(
+      this.groundExitLocal.x,
+      this.groundExitLocal.y + correction,
+      this.groundExitLocal.z
+    );
+  }
+
+  /** 0..1 hatch opening, mirroring the state machine's own progress. */
+  get hatchProgress(): number {
+    return this.hatchProgressValue;
+  }
+
+  /** 0..1 of the upper ladder section swinging clear of the bay. */
+  get ladderPrimaryProgress(): number {
+    return this.ladderPrimaryProgressValue;
+  }
+
+  /** 0..1 of the mid section unfolding. Always trails the primary. */
+  get ladderSecondaryProgress(): number {
+    return this.ladderSecondaryProgressValue;
+  }
+
+  /** 0..1 of the ground step settling onto the terrain. */
+  get footAdjustmentProgress(): number {
+    return this.footAdjustmentProgressValue;
+  }
+
+  /** World position of the ladder's top hinge. Diagnostics only. */
+  getLadderTopWorld(target: THREE.Vector3): THREE.Vector3 {
+    return this.ladderRoot.getWorldPosition(target);
+  }
+
+  /** World position of the ground step. Diagnostics only. */
+  getLadderBottomWorld(target: THREE.Vector3): THREE.Vector3 {
+    return this.ladderFoot.getWorldPosition(target);
+  }
+
+  /**
+   * Measures the access from the live scene graph.
+   *
+   * Walks the hatch and ladder subtrees and builds world bounds, so it is
+   * genuinely what is on screen rather than the authored numbers. Allocates,
+   * and is therefore called only from the capture/diagnostic path — never
+   * from `updateAnchor`.
+   */
+  measureGeometry(sampleGround: (x: number, z: number) => number): ShipAccessMeasurement {
+    const top = this.ladderRoot.getWorldPosition(new THREE.Vector3());
+    const mid = this.ladderMid.getWorldPosition(new THREE.Vector3());
+    const bottom = this.ladderFoot.getWorldPosition(new THREE.Vector3());
+    const anchor = this.boardingAnchor.getWorldPosition(new THREE.Vector3());
+
+    const frameBox = new THREE.Box3().setFromObject(this.bayCollar);
+    const frameSize = frameBox.getSize(new THREE.Vector3());
+    // Aperture between the two leaves, measured from their world bounds.
+    const leftBox = new THREE.Box3().setFromObject(this.doorLeft);
+    const rightBox = new THREE.Box3().setFromObject(this.doorRight);
+    const leafGap = Math.max(0, rightBox.min.x - leftBox.max.x);
+
+    const groundUnderFoot = sampleGround(bottom.x, bottom.z);
+
+    return {
+      // With the leaves swung down the clear opening is the frame's own
+      // aperture; the gap between leaves reports how far they have parted.
+      hatchOpeningWidth: Number(Math.max(leafGap, frameSize.z * 0.75).toFixed(3)),
+      hatchOpeningHeight: Number(frameSize.z.toFixed(3)),
+      leafGapClosed: Number(leafGap.toFixed(3)),
+      ladderTopWorld: top.toArray().map((v) => Number(v.toFixed(3))) as [number, number, number],
+      ladderMidWorld: mid.toArray().map((v) => Number(v.toFixed(3))) as [number, number, number],
+      ladderBottomWorld: bottom.toArray().map((v) => Number(v.toFixed(3))) as [number, number, number],
+      ladderTotalLength: Number(top.distanceTo(bottom).toFixed(3)),
+      ladderUsefulWidth: SHIP_ACCESS_LADDER_WIDTH,
+      stepSpacing: Number((SHIP_ACCESS_LADDER_SECTION_LENGTH / 4).toFixed(3)),
+      terrainHeightAtLadderBottom: Number(groundUnderFoot.toFixed(3)),
+      footClearance: Number((bottom.y - groundUnderFoot).toFixed(3)),
+      footSafe: this.footSafe,
+      boardingAnchorWorld: anchor.toArray().map((v) => Number(v.toFixed(3))) as [number, number, number],
+      anchorToFootDistance: Number(anchor.distanceTo(bottom).toFixed(3))
+    };
+  }
+
+  /**
+   * One-shot trace of the ground-step transform chain.
+   *
+   * Diagnostic only: it re-runs the same arithmetic `updateAnchor` performs and
+   * reports every intermediate value, so the reason a correction does or does
+   * not reach world space can be read off directly instead of guessed at.
+   */
+  /** Peak step travel actually requested since the last reset, in metres. */
+  get peakFootTravel(): number {
+    return Number(this.peakFootTravelRequested.toFixed(4));
+  }
+
+  /** Clears the travel high-water mark so a surface can be measured alone. */
+  resetPeakFootTravel(): void {
+    this.peakFootTravelRequested = 0;
+  }
+
+  debugFootChain(sampleGround: (x: number, z: number) => number): Record<string, unknown> {
+    const localBefore = this.ladderFoot.position.clone();
+    this.ladderFoot.updateWorldMatrix(true, false);
+    const worldBefore = new THREE.Vector3().setFromMatrixPosition(this.ladderFoot.matrixWorld);
+    const terrain = sampleGround(worldBefore.x, worldBefore.z);
+    const gap = worldBefore.y - terrain;
+    const requested = gap;
+    const clamped = THREE.MathUtils.clamp(gap, -SHIP_ACCESS_FOOT_TRAVEL, SHIP_ACCESS_FOOT_TRAVEL);
+
+    // What one unit of local Y actually does in world space: if the parent
+    // chain is rotated, local Y and world up are not the same direction.
+    const parent = this.ladderFoot.parent;
+    const localUpInWorld = new THREE.Vector3(0, 1, 0);
+    if (parent) {
+      parent.updateWorldMatrix(true, false);
+      localUpInWorld.transformDirection(parent.matrixWorld);
+    }
+
+    return {
+      localBefore: localBefore.toArray().map((v) => Number(v.toFixed(4))),
+      worldBefore: worldBefore.toArray().map((v) => Number(v.toFixed(4))),
+      terrainHeight: Number(terrain.toFixed(4)),
+      verticalGap: Number(gap.toFixed(4)),
+      requestedCorrection: Number(requested.toFixed(4)),
+      clampedCorrection: Number(clamped.toFixed(4)),
+      footTravelLimit: SHIP_ACCESS_FOOT_TRAVEL,
+      footAdjustmentProgress: Number(this.footAdjustmentProgressValue.toFixed(4)),
+      footSafe: this.footSafe,
+      parentName: parent?.name ?? 'none',
+      // The decisive number: how much world Y one unit of local Y buys.
+      localUpInWorld: localUpInWorld.toArray().map((v) => Number(v.toFixed(4))),
+      worldYPerLocalY: Number(localUpInWorld.y.toFixed(4)),
+      lowerRotationZ: Number(this.ladderLower.rotation.z.toFixed(4)),
+      footRotationZ: Number(this.ladderFoot.rotation.z.toFixed(4)),
+      measuredObject: this.ladderFoot.name,
+      adjustedObject: this.ladderFoot.name
+    };
+  }
+
+  /** Visible meshes in the new hatch and ladder, for the replacement check. */
+  countAccessVisuals(): { hatch: number; ladder: number } {
+    let hatch = 0;
+    let ladder = 0;
+    this.bayCollar.traverse((o) => { if ((o as THREE.Mesh).isMesh) hatch += 1; });
+    this.ladderRoot.traverse((o) => { if ((o as THREE.Mesh).isMesh) ladder += 1; });
+    return { hatch, ladder };
+  }
+
+  /** Terrain height sampled under the egress foot itself. */
+  get egressTerrainHeight(): number {
+    return this.footTerrainHeight;
+  }
+
+  /** Signed gap between the foot's datum and the terrain beneath it. */
+  get egressGroundDifference(): number {
+    return this.footGroundDifference;
+  }
+
+  /** False when the surface under the foot is too broken to step onto. */
+  get egressFootSafe(): boolean {
+    return this.footSafe;
   }
 
   getGroundExitPosition(): THREE.Vector3 {

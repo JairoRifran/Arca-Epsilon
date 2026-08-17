@@ -23,6 +23,10 @@ export type Mission22Snapshot = {
   mission22InitialCommsFront: Mission22FrontChoice;
   auroraFrontDefended: boolean;
   nereidaFrontDefended: boolean;
+  auroraHostilesDestroyed: number;
+  nereidaHostilesDestroyed: number;
+  orbitalHostilesDestroyed: number;
+  finalHostilesDestroyed: number;
   orbitalRelaysProtected: boolean[];
   crossFrontCrisisManaged: boolean;
   mission22SupportPriority: Mission22FrontChoice;
@@ -84,6 +88,10 @@ export class Mission22BrokenFronts {
     mission22InitialCommsFront: 'none',
     auroraFrontDefended: false,
     nereidaFrontDefended: false,
+    auroraHostilesDestroyed: 0,
+    nereidaHostilesDestroyed: 0,
+    orbitalHostilesDestroyed: 0,
+    finalHostilesDestroyed: 0,
     orbitalRelaysProtected: [false, false, false],
     crossFrontCrisisManaged: false,
     mission22SupportPriority: 'none',
@@ -103,6 +111,23 @@ export class Mission22BrokenFronts {
   get stepDefinition(): Mission22StepDefinition { return mission22Steps[this.step]; }
   get relaysProtected(): number { return countEnabled(this.state.orbitalRelaysProtected); }
   get nodesDetected(): number { return countEnabled(this.state.coordinationNodesDetected); }
+  get currentWaveRequired(): number {
+    if (this.step === 'defendAuroraFront') return mission22Tuning.auroraWaveCount;
+    if (this.step === 'defendNereidaFront') return mission22Tuning.nereidaWaveCount;
+    if (this.step === 'defendOrbitalFront') return mission22Tuning.orbitalWaveCount;
+    if (this.step === 'surviveFinalPressure') return mission22Tuning.finalWaveCount;
+    return 0;
+  }
+  get currentWaveDestroyed(): number {
+    if (this.step === 'defendAuroraFront') return this.state.auroraHostilesDestroyed;
+    if (this.step === 'defendNereidaFront') return this.state.nereidaHostilesDestroyed;
+    if (this.step === 'defendOrbitalFront') return this.state.orbitalHostilesDestroyed;
+    if (this.step === 'surviveFinalPressure') return this.state.finalHostilesDestroyed;
+    return 0;
+  }
+  get currentWaveRemaining(): number {
+    return Math.max(0, this.currentWaveRequired - this.currentWaveDestroyed);
+  }
   get initialAssignmentsComplete(): boolean {
     return validFront(this.state.mission22InitialEnergyFront) &&
       validFront(this.state.mission22InitialDefenseFront) &&
@@ -204,8 +229,20 @@ export class Mission22BrokenFronts {
     return changed;
   }
 
+  recordCurrentHostileDestroyed(): boolean {
+    const required = this.currentWaveRequired;
+    if (required <= 0 || this.currentWaveDestroyed >= required) return false;
+    if (this.step === 'defendAuroraFront') this.state.auroraHostilesDestroyed += 1;
+    else if (this.step === 'defendNereidaFront') this.state.nereidaHostilesDestroyed += 1;
+    else if (this.step === 'defendOrbitalFront') this.state.orbitalHostilesDestroyed += 1;
+    else if (this.step === 'surviveFinalPressure') this.state.finalHostilesDestroyed += 1;
+    else return false;
+    return true;
+  }
+
   completeAuroraFront(): boolean {
     if (this.step !== 'defendAuroraFront') return false;
+    this.state.auroraHostilesDestroyed = mission22Tuning.auroraWaveCount;
     this.state.auroraFrontDefended = true;
     this.repairFront('aurora', 14);
     return this.goToStep('defendNereidaFront');
@@ -213,6 +250,7 @@ export class Mission22BrokenFronts {
 
   completeNereidaFront(): boolean {
     if (this.step !== 'defendNereidaFront') return false;
+    this.state.nereidaHostilesDestroyed = mission22Tuning.nereidaWaveCount;
     this.state.nereidaFrontDefended = true;
     this.repairFront('nereida', 14);
     return this.goToStep('defendOrbitalFront');
@@ -223,7 +261,10 @@ export class Mission22BrokenFronts {
     const safeIndex = Math.max(0, Math.min(this.state.orbitalRelaysProtected.length - 1, Math.floor(index)));
     this.state.orbitalRelaysProtected[safeIndex] = true;
     this.repairFront('orbital', 4);
-    if (this.relaysProtected >= this.state.orbitalRelaysProtected.length) this.goToStep('manageCrossFrontCrisis');
+    if (this.relaysProtected >= this.state.orbitalRelaysProtected.length) {
+      this.state.orbitalHostilesDestroyed = mission22Tuning.orbitalWaveCount;
+      this.goToStep('manageCrossFrontCrisis');
+    }
     return true;
   }
 
@@ -268,6 +309,7 @@ export class Mission22BrokenFronts {
     if (orbitalClear) this.phaseTimer += delta;
     else this.phaseTimer = Math.max(0, this.phaseTimer - delta * 0.1);
     if (this.phaseTimer < mission22Tuning.finalPressureSeconds) return false;
+    this.state.finalHostilesDestroyed = mission22Tuning.finalWaveCount;
     this.state.finalPressureSurvived = true;
     this.completeMission();
     return true;
@@ -342,6 +384,10 @@ export class Mission22BrokenFronts {
       mission22InitialCommsFront: 'none',
       auroraFrontDefended: false,
       nereidaFrontDefended: false,
+      auroraHostilesDestroyed: 0,
+      nereidaHostilesDestroyed: 0,
+      orbitalHostilesDestroyed: 0,
+      finalHostilesDestroyed: 0,
       orbitalRelaysProtected: [false, false, false],
       crossFrontCrisisManaged: false,
       mission22SupportPriority: 'none',
@@ -366,6 +412,26 @@ export class Mission22BrokenFronts {
     this.state.mission22InitialCommsFront = validFront(snapshot.mission22InitialCommsFront) ? snapshot.mission22InitialCommsFront : 'none';
     this.state.auroraFrontDefended = Boolean(snapshot.auroraFrontDefended || reached('defendNereidaFront'));
     this.state.nereidaFrontDefended = Boolean(snapshot.nereidaFrontDefended || reached('defendOrbitalFront'));
+    this.state.auroraHostilesDestroyed = this.normalizeCount(
+      snapshot.auroraHostilesDestroyed,
+      mission22Tuning.auroraWaveCount,
+      this.state.auroraFrontDefended
+    );
+    this.state.nereidaHostilesDestroyed = this.normalizeCount(
+      snapshot.nereidaHostilesDestroyed,
+      mission22Tuning.nereidaWaveCount,
+      this.state.nereidaFrontDefended
+    );
+    this.state.orbitalHostilesDestroyed = this.normalizeCount(
+      snapshot.orbitalHostilesDestroyed,
+      mission22Tuning.orbitalWaveCount,
+      reached('manageCrossFrontCrisis')
+    );
+    this.state.finalHostilesDestroyed = this.normalizeCount(
+      snapshot.finalHostilesDestroyed,
+      mission22Tuning.finalWaveCount,
+      reached('completed')
+    );
     this.state.orbitalRelaysProtected = this.normalizeFlags(snapshot.orbitalRelaysProtected, 3, reached('manageCrossFrontCrisis'));
     this.state.crossFrontCrisisManaged = Boolean(snapshot.crossFrontCrisisManaged || reached('chooseSupportPriority'));
     this.state.mission22SupportPriority = validFront(snapshot.mission22SupportPriority) ? snapshot.mission22SupportPriority : 'none';
@@ -432,6 +498,11 @@ export class Mission22BrokenFronts {
 
   private normalizeIntegrity(value: number, fallback: number): number {
     return Number.isFinite(value) ? Math.max(mission22Tuning.integrityFloor, Math.min(100, value)) : fallback;
+  }
+
+  private normalizeCount(value: number | undefined, required: number, completed: boolean): number {
+    if (completed) return required;
+    return Number.isFinite(value) ? Math.max(0, Math.min(required, Math.floor(value ?? 0))) : 0;
   }
 
   private normalizeFlags(value: boolean[] | undefined, length: number, completed: boolean): boolean[] {

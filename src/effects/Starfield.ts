@@ -10,6 +10,31 @@ type LayerOptions = {
   twinkleSpeed: number;
 };
 
+export type StarfieldQuality = 'performance' | 'high' | 'ultra';
+
+type StarfieldBudget = {
+  layers: [number, number, number];
+  clusterCount: number;
+  starsPerCluster: number;
+};
+
+const STARFIELD_BUDGETS: Record<StarfieldQuality, StarfieldBudget> = {
+  performance: { layers: [2500, 900, 120], clusterCount: 2, starsPerCluster: 44 },
+  high: { layers: [3600, 1450, 220], clusterCount: 3, starsPerCluster: 64 },
+  ultra: { layers: [4600, 1850, 300], clusterCount: 4, starsPerCluster: 72 }
+};
+
+function createSeededRandom(seed: number): () => number {
+  let state = Math.floor(Math.abs(seed) * 1_000_003) ^ 0x9e3779b9;
+  return () => {
+    state = (state + 0x6d2b79f5) | 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
 const STAR_VERTEX = /* glsl */ `
 attribute float size;
 attribute float phase;
@@ -22,7 +47,7 @@ void main() {
   vPhase = phase;
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   gl_PointSize = size * (1900.0 / -mvPosition.z);
-  gl_PointSize = clamp(gl_PointSize, 0.75, 9.0);
+  gl_PointSize = clamp(gl_PointSize, 0.65, 4.5);
   gl_Position = projectionMatrix * mvPosition;
 }
 `;
@@ -40,21 +65,19 @@ void main() {
 
   float core = smoothstep(0.5, 0.02, dist);
   core = pow(core, 2.2);
-  float twinkle = 0.78 + 0.22 * sin(uTime * uTwinkleSpeed + vPhase);
+  float twinkle = 0.965 + 0.035 * sin(uTime * uTwinkleSpeed + vPhase);
   gl_FragColor = vec4(vColor * core * twinkle, core * twinkle);
 }
 `;
 
-function pickStarColor(target: THREE.Color): void {
-  const roll = Math.random();
-  if (roll < 0.42) {
-    target.setHSL(0.6 + Math.random() * 0.05, 0.45 + Math.random() * 0.3, 0.72 + Math.random() * 0.2);
-  } else if (roll < 0.74) {
-    target.setHSL(0.12 + Math.random() * 0.04, 0.12 + Math.random() * 0.18, 0.82 + Math.random() * 0.14);
-  } else if (roll < 0.9) {
-    target.setHSL(0.09 + Math.random() * 0.03, 0.55 + Math.random() * 0.25, 0.66 + Math.random() * 0.16);
+function pickStarColor(target: THREE.Color, random: () => number): void {
+  const roll = random();
+  if (roll < 0.82) {
+    target.setHSL(0.11 + random() * 0.05, 0.015 + random() * 0.045, 0.72 + random() * 0.2);
+  } else if (roll < 0.92) {
+    target.setHSL(0.105 + random() * 0.025, 0.12 + random() * 0.1, 0.72 + random() * 0.16);
   } else {
-    target.setHSL(0.015 + Math.random() * 0.02, 0.7 + Math.random() * 0.2, 0.58 + Math.random() * 0.14);
+    target.setHSL(0.57 + random() * 0.035, 0.12 + random() * 0.1, 0.72 + random() * 0.16);
   }
 }
 
@@ -84,38 +107,48 @@ export class Starfield {
 
   private streakTimer = 9;
 
-  constructor() {
+  private readonly random = createSeededRandom(218.9);
+
+  private readonly meteorOrigin = new THREE.Vector3();
+
+  private readonly meteorTangent = new THREE.Vector3();
+
+  private readonly meteorPoint = new THREE.Vector3();
+
+  constructor(quality: StarfieldQuality = 'high') {
     this.group.name = 'Deep Starfield';
 
+    const budget = STARFIELD_BUDGETS[quality];
+
     this.addLayer({
-      count: 5200,
+      count: budget.layers[0],
       minRadius: 3600,
       maxRadius: 4800,
-      minSize: 0.9,
-      maxSize: 2.4,
-      bandBias: 0.62,
-      twinkleSpeed: 0.7
+      minSize: 0.62,
+      maxSize: 1.65,
+      bandBias: 0.48,
+      twinkleSpeed: 0.18
     });
     this.addLayer({
-      count: 2400,
+      count: budget.layers[1],
       minRadius: 2300,
       maxRadius: 3300,
-      minSize: 1.4,
-      maxSize: 3.6,
-      bandBias: 0.4,
-      twinkleSpeed: 1.1
+      minSize: 0.82,
+      maxSize: 2.15,
+      bandBias: 0.28,
+      twinkleSpeed: 0.24
     });
     this.addLayer({
-      count: 640,
+      count: budget.layers[2],
       minRadius: 1250,
       maxRadius: 2100,
-      minSize: 2.6,
-      maxSize: 6.2,
+      minSize: 1.05,
+      maxSize: 2.9,
       bandBias: 0,
-      twinkleSpeed: 1.7
+      twinkleSpeed: 0.31
     });
 
-    this.addClusters(5, 130);
+    this.addClusters(budget.clusterCount, budget.starsPerCluster);
     this.group.rotation.z = 0.42;
     this.group.rotation.x = 0.18;
 
@@ -126,7 +159,7 @@ export class Starfield {
     streakGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(trailCount * 3), 3));
     this.streakMaterial = new THREE.PointsMaterial({
       color: 0xcfe8ff,
-      size: 5,
+      size: 2.8,
       transparent: true,
       opacity: 0,
       depthWrite: false,
@@ -149,19 +182,20 @@ export class Starfield {
     this.streakTimer -= delta;
     if (this.streakTimer <= 0) {
       // Launch: pick a random far point and a tangential travel direction.
-      const origin = new THREE.Vector3().setFromSphericalCoords(
-        2600 + Math.random() * 900,
-        Math.acos(2 * Math.random() - 1),
-        Math.random() * Math.PI * 2
+      const origin = this.meteorOrigin.setFromSphericalCoords(
+        2600 + this.random() * 900,
+        Math.acos(2 * this.random() - 1),
+        this.random() * Math.PI * 2
       );
-      const tangent = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)
+      const tangent = this.meteorTangent
+        .set(this.random() - 0.5, this.random() - 0.5, this.random() - 0.5)
         .cross(origin)
         .normalize()
-        .multiplyScalar(700 + Math.random() * 600);
+        .multiplyScalar(520 + this.random() * 480);
       this.streakFrom.copy(origin);
       this.streakTo.copy(origin).add(tangent);
       this.streakAge = 0;
-      this.streakTimer = 12 + Math.random() * 24;
+      this.streakTimer = 24 + this.random() * 34;
     }
 
     if (this.streakAge >= this.streakDuration) {
@@ -172,14 +206,13 @@ export class Starfield {
     this.streakAge += delta;
     const headT = Math.min(this.streakAge / this.streakDuration, 1);
     const positions = this.streak.geometry.getAttribute('position') as THREE.BufferAttribute;
-    const point = new THREE.Vector3();
     for (let i = 0; i < positions.count; i += 1) {
       const t = Math.max(headT - i * 0.016, 0);
-      point.copy(this.streakFrom).lerp(this.streakTo, t);
-      positions.setXYZ(i, point.x, point.y, point.z);
+      this.meteorPoint.copy(this.streakFrom).lerp(this.streakTo, t);
+      positions.setXYZ(i, this.meteorPoint.x, this.meteorPoint.y, this.meteorPoint.z);
     }
     positions.needsUpdate = true;
-    this.streakMaterial.opacity = Math.sin(Math.PI * headT) * 0.85;
+    this.streakMaterial.opacity = Math.sin(Math.PI * headT) * 0.34;
   }
 
   get starCount(): number {
@@ -220,31 +253,31 @@ export class Starfield {
     let guard = 0;
     while (written < options.count && guard < options.count * 30) {
       guard += 1;
-      const radius = THREE.MathUtils.lerp(options.minRadius, options.maxRadius, Math.random());
-      const theta = Math.random() * Math.PI * 2;
-      const inBand = Math.random() < options.bandBias;
+      const radius = THREE.MathUtils.lerp(options.minRadius, options.maxRadius, this.random());
+      const theta = this.random() * Math.PI * 2;
+      const inBand = this.random() < options.bandBias;
       const phi = inBand
-        ? Math.PI / 2 + (Math.random() - 0.5) * 0.34
-        : Math.acos(2 * Math.random() - 1);
+        ? Math.PI / 2 + (this.random() - 0.5) * 0.3
+        : Math.acos(2 * this.random() - 1);
 
       point.setFromSphericalCoords(radius, phi, theta);
 
       // Carve a dark void so one region of the sky feels genuinely empty.
-      const alignment = point.clone().normalize().dot(this.voidDirection);
-      if (alignment > 0.86 && Math.random() < 0.92) continue;
+      const alignment = point.dot(this.voidDirection) / radius;
+      if (alignment > 0.8 && this.random() < 0.965) continue;
 
       positions[written * 3] = point.x;
       positions[written * 3 + 1] = point.y;
       positions[written * 3 + 2] = point.z;
 
-      pickStarColor(color);
-      const bright = inBand ? 0.82 + Math.random() * 0.3 : 1;
+      pickStarColor(color, this.random);
+      const bright = inBand ? 0.68 + this.random() * 0.22 : 0.76 + this.random() * 0.22;
       colors[written * 3] = color.r * bright;
       colors[written * 3 + 1] = color.g * bright;
       colors[written * 3 + 2] = color.b * bright;
 
-      sizes[written] = THREE.MathUtils.lerp(options.minSize, options.maxSize, Math.pow(Math.random(), 2.4));
-      phases[written] = Math.random() * Math.PI * 2;
+      sizes[written] = THREE.MathUtils.lerp(options.minSize, options.maxSize, Math.pow(this.random(), 3.2));
+      phases[written] = this.random() * Math.PI * 2;
       written += 1;
     }
 
@@ -272,24 +305,24 @@ export class Starfield {
     let index = 0;
     for (let c = 0; c < clusterCount; c += 1) {
       center.setFromSphericalCoords(
-        2600 + Math.random() * 1500,
-        Math.acos(2 * Math.random() - 1),
-        Math.random() * Math.PI * 2
+        2700 + this.random() * 1300,
+        Math.acos(2 * this.random() - 1),
+        this.random() * Math.PI * 2
       );
-      const spread = 90 + Math.random() * 200;
+      const spread = 150 + this.random() * 240;
 
       for (let s = 0; s < starsPerCluster; s += 1) {
-        const gaussian = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.8;
+        const gaussian = () => (this.random() + this.random() + this.random() - 1.5) * 0.8;
         positions[index * 3] = center.x + gaussian() * spread;
         positions[index * 3 + 1] = center.y + gaussian() * spread;
         positions[index * 3 + 2] = center.z + gaussian() * spread;
 
-        color.setHSL(0.58 + Math.random() * 0.08, 0.5, 0.74 + Math.random() * 0.2);
+        color.setHSL(0.57 + this.random() * 0.035, 0.08 + this.random() * 0.12, 0.68 + this.random() * 0.18);
         colors[index * 3] = color.r;
         colors[index * 3 + 1] = color.g;
         colors[index * 3 + 2] = color.b;
-        sizes[index] = 1 + Math.pow(Math.random(), 2) * 2.6;
-        phases[index] = Math.random() * Math.PI * 2;
+        sizes[index] = 0.72 + Math.pow(this.random(), 2.8) * 1.55;
+        phases[index] = this.random() * Math.PI * 2;
         index += 1;
       }
     }
@@ -300,7 +333,7 @@ export class Starfield {
     geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
     geometry.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
 
-    const points = new THREE.Points(geometry, this.buildMaterial(0.9));
+    const points = new THREE.Points(geometry, this.buildMaterial(0.2));
     points.frustumCulled = false;
     points.renderOrder = -20;
     this.group.add(points);

@@ -5,6 +5,7 @@ export interface EngineAudioInput {
   active: boolean;
   thrust: number;
   boost: boolean;
+  brake: boolean;
   vertical: number;
   hover: number;
   groundEffect: number;
@@ -68,7 +69,6 @@ export class EngineAudio {
   private smoothedBoost = 0;
   private smoothedGroundWash = 0;
   private lastBrakeAt = -Infinity;
-  private previousThrust = 0;
   private atmosphereActive = false;
   private dialogueDucking = false;
   private layerEpoch = 0;
@@ -145,15 +145,14 @@ export class EngineAudio {
     this.smoothedGroundWash = smoothIntent(this.smoothedGroundWash, groundWashTarget, delta, 0.2, 0.7);
 
     if (
-      this.previousThrust > 0.55 &&
-      input.thrust < 0.05 &&
+      input.brake &&
+      this.state !== 'brake' &&
       input.speed > 14 &&
       elapsedSeconds - this.lastBrakeAt > BRAKE_COOLDOWN_SECONDS
     ) {
       this.lastBrakeAt = elapsedSeconds;
       void this.audio.play('sfx-brake-release', { loop: false, volume: 0.46, fadeInSeconds: 0.1 });
     }
-    this.previousThrust = input.thrust;
 
     const sceneScale = (input.liftActive ? 0.18 : 1) * (input.dialogueActive ? 0.46 : 1);
     const atmosphereScale = input.atmosphere ? 1 : 0.74;
@@ -177,7 +176,7 @@ export class EngineAudio {
 
     this.state = input.liftActive
       ? 'lift-quiet'
-      : elapsedSeconds - this.lastBrakeAt < 1
+      : input.brake
         ? 'brake'
         : input.boost && input.thrust > 0.05
           ? 'boost'

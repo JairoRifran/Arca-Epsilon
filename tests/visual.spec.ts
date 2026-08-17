@@ -19,6 +19,9 @@ import type {
   Mission03DebugState,
   Mission04DebugState,
   Mission05DebugState,
+  Mission25DebugState,
+  Mission25Diagnostics,
+  Mission25VisualDebugState,
   RuntimeAssetAuditEntry
 } from '../src/main';
 
@@ -180,10 +183,16 @@ test('loads the GLB mothership and renders cinematic gameplay', async ({ page })
 
     await expect(page.locator('#launch-button')).toBeEnabled();
     await page.locator('#launch-button').dispatchEvent('click');
+    // The dedicated M01 probes own the launch tutorial. This broad visual
+    // regression starts at its historical scanner precondition by driving the
+    // new prologue and tutorial through their real completion hooks.
+    expect(await page.evaluate(() => window.__arcaDebug?.completeArkDeparture())).toBe(true);
+    expect(await page.evaluate(() => window.__arcaDebug?.completeMission01Tutorial())).toBe(true);
+    await page.waitForFunction(() => window.__arcaMissionState?.step === 'scannerTutorial');
     await expect(page.locator('#hud')).toHaveClass(/is-active/);
     await expect(page.locator('#home-marker')).toBeVisible();
     await expect(page.locator('.objective-panel')).toBeVisible();
-    await expect(page.locator('#mission-name')).toContainText('Perímetro de Arca Epsilon');
+    await expect(page.locator('#mission-name')).toContainText(/Misi[oó]n 01: Buscar un Nuevo Hogar/i);
     await expect(page.locator('#objective-text')).toContainText(/zona segura|escáner/i);
     await expect(page.locator('#objective-marker')).toBeVisible();
     await expect(page.locator('#safezone-readout')).toContainText(/Zona segura|Retorno/);
@@ -194,7 +203,7 @@ test('loads the GLB mothership and renders cinematic gameplay', async ({ page })
     expect(initialObjective?.target).toContain('E-01');
     expect(initialObjective?.missionTitle).toContain('Mision 01');
     expect(initialObjective?.stepTitle).toContain('Perímetro');
-    expect(initialObjective?.objectiveText).toContain('zona segura');
+    expect(initialObjective?.objectiveText).toContain('largo alcance');
     expect(initialObjective?.keyHint).toBe('E');
 
     // Cockpit mode is optional, reversible and uses real CanvasTexture instruments.
@@ -342,22 +351,23 @@ test('loads the GLB mothership and renders cinematic gameplay', async ({ page })
       phase: window.__arcaDiagnostics?.descentPhase
     }));
     expect(blockedDescent.authorized).toBe(false);
-    expect(blockedDescent.reason).toContain('Descenso denegado');
+    expect(blockedDescent.reason).toBe('Sin candidato confirmado');
     expect(blockedDescent.missing).toContain('análisis orbital completo');
     expect(blockedDescent.missing).toContain('corredor Atlas decodificado');
     expect(blockedDescent.phase).not.toBe('entry');
-    await expect(page.locator('#mission-text')).toContainText('Descenso denegado');
+    await expect(page.locator('#mission-text')).toContainText('Sin candidato confirmado');
+    await expect(page.locator('#mission-text')).toContainText('largo alcance');
 
     expect(await page.evaluate(() => window.__arcaDebug?.setPlayerPosition(220, 0, 180))).toEqual([220, 0, 180]);
     await page.locator('#scan-button').dispatchEvent('click');
     await page.waitForFunction(() => (window.__arcaDiagnostics?.scannerPulses ?? 0) > 0);
     await page.waitForFunction(() => window.__arcaMissionState?.step === 'followSignal');
-    await expect(page.locator('#objective-text')).toContainText('Fija rumbo');
+    await expect(page.locator('#objective-text')).toContainText('rumbo hacia');
     await expect(page.locator('#scanner-status')).toContainText('Activo');
     await page.keyboard.press('Space');
     await page.keyboard.press('KeyR');
-    await expect(page.locator('#laser-status')).toContainText(/Laser/);
-    await expect(page.locator('#missile-status')).toContainText(/Misil|Misiles/);
+    await expect(page.locator('#laser-status')).toContainText(/CANON|CAÑON/i);
+    await expect(page.locator('#missile-status')).toContainText(/TORPEDOS/i);
     await page.waitForTimeout(700);
 
     expect(await page.evaluate(() => window.__arcaDebug?.advanceToMarker())).toBe('scanOrbitalMarker');
@@ -2139,8 +2149,59 @@ declare global {
     __arcaGameReady?: boolean;
     __arcaScene?: import('three').Scene;
     __arcaDebug?: {
+      getCollisionState: () => unknown;
+      getArkLaunchCorridorState: () => unknown;
+      getCollisionColliderState: (id: string) => unknown;
+      probeCharacterCollision: (start: readonly number[], displacement: readonly number[]) => unknown;
+      probeShipCollision: (start: readonly number[], displacement: readonly number[], terrain?: boolean) => unknown;
+      moveCharacterBy: (displacement: readonly number[]) => unknown;
+      moveShipBy: (displacement: readonly number[], terrain?: boolean) => unknown;
+      getSurfaceGroundHeight: (x: number, z: number) => number;
+      setCollisionDebug: (visible: boolean) => boolean;
+      normalizePlayerCollisions: () => unknown;
+      setCharacterWorldPosition: (position: readonly number[]) => [number, number, number];
+      setShipWorldPosition: (position: readonly number[]) => [number, number, number];
       setCameraMode: (mode: CameraMode) => CameraMode;
+      inspectShipAccess: (open: number, lift: number, azimuthDeg?: number, elevationDeg?: number, distance?: number, focus?: 'anchor' | 'hatch') => number;
+      clearShipAccessInspection: () => boolean;
+      measureShipAccess: () => import('../src/entities/ShipAccessLift').ShipAccessMeasurement;
+      setLandingGearFraction: (fraction: number) => string;
+      getLandingGearState: () => Record<string, unknown>;
+      debugShipAccessFoot: () => Record<string, unknown>;
+      resetFootTravelPeak: () => void;
+      getOrbitalAscentState: () => Record<string, unknown>;
+      inspectShipFeature: (feature: 'engines' | 'torpedoBay' | 'accessories' | 'shield', azimuthDeg?: number, elevationDeg?: number, distance?: number) => number[];
+      clearShipFeatureInspection: () => boolean;
+      getShipHardpointState: () => Record<string, unknown>;
+      getShipNavigationState: () => Record<string, unknown>;
+      setShipYaw: (heading: number) => number;
+      setShipVelocity: (x: number, y: number, z: number) => number[];
+      liftShipToAltitude: (metres?: number) => number;
+      getMission19SpawnTrace: () => Record<string, unknown>;
+      getHostileContactState: () => Record<string, unknown>;
+      selectNearestHostile: () => string | null;
+      cycleHostileTarget: () => string | null;
+      setLandingGearRetraction: (fraction: number) => string;
+      firePrimaryOnce: () => { fired: boolean; energy: number };
+      requestWeaponReload: () => { primaryStarted: boolean; torpedoStarted: boolean; message: string };
+      advanceWeaponReload: (seconds?: number) => { loadedCount: number; reloading: boolean; progress: number };
+      setWeaponAmmo: (data: {
+        primaryMagazine?: number; primaryReserve?: number;
+        torpedoTubes?: boolean[]; torpedoReserve?: number; torpedoTotal?: number;
+      }) => { primaryMagazine: number; primaryReserve: number; torpedoTubes: boolean[]; torpedoReserve: number };
+      refillWeaponStores: () => { primaryMagazine: number; primaryReserve: number; torpedoTubes: boolean[]; torpedoReserve: number };
+      fireTorpedoOnce: () => { fired: boolean; ammo: number };
+      setWeaponEnergy: (value: number) => number;
+      resetWeaponAudit: () => boolean;
+      getWeaponResourceState: () => Record<string, unknown>;
+      getInputGateState: () => Record<string, unknown>;
       setCameraLookAt: (target: CameraLookAtInput) => CameraProbeResult | undefined;
+      frameCameraTarget: (
+        target: CameraLookAtInput,
+        offset: readonly [number, number, number],
+        lookHeight?: number
+      ) => CameraProbeResult | undefined;
+      clearCameraLookAt: () => boolean;
       lookAtDefenseBeacon: (index: number) => CameraProbeResult | undefined;
       lookAtThreatSignature: () => CameraProbeResult | undefined;
       getDefenseNetworkVisualState: () => DefenseNetworkVisualState;
@@ -2408,7 +2469,7 @@ declare global {
       recoverNereidaWreckage: () => boolean;
       completeMission19: () => boolean;
       getMission19State: () => import('../src/main').Mission19DebugState;
-      getNereidaDefenseReadout: () => import('../src/game/Mission19NereidaUnderAttack').NereidaDefenseReadout;
+      getNereidaDefenseReadout: () => import('../src/game/Mission19NereidaUnderAttack').NereidaDefenseReadout & { airWaveAnnounced: boolean; groundWaveAnnounced: boolean; airDronesActive: number; breachDronesActive: number };
       startMission20: () => boolean;
       completeArkAscent: () => boolean;
       rendezvousWithArk: () => boolean;
@@ -2425,6 +2486,20 @@ declare global {
       completeMission20: () => boolean;
       getMission20State: () => import('../src/main').Mission20DebugState;
       getArkBattleReadout: () => import('../src/game/Mission20ArkBattle').ArkBattleReadout;
+      getArkStationState: () => {
+        step: string;
+        linksRestored: boolean[];
+        activeLinkIndex: number;
+        arkPosition: number[];
+        arkRotation: number[];
+        stationPosition: number[];
+        shipPosition: number[];
+        distance: number;
+        stationRange: number;
+        interactionRange: number;
+        inRange: boolean;
+        phaseProgress: number;
+      };
       startMission21: () => boolean;
       alignMission21Channel: (index: number) => number;
       decryptCoalitionTransmission: () => boolean;
@@ -2443,6 +2518,17 @@ declare global {
       completeMission21: () => boolean;
       getMission21State: () => import('../src/main').Mission21DebugState;
       getMission21Readout: () => import('../src/game/Mission21SilenceRupture').Mission21Readout;
+      getMission21TargetState: () => {
+        step: import('../src/main').Mission21DebugState['mission21Step'];
+        targetId: string;
+        targetLabel: string;
+        targetPosition: number[];
+        shipPosition: number[];
+        distance: number;
+        range: number;
+        inRange: boolean;
+        phaseProgress: number;
+      };
       startMission22: () => boolean;
       acknowledgeMission22Alarm: () => string;
       accessMission22CommandTerminal: () => string;
@@ -2466,6 +2552,19 @@ declare global {
       completeMission22: () => import('../src/main').Mission22DebugState;
       getMission22State: () => import('../src/main').Mission22DebugState;
       getMission22Readout: () => import('../src/game/Mission22BrokenFronts').Mission22Readout;
+      getMission22TargetState: () => {
+        step: import('../src/main').Mission22DebugState['mission22Step'];
+        targetId: string;
+        targetLabel: string;
+        targetPosition: number[];
+        shipPosition: number[];
+        distance: number;
+        range: number;
+        inRange: boolean;
+        waveRequired: number;
+        waveDestroyed: number;
+        waveRemaining: number;
+      };
       startMission23: () => boolean;
       completeMission23Council: () => import('../src/main').Mission23DebugState;
       synchronizeMission23Forces: () => import('../src/main').Mission23DebugState;
@@ -2536,7 +2635,29 @@ declare global {
       detectMission24FinalFleet: () => import('../src/main').Mission24DebugState;
       completeMission24: () => import('../src/main').Mission24DebugState;
       getMission24State: () => import('../src/main').Mission24DebugState;
+      startMission25: () => boolean;
+      advanceMission25Interaction: () => Mission25DebugState;
+      teleportToMission25Target: () => [number, number, number];
+      completeMission25Wave: () => Mission25DebugState;
+      applyMission25SystemDamage: (index: number, amount?: number) => Mission25DebugState;
+      prepareMission25Counterattack: () => Mission25DebugState;
+      locateMission25CommandTarget: () => Mission25DebugState;
+      destroyMission25CommandNode: (index: number) => Mission25DebugState;
+      destroyAllMission25CommandNodes: () => Mission25DebugState;
+      beginMission25FinalAssault: () => Mission25DebugState;
+      damageMission25CommandCore: (amount: number) => Mission25DebugState;
+      destroyMission25CommandCore: () => Mission25DebugState;
+      completeMission25Collapse: () => Mission25DebugState;
+      completeMission25Stabilization: () => Mission25DebugState;
+      completeMission25: () => Mission25DebugState;
+      continueAfterChapterEnd: () => Mission25DebugState;
+      getMission25State: () => Mission25DebugState;
+      getMission25Target: () => { name: string; position: [number, number, number]; distance: number };
+      getMission25VisualState: () => Mission25VisualDebugState;
+      getMission25Diagnostics: () => Mission25Diagnostics;
       getArkDepartureState: () => import('../src/main').ArkDepartureDebugState;
+      getArkPlatformVisualState: () => import('../src/main').ArkPlatformVisualDebugState;
+      completeArkDeparture: () => boolean;
       getMission01OnboardingState: () => import('../src/main').Mission01OnboardingDebugState;
       advanceMission01To: (step: string) => boolean;
       completeMission01Tutorial: () => boolean;
@@ -2631,6 +2752,14 @@ declare global {
         verticalDifference: number;
         boardingAvailable: boolean;
         parked: boolean;
+        surfaceZone: 'space' | 'nereida' | 'aurora' | 'surface-transit';
+        parkingState: 'flight' | 'transition' | 'parked';
+        clearanceTarget: number;
+        visualOscillationActive: boolean;
+        fConsumed: boolean;
+        characterPosition: [number, number, number];
+        restoreChecked: boolean;
+        saveCorrected: boolean;
         playerShipInstances: number;
       };
       reconcileParkedShip: () => boolean;
@@ -2639,6 +2768,7 @@ declare global {
       listLoadedAssets: () => RuntimeAssetAuditEntry[];
       getAssetAudit: () => RuntimeAssetAuditEntry[];
       getPerformanceSnapshot: () => ArcaDiagnostics;
+      getNereidaProceduralState: () => ReturnType<import('../src/game/PlanetaryWorld').PlanetaryWorld['getProceduralDiagnostics']>;
       validateNoDuplicateCharacterMeshes: () => boolean;
       validateNoDuplicateCockpitMeshes: () => boolean;
       listActiveHighPolyAssets: () => string[];

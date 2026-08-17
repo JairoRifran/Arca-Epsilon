@@ -532,6 +532,38 @@ export class Mission16PleyadianProtocol {
       0,
       Math.min(NODE_COUNT, Math.floor(this.state.linkFrequenciesCalibrated || 0))
     );
+
+    // Reconcile late M16 saves with incomplete prerequisite flags, or all
+    // three nodes synchronized while the step still says synchronizeNodes.
+    if (
+      this.state.mission16Step === 'synchronizeNodes' ||
+      this.state.mission16Step === 'runSimulation' ||
+      this.state.mission16Step === 'confirmEnergyDeficit' ||
+      this.state.mission16Step === 'completed'
+    ) {
+      this.state.alertReceived = true;
+      this.state.linkFrequenciesCalibrated = NODE_COUNT;
+      this.state.tripleLinkEstablished = true;
+      this.state.atlasKeyRecovered = true;
+      this.state.pleyadianSeedRevealed = true;
+      this.state.protocolsUnlocked = [true, true, true];
+    }
+    if (this.state.mission16Step === 'synchronizeNodes' && this.nodesSynchronizedCount === NODE_COUNT) {
+      this.state.mission16Step = 'runSimulation';
+    }
+    if (
+      this.state.mission16Step === 'runSimulation' ||
+      this.state.mission16Step === 'confirmEnergyDeficit' ||
+      this.state.mission16Step === 'completed'
+    ) {
+      this.state.nodesSynchronized = [true, true, true];
+    }
+    if (this.state.mission16Step === 'confirmEnergyDeficit') {
+      this.state.simulationComplete = true;
+    }
+    if (this.state.mission16Completed || this.state.mission16Step === 'completed') {
+      this.completeProtocol();
+    }
     this.state.mission17Unlocked = this.state.mission17Unlocked || this.state.mission16Completed;
 
     // Reloading always lands on the last stable step with its interaction

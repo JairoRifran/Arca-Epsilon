@@ -77,12 +77,12 @@ test('audio local seguro y controles del mezclador', async ({ page }) => {
   expect((await page.evaluate(() => window.__arcaDebug?.getAudioState()))?.engine.activeLayers).toContain('acceleration');
   await page.keyboard.up('w');
 
-  await page.keyboard.down('Space');
+  await page.keyboard.down('q');
   await page.waitForFunction(() => (window.__arcaDiagnostics?.verticalThrustAudioIntensity ?? 0) > 0.45);
   await page.waitForFunction(() => window.__arcaDebug?.getAudioState().engine.activeLayers.includes('vertical'));
   expect(await page.evaluate(() => window.__arcaDiagnostics?.verticalThrustAudioIntensity ?? 0)).toBeGreaterThan(0.45);
   expect((await page.evaluate(() => window.__arcaDebug?.getAudioState()))?.engine.activeLayers).toContain('vertical');
-  await page.keyboard.up('Space');
+  await page.keyboard.up('q');
 
   await page.keyboard.down('w');
   await page.keyboard.down('Shift');

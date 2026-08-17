@@ -139,6 +139,7 @@ export class MusicManager {
       context.currentMissionId === 'mission-24' &&
       (nextTrack === 'music-return-to-origin' || nextTrack === 'music-final-orbit-intro')
     ) return true;
+    if (context.currentMissionId === 'mission-25') return true;
     const hold = CUE_MIX[this.desiredTrack]?.minHoldSeconds ?? 0;
     if (hold <= 0) return true;
     return (now() - this.desiredSince) / 1000 >= hold;

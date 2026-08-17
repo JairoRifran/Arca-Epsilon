@@ -4,7 +4,41 @@ import { materialLibrary } from '../assets/materials';
 import { createRockGeometry } from './AsteroidField';
 import { AssetLoader } from '../core/AssetLoader';
 import { loadOptionalModel, loadPreferredModel, type ModelLodPaths } from '../core/ModelLod';
-import { freezeStaticChildren } from '../assets/materialCache';
+import {
+  cloneShared,
+  freezeStaticChildren,
+  sharedBasicMaterial,
+  sharedStandardMaterial
+} from '../assets/materialCache';
+
+const ARK_PLUME_VERTEX = /* glsl */ `
+varying float vAxial;
+varying vec3 vNormal;
+
+void main() {
+  vAxial = uv.y;
+  vNormal = normalize(normalMatrix * normal);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const ARK_PLUME_FRAGMENT = /* glsl */ `
+uniform vec3 uColor;
+uniform float uOpacity;
+uniform float uPulse;
+varying float vAxial;
+varying vec3 vNormal;
+
+void main() {
+  float nearFade = smoothstep(0.0, 0.12, vAxial);
+  float farFade = 1.0 - smoothstep(0.28, 1.0, vAxial);
+  float edge = 0.45 + pow(1.0 - abs(vNormal.z), 1.8) * 0.55;
+  float ripple = 0.92 + sin(vAxial * 24.0 + uPulse) * 0.08;
+  float alpha = uOpacity * nearFade * farFade * edge * ripple;
+  if (alpha < 0.004) discard;
+  gl_FragColor = vec4(uColor * (0.72 + edge * 0.28), alpha);
+}
+`;
 
 export type MothershipDiagnostics = {
   status: 'loading' | 'loaded' | 'fallback';
@@ -49,6 +83,8 @@ export class Mothership {
 
   private readonly engineMaterials: THREE.MeshStandardMaterial[] = [];
 
+  private readonly enginePlumeMaterials: THREE.ShaderMaterial[] = [];
+
   private coreObject?: THREE.Object3D;
 
   private lowDetailObject?: THREE.Object3D;
@@ -60,6 +96,14 @@ export class Mothership {
   private readonly clampArms: THREE.Object3D[] = [];
 
   private readonly platformLightMaterials: THREE.MeshStandardMaterial[] = [];
+
+  private launchPlatform?: THREE.Group;
+
+  private launchPlatformNearDetail?: THREE.Group;
+
+  private hangarGuide?: THREE.Group;
+
+  private safeZoneHardware?: THREE.Group;
 
   private platformPower = 0;
 
@@ -113,6 +157,11 @@ export class Mothership {
     const useLow = Boolean(this.lowDetailObject && playerDistance > 900);
     if (this.coreObject) this.coreObject.visible = !useLow;
     if (this.lowDetailObject) this.lowDetailObject.visible = useLow;
+    const nearInfrastructureVisible = !useLow && playerDistance < 900;
+    if (this.launchPlatform) this.launchPlatform.visible = nearInfrastructureVisible;
+    if (this.hangarGuide) this.hangarGuide.visible = nearInfrastructureVisible;
+    if (this.safeZoneHardware) this.safeZoneHardware.visible = nearInfrastructureVisible;
+    if (this.launchPlatformNearDetail) this.launchPlatformNearDetail.visible = nearInfrastructureVisible;
     this.diagnostics.lodLevel = useLow ? 'low' : this.nearLevel;
     this.diagnostics.triangles = this.diagnostics.trianglesByLod[this.diagnostics.lodLevel] ?? 0;
     if (!this.group.visible) {
@@ -136,12 +185,16 @@ export class Mothership {
     for (const material of this.engineMaterials) {
       material.emissiveIntensity = enginePulse;
     }
+    for (const material of this.enginePlumeMaterials) {
+      material.uniforms.uPulse.value = elapsed * 4.6;
+    }
 
     // Platform guide lights: quiet idle pulse; a running chase toward the
     // pad edge while launch power ramps.
-    for (const [index, material] of this.platformLightMaterials.entries()) {
+    for (let index = 0; index < this.platformLightMaterials.length; index += 1) {
+      const material = this.platformLightMaterials[index];
       const idle = 0.3 + Math.sin(elapsed * 1.8 + index) * 0.1;
-      const chase = Math.max(0, Math.sin(elapsed * 9 - (index % 5) * 1.1)) * 2.6 * this.platformPower;
+      const chase = Math.max(0, Math.sin(elapsed * 7.2 - index * 1.35)) * 1.55 * this.platformPower;
       material.emissiveIntensity = idle + chase;
     }
 
@@ -167,6 +220,7 @@ export class Mothership {
   private installModels(primary: GLTF, low?: GLTF): void {
     this.group.clear();
     this.engineMaterials.length = 0;
+    this.enginePlumeMaterials.length = 0;
     this.coreObject = primary.scene;
     this.coreObject.name = `Arca Epsilon ${this.nearLevel}`;
 
@@ -233,6 +287,7 @@ export class Mothership {
     const improved = material.clone();
     improved.roughness = Math.max(0.36, improved.roughness ?? 0.5);
     improved.metalness = Math.max(0.45, improved.metalness ?? 0.4);
+    improved.envMapIntensity = Math.min(improved.envMapIntensity ?? 1, 0.72);
 
     if (!improved.map) {
       improved.color.lerp(new THREE.Color(0x8fa0aa), 0.18);
@@ -283,51 +338,217 @@ export class Mothership {
   private addLaunchPlatform(size: THREE.Vector3): void {
     const platform = new THREE.Group();
     platform.name = 'Launch Platform Epsilon-3';
+    this.launchPlatform = platform;
 
-    const padMetal = materialLibrary.wornMetal.clone();
-    padMetal.color.setHex(0x5b666e);
-    const strutMetal = materialLibrary.darkMetal.clone();
+    const deckMetal = sharedStandardMaterial({
+      color: 0x414c54,
+      metalness: 0.72,
+      roughness: 0.58
+    });
+    const deckInset = sharedStandardMaterial({
+      color: 0x263139,
+      metalness: 0.66,
+      roughness: 0.66
+    });
+    const structuralMetal = sharedStandardMaterial({
+      color: 0x141c22,
+      metalness: 0.84,
+      roughness: 0.44,
+      emissive: 0x050b0e,
+      emissiveIntensity: 0.12
+    });
+    const serviceMetal = sharedStandardMaterial({
+      color: 0x778087,
+      metalness: 0.58,
+      roughness: 0.7
+    });
+    const hazardMaterial = sharedStandardMaterial({
+      color: 0x9a7a32,
+      metalness: 0.48,
+      roughness: 0.76
+    });
 
-    // Bridge strut from the hull to the pad.
-    const strut = new THREE.Mesh(new THREE.BoxGeometry(7, 2.4, 20), strutMetal);
-    strut.position.set(0, -1.6, -14);
-    platform.add(strut);
+    // A layered load-bearing deck instead of a single exposed slab.
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(8.4, 2.6, 22), structuralMetal);
+    bridge.name = 'Epsilon-3 armored hull bridge';
+    bridge.position.set(0, -1.75, -14.5);
+    platform.add(bridge);
 
-    const pad = new THREE.Mesh(new THREE.BoxGeometry(17, 1.4, 22), padMetal);
-    pad.position.y = -1.2;
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(18, 1.3, 24), deckMetal);
+    pad.name = 'Epsilon-3 load-bearing deck';
+    pad.position.y = -1.18;
     platform.add(pad);
+    const upperDeck = new THREE.Mesh(new THREE.BoxGeometry(16.7, 0.24, 22.5), deckInset);
+    upperDeck.name = 'Epsilon-3 replaceable deck surface';
+    upperDeck.position.y = -0.43;
+    platform.add(upperDeck);
 
-    // Guide-light rails along both pad edges; the chase animation runs
-    // through platformLightMaterials during power-up.
-    const lightGeometry = new THREE.BoxGeometry(0.8, 0.34, 1.4);
-    for (const x of [-7.6, 7.6]) {
-      for (let i = 0; i < 5; i += 1) {
-        const material = materialLibrary.energyBlue.clone();
-        material.emissiveIntensity = 0.35;
-        this.platformLightMaterials.push(material);
-        const guide = new THREE.Mesh(lightGeometry, material);
-        guide.position.set(x, -0.4, -8.5 + i * 4.2);
-        platform.add(guide);
+    const nearDetail = new THREE.Group();
+    nearDetail.name = 'Epsilon-3 near industrial detail';
+    this.launchPlatformNearDetail = nearDetail;
+    platform.add(nearDetail);
+
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const unitBox = new THREE.BoxGeometry(1, 1, 1);
+    const setBox = (
+      mesh: THREE.InstancedMesh,
+      index: number,
+      position: readonly [number, number, number],
+      dimensions: readonly [number, number, number],
+      rotationY = 0
+    ): void => {
+      quaternion.setFromEuler(new THREE.Euler(0, rotationY, 0));
+      scale.set(dimensions[0], dimensions[1], dimensions[2]);
+      matrix.compose(new THREE.Vector3(position[0], position[1], position[2]), quaternion, scale);
+      mesh.setMatrixAt(index, matrix);
+    };
+
+    // Armored edge cassettes break the slab silhouette and protect utilities.
+    const edgeCassettes = new THREE.InstancedMesh(unitBox, structuralMetal, 12);
+    edgeCassettes.name = 'Epsilon-3 armored edge cassettes';
+    let instance = 0;
+    for (let side = -1; side <= 1; side += 2) {
+      for (let index = 0; index < 6; index += 1) {
+        setBox(edgeCassettes, instance++, [side * 8.85, -1.12, -9.8 + index * 3.9], [0.55, 1.5, 3.15]);
       }
     }
+    edgeCassettes.instanceMatrix.needsUpdate = true;
+    edgeCassettes.computeBoundingSphere();
+    nearDetail.add(edgeCassettes);
 
-    // Docking clamps: two arms that pivot open on release.
+    // Structural trusses make the connection to the Ark visibly load-bearing.
+    const trusses = new THREE.InstancedMesh(unitBox, structuralMetal, 6);
+    trusses.name = 'Epsilon-3 underside truss members';
+    setBox(trusses, 0, [-4.7, -2.65, -15.5], [0.55, 0.55, 12], 0.52);
+    setBox(trusses, 1, [4.7, -2.65, -15.5], [0.55, 0.55, 12], -0.52);
+    setBox(trusses, 2, [-4.8, -2.25, -2], [0.48, 0.48, 16], -0.38);
+    setBox(trusses, 3, [4.8, -2.25, -2], [0.48, 0.48, 16], 0.38);
+    setBox(trusses, 4, [0, -2.55, -20], [13.5, 0.55, 0.55]);
+    setBox(trusses, 5, [0, -2.25, -9.5], [16.2, 0.48, 0.48]);
+    trusses.instanceMatrix.needsUpdate = true;
+    trusses.computeBoundingSphere();
+    nearDetail.add(trusses);
+
+    // Replaceable deck plates: ordered service bays, not random surface noise.
+    const panelGeometry = new THREE.BoxGeometry(1.7, 0.08, 2.45);
+    const deckPanels = new THREE.InstancedMesh(panelGeometry, serviceMetal, 12);
+    deckPanels.name = 'Epsilon-3 service access panels';
+    instance = 0;
+    for (let row = 0; row < 4; row += 1) {
+      for (let column = -1; column <= 1; column += 1) {
+        matrix.compose(
+          new THREE.Vector3(column * 5.4, -0.265, -7.4 + row * 4.75),
+          new THREE.Quaternion(),
+          new THREE.Vector3(1, 1, 1)
+        );
+        deckPanels.setMatrixAt(instance++, matrix);
+      }
+    }
+    deckPanels.instanceMatrix.needsUpdate = true;
+    deckPanels.computeBoundingSphere();
+    nearDetail.add(deckPanels);
+
+    // Two physical guide rails contain the light inserts. No floating strokes.
+    const railHousings = new THREE.InstancedMesh(unitBox, structuralMetal, 2);
+    railHousings.name = 'Epsilon-3 launch rail housings';
+    setBox(railHousings, 0, [-7.55, -0.22, 0], [0.78, 0.42, 21.1]);
+    setBox(railHousings, 1, [7.55, -0.22, 0], [0.78, 0.42, 21.1]);
+    railHousings.instanceMatrix.needsUpdate = true;
+    railHousings.computeBoundingSphere();
+    platform.add(railHousings);
+
+    const guideLooks = [0, 1].map((index) => {
+      const material = cloneShared(sharedStandardMaterial({
+        color: index === 0 ? 0x5d9eaa : 0x6ea58e,
+        emissive: index === 0 ? 0x238cb1 : 0x2a9a78,
+        emissiveIntensity: 0.35,
+        metalness: 0.24,
+        roughness: 0.34
+      }));
+      this.platformLightMaterials.push(material);
+      return material;
+    });
+    const guideGeometry = new THREE.BoxGeometry(0.42, 0.13, 1.25);
+    for (let phase = 0; phase < 2; phase += 1) {
+      const guides = new THREE.InstancedMesh(guideGeometry, guideLooks[phase], 5);
+      guides.name = `Epsilon-3 recessed vector lights ${phase + 1}`;
+      instance = 0;
+      for (let sideIndex = 0; sideIndex < 2; sideIndex += 1) {
+        const x = sideIndex === 0 ? -7.55 : 7.55;
+        for (let index = 0; index < 5; index += 1) {
+          if ((sideIndex + index) % 2 !== phase) continue;
+          matrix.compose(
+            new THREE.Vector3(x, 0.045, -8.4 + index * 4.2),
+            new THREE.Quaternion(),
+            new THREE.Vector3(1, 1, 1)
+          );
+          guides.setMatrixAt(instance++, matrix);
+        }
+      }
+      guides.instanceMatrix.needsUpdate = true;
+      guides.computeBoundingSphere();
+      platform.add(guides);
+    }
+
+    const hazardStrips = new THREE.InstancedMesh(unitBox, hazardMaterial, 8);
+    hazardStrips.name = 'Epsilon-3 hazard edge markings';
+    for (let index = 0; index < 4; index += 1) {
+      setBox(hazardStrips, index, [-6.4 + index * 4.25, -0.25, 10.85], [2.5, 0.08, 0.48], index % 2 ? 0.12 : -0.12);
+      setBox(hazardStrips, index + 4, [-6.4 + index * 4.25, -0.25, -10.85], [2.5, 0.08, 0.48], index % 2 ? -0.12 : 0.12);
+    }
+    hazardStrips.instanceMatrix.needsUpdate = true;
+    hazardStrips.computeBoundingSphere();
+    nearDetail.add(hazardStrips);
+
+    // A real service bulkhead gives the platform a clear connection point.
+    const bulkhead = new THREE.InstancedMesh(unitBox, structuralMetal, 4);
+    bulkhead.name = 'Epsilon-3 service bulkhead';
+    setBox(bulkhead, 0, [-7.2, 2.25, -11.65], [1.1, 6.1, 1.45]);
+    setBox(bulkhead, 1, [7.2, 2.25, -11.65], [1.1, 6.1, 1.45]);
+    setBox(bulkhead, 2, [-4.8, 5.35, -11.65], [5.1, 0.58, 1.45]);
+    setBox(bulkhead, 3, [4.8, 5.35, -11.65], [5.1, 0.58, 1.45]);
+    bulkhead.instanceMatrix.needsUpdate = true;
+    bulkhead.computeBoundingSphere();
+    nearDetail.add(bulkhead);
+
+    const servicePods = new THREE.InstancedMesh(unitBox, serviceMetal, 6);
+    servicePods.name = 'Epsilon-3 power and coolant modules';
+    for (let index = 0; index < 3; index += 1) {
+      setBox(servicePods, index, [-6.25, 0.2 + index * 1.25, -11.05], [1.35, 0.72, 1.15]);
+      setBox(servicePods, index + 3, [6.25, 0.2 + index * 1.25, -11.05], [1.35, 0.72, 1.15]);
+    }
+    servicePods.instanceMatrix.needsUpdate = true;
+    servicePods.computeBoundingSphere();
+    nearDetail.add(servicePods);
+
+    nearDetail.add(this.createLaunchDeckMarking());
+
+    // Articulated docking clamps retain the existing pivots and release logic.
     for (const x of [-4.6, 4.6]) {
       const pivot = new THREE.Group();
-      pivot.position.set(x, -0.5, 0);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 3.4, 2.4), strutMetal);
-      arm.position.y = 1.7;
-      pivot.add(arm);
-      const claw = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.7, 2.4), strutMetal);
-      claw.position.set(x < 0 ? 0.8 : -0.8, 3.4, 0);
-      pivot.add(claw);
+      pivot.name = x < 0 ? 'Epsilon-3 port clamp' : 'Epsilon-3 starboard clamp';
+      pivot.userData.dynamic = true;
+      pivot.position.set(x, -0.48, 0);
+      const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 1.25, 10), structuralMetal);
+      hinge.rotation.z = Math.PI / 2;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 3.45, 1.55), structuralMetal);
+      arm.position.y = 1.72;
+      const actuator = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.24, 2.8, 8), serviceMetal);
+      actuator.position.set(x < 0 ? 0.5 : -0.5, 1.55, 0.72);
+      actuator.rotation.z = x < 0 ? -0.22 : 0.22;
+      const claw = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.62, 1.85), structuralMetal);
+      claw.position.set(x < 0 ? 0.78 : -0.78, 3.42, 0);
+      const contact = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.26, 1.35), serviceMetal);
+      contact.position.set(x < 0 ? 1.62 : -1.62, 3.56, 0);
+      pivot.add(hinge, arm, actuator, claw, contact);
       platform.add(pivot);
       this.clampArms.push(pivot);
     }
 
-    // Pad work light.
-    const workLight = new THREE.PointLight(0xbfe2ff, 1.1, 70, 1.8);
-    workLight.position.set(0, 6, 0);
+    const workLight = new THREE.PointLight(0xbfe2ff, 0.82, 58, 1.8);
+    workLight.position.set(0, 5.2, -7.8);
     platform.add(workLight);
 
     // Cradle anchor: the scout parks here; +Z of this anchor is the
@@ -343,33 +564,114 @@ export class Mothership {
     this.group.add(platform);
   }
 
-  private addSafeZoneShell(): void {
-    // Holographic perimeter: sparse broken dashes projected by the Arca's
-    // traffic control, never a perfect uniform circle. Uneven arc lengths
-    // and gaps keep it reading as a scanner artifact.
-    const perimeter = new THREE.Group();
-    perimeter.name = 'Arca Safe Zone Perimeter';
+  private createLaunchDeckMarking(): THREE.Mesh {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Could not create Epsilon-3 deck marking.');
 
-    const dashCount = 14;
-    for (let i = 0; i < dashCount; i += 1) {
-      const material = new THREE.MeshBasicMaterial({
-        color: 0x96e8ff,
-        transparent: true,
-        opacity: 0.14,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
-      });
-      this.safeZoneRingMaterials.push(material);
-
-      const span = 0.12 + Math.random() * 0.2;
-      const dash = new THREE.Mesh(
-        new THREE.TorusGeometry(this.safeZoneRadius, 0.42, 4, 12, span),
-        material
-      );
-      dash.rotation.x = Math.PI / 2;
-      dash.rotation.z = (i / dashCount) * Math.PI * 2 + Math.random() * 0.2;
-      perimeter.add(dash);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.strokeStyle = 'rgba(196, 210, 214, 0.66)';
+    context.lineWidth = 7;
+    context.strokeRect(24, 24, 464, 208);
+    context.fillStyle = 'rgba(201, 167, 77, 0.78)';
+    for (let index = 0; index < 8; index += 1) {
+      context.save();
+      context.translate(40 + index * 58, 210);
+      context.rotate(-0.42);
+      context.fillRect(-16, -9, 32, 18);
+      context.restore();
     }
+    context.fillStyle = 'rgba(218, 229, 231, 0.82)';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.font = '700 86px Arial';
+    context.fillText('E-3', 256, 105);
+    context.font = '700 27px Arial';
+    context.fillText('LAUNCH / OUTBOUND', 256, 164);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const material = new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 0.78,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      side: THREE.DoubleSide
+    });
+    const marking = new THREE.Mesh(new THREE.PlaneGeometry(10.5, 5.25), material);
+    marking.name = 'Epsilon-3 operational deck marking';
+    marking.rotation.x = -Math.PI / 2;
+    marking.position.set(0, -0.255, 4.2);
+    return marking;
+  }
+
+  private addSafeZoneShell(): void {
+    const perimeter = new THREE.Group();
+    perimeter.name = 'Arca Traffic Control Buoy Perimeter';
+    this.safeZoneHardware = perimeter;
+
+    const buoyCount = 14;
+    const bodyMaterial = sharedStandardMaterial({
+      color: 0x26323a,
+      metalness: 0.8,
+      roughness: 0.48,
+      emissive: 0x061018,
+      emissiveIntensity: 0.16
+    });
+    const lightMaterial = cloneShared(sharedBasicMaterial({
+      color: 0x7dd8eb,
+      transparent: true,
+      opacity: 0.08,
+      depthWrite: false
+    }));
+    this.safeZoneRingMaterials.push(lightMaterial);
+
+    const bodies = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.72, 0.92, 2.7, 8),
+      bodyMaterial,
+      buoyCount
+    );
+    bodies.name = 'Arca perimeter buoy housings';
+    const lenses = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.46, 8, 6),
+      lightMaterial,
+      buoyCount
+    );
+    lenses.name = 'Arca perimeter buoy navigation lenses';
+
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3(1, 1, 1);
+    for (let index = 0; index < buoyCount; index += 1) {
+      const angle = (index / buoyCount) * Math.PI * 2;
+      const y = Math.sin(index * 1.7) * 4.5;
+      quaternion.setFromEuler(new THREE.Euler(0, -angle, Math.PI / 2));
+      matrix.compose(
+        new THREE.Vector3(Math.cos(angle) * this.safeZoneRadius, y, Math.sin(angle) * this.safeZoneRadius),
+        quaternion,
+        scale
+      );
+      bodies.setMatrixAt(index, matrix);
+      matrix.compose(
+        new THREE.Vector3(
+          Math.cos(angle) * (this.safeZoneRadius - 1.05),
+          y,
+          Math.sin(angle) * (this.safeZoneRadius - 1.05)
+        ),
+        quaternion,
+        scale
+      );
+      lenses.setMatrixAt(index, matrix);
+    }
+    bodies.instanceMatrix.needsUpdate = true;
+    lenses.instanceMatrix.needsUpdate = true;
+    bodies.computeBoundingSphere();
+    lenses.computeBoundingSphere();
+    perimeter.add(bodies, lenses);
 
     this.group.add(perimeter);
   }
@@ -379,7 +681,7 @@ export class Mothership {
    * sky, so they fade to a whisper; from outside they read as the gate home.
    */
   setPlayerInside(inside: boolean, delta: number): void {
-    const target = inside ? 0.025 : 0.15;
+    const target = inside ? 0.08 : 0.42;
     for (const material of this.safeZoneRingMaterials) {
       material.opacity = THREE.MathUtils.lerp(material.opacity, target, 1 - Math.pow(0.02, delta));
     }
@@ -405,39 +707,148 @@ export class Mothership {
   }
 
   private addHangarGuide(size: THREE.Vector3): void {
-    const material = materialLibrary.energyBlue.clone();
-    material.transparent = true;
-    material.opacity = 0.7;
-
     const guide = new THREE.Group();
-    guide.name = 'Docking Hangar Guide';
+    guide.name = 'Arca Industrial Hangar Approach';
+    this.hangarGuide = guide;
 
-    for (const x of [-10, 10]) {
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 42), material);
-      rail.position.set(x, -size.y * 0.22, size.z * 0.24);
-      guide.add(rail);
+    const structuralMetal = sharedStandardMaterial({
+      color: 0x222d35,
+      metalness: 0.82,
+      roughness: 0.48,
+      emissive: 0x061019,
+      emissiveIntensity: 0.14
+    });
+    const insetLight = sharedStandardMaterial({
+      color: 0x5e909b,
+      emissive: 0x236f85,
+      emissiveIntensity: 0.62,
+      metalness: 0.3,
+      roughness: 0.38
+    });
+
+    const unitBox = new THREE.BoxGeometry(1, 1, 1);
+    const frame = new THREE.InstancedMesh(unitBox, structuralMetal, 9);
+    frame.name = 'Arca hangar approach armored frame';
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const baseY = -size.y * 0.22;
+    const laneZ = size.z * 0.24;
+    const gateZ = size.z * 0.42;
+    const compose = (
+      index: number,
+      x: number,
+      y: number,
+      z: number,
+      sx: number,
+      sy: number,
+      sz: number
+    ): void => {
+      scale.set(sx, sy, sz);
+      matrix.compose(new THREE.Vector3(x, y, z), quaternion, scale);
+      frame.setMatrixAt(index, matrix);
+    };
+    compose(0, -10, baseY, laneZ, 2.1, 1.15, 42);
+    compose(1, 10, baseY, laneZ, 2.1, 1.15, 42);
+    compose(2, -13, baseY, gateZ, 1.8, 22, 2);
+    compose(3, 13, baseY, gateZ, 1.8, 22, 2);
+    compose(4, 0, baseY + 10.5, gateZ, 27.5, 1.5, 2);
+    compose(5, 0, baseY - 10.5, gateZ, 27.5, 1.5, 2);
+    compose(6, -11.5, baseY + 7, gateZ - 2.8, 0.7, 7, 0.7);
+    compose(7, 11.5, baseY + 7, gateZ - 2.8, 0.7, 7, 0.7);
+    compose(8, 0, baseY + 8.8, gateZ - 2.8, 17, 0.65, 0.65);
+    frame.instanceMatrix.needsUpdate = true;
+    frame.computeBoundingSphere();
+    guide.add(frame);
+
+    const markerGeometry = new THREE.BoxGeometry(0.55, 0.18, 2.25);
+    const markers = new THREE.InstancedMesh(markerGeometry, insetLight, 16);
+    markers.name = 'Arca hangar recessed vector markers';
+    let instance = 0;
+    for (let side = -1; side <= 1; side += 2) {
+      for (let index = 0; index < 8; index += 1) {
+        matrix.compose(
+          new THREE.Vector3(side * 10, baseY + 0.67, laneZ - 17 + index * 4.8),
+          new THREE.Quaternion(),
+          new THREE.Vector3(1, 1, 1)
+        );
+        markers.setMatrixAt(instance++, matrix);
+      }
     }
-
-    const aperture = new THREE.Mesh(new THREE.TorusGeometry(15, 0.65, 10, 72), material);
-    aperture.position.set(0, -size.y * 0.22, size.z * 0.42);
-    aperture.rotation.x = Math.PI / 2;
-    guide.add(aperture);
+    markers.instanceMatrix.needsUpdate = true;
+    markers.computeBoundingSphere();
+    guide.add(markers);
     this.group.add(guide);
   }
 
   private addEngineGlow(size: THREE.Vector3): void {
-    for (const x of [-size.x * 0.16, 0, size.x * 0.16]) {
-      const material = materialLibrary.energyBlue.clone();
-      this.engineMaterials.push(material);
-      const glow = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 12), material);
-      glow.scale.set(1, 0.55, 2.8);
-      glow.position.set(x, -size.y * 0.18, size.z * 0.5);
-      this.group.add(glow);
+    const sockets = [-size.x * 0.16, 0, size.x * 0.16];
+    const throatMaterial = materialLibrary.energyBlue.clone();
+    throatMaterial.emissiveIntensity = 1.25;
+    this.engineMaterials.push(throatMaterial);
 
-      const light = new THREE.PointLight(0x58ccff, 1.6, 180);
-      light.position.copy(glow.position);
-      this.group.add(light);
+    const outerMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(0x4ab7df) },
+        uOpacity: { value: 0.14 },
+        uPulse: { value: 0 }
+      },
+      vertexShader: ARK_PLUME_VERTEX,
+      fragmentShader: ARK_PLUME_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending
+    });
+    const innerMaterial = outerMaterial.clone();
+    innerMaterial.uniforms = THREE.UniformsUtils.clone(outerMaterial.uniforms);
+    innerMaterial.uniforms.uColor.value = new THREE.Color(0xd5f6ff);
+    innerMaterial.uniforms.uOpacity.value = 0.2;
+    this.enginePlumeMaterials.push(outerMaterial, innerMaterial);
+
+    const throats = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(3.4, 4.6, 2.2, 18, 1, false),
+      throatMaterial,
+      sockets.length
+    );
+    throats.name = 'Arca Engine Throats';
+    const outerPlumes = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(5.4, 1.15, 32, 18, 1, true),
+      outerMaterial,
+      sockets.length
+    );
+    outerPlumes.name = 'Arca Engine Outer Plumes';
+    const innerPlumes = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(2.15, 0.46, 18, 14, 1, true),
+      innerMaterial,
+      sockets.length
+    );
+    innerPlumes.name = 'Arca Engine Hot Cores';
+
+    const matrix = new THREE.Matrix4();
+    const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
+    const scale = new THREE.Vector3(1, 1, 1);
+    const y = -size.y * 0.18;
+    for (let index = 0; index < sockets.length; index += 1) {
+      const x = sockets[index];
+      matrix.compose(new THREE.Vector3(x, y, size.z * 0.5), quaternion, scale);
+      throats.setMatrixAt(index, matrix);
+      matrix.compose(new THREE.Vector3(x, y, size.z * 0.5 + 16), quaternion, scale);
+      outerPlumes.setMatrixAt(index, matrix);
+      matrix.compose(new THREE.Vector3(x, y, size.z * 0.5 + 9), quaternion, scale);
+      innerPlumes.setMatrixAt(index, matrix);
     }
+    throats.instanceMatrix.needsUpdate = true;
+    outerPlumes.instanceMatrix.needsUpdate = true;
+    innerPlumes.instanceMatrix.needsUpdate = true;
+    throats.computeBoundingSphere();
+    outerPlumes.computeBoundingSphere();
+    innerPlumes.computeBoundingSphere();
+    this.group.add(throats, outerPlumes, innerPlumes);
+
+    const light = new THREE.PointLight(0x58ccff, 0.82, 125, 1.9);
+    light.position.set(0, y, size.z * 0.54);
+    this.group.add(light);
   }
 
   private addBeaconLights(size: THREE.Vector3): void {
