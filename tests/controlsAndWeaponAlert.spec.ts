@@ -103,7 +103,8 @@ test('controls can be remapped, and the old key stops working', async ({ page })
   const after = await page.evaluate(() => ({
     label: (document.querySelector('#bindings-list .binding-row__key[data-action="reload"]') as HTMLElement)?.textContent,
     custom: (document.querySelector('#bindings-list .binding-row__key[data-action="reload"]') as HTMLElement)?.dataset.custom,
-    footer: (document.querySelector('[data-binding-hint="reload"]') as HTMLElement)?.textContent,
+    footer: Array.from(document.querySelectorAll('#controls-strip span'))
+      .find((node) => node.textContent?.includes('recargar'))?.querySelector('kbd')?.textContent,
     stored: window.localStorage.getItem('arca-epsilon:key-bindings:v1')
   }));
   console.log('AFTER REBIND', JSON.stringify(after));
@@ -131,16 +132,61 @@ test('controls can be remapped, and the old key stops working', async ({ page })
   console.log('VIA OLD KEY', JSON.stringify({ requests: viaOldKey.reloadRequestCount }));
   expect(viaOldKey.reloadRequestCount, 'G no longer reloads').toBe(0);
 
+  // Mission prose and the objective panel write their key against the default
+  // layout. Rebinding "interactuar" must relabel both, or the HUD keeps telling
+  // the player to press a key that does nothing.
+  await page.evaluate(() => {
+    const button = document.querySelector('#bindings-list .binding-row__key[data-action="interact"]') as HTMLElement;
+    button.click();
+  });
+  await page.keyboard.press('KeyK');
+  await page.waitForTimeout(1_200);
+
+  // Reach a step that actually names a key. The opening step is mouse-aiming, so
+  // asserting against it proves nothing -- the first version of this test passed
+  // vacuously for exactly that reason.
+  await page.evaluate(() => {
+    window.__arcaDebug?.startSurfacePhase();
+    window.__arcaDebug?.clearDialogueQueue();
+  });
+  await expect
+    .poll(async () => page.evaluate(() =>
+      (document.querySelector('#next-key') as HTMLElement | null)?.textContent ?? ''),
+    { message: 'a step with a real key hint', timeout: 60_000, intervals: [500] })
+    .not.toBe('›');
+
+  const relabelled = await page.evaluate(() => ({
+    nextKey: (document.querySelector('#next-key') as HTMLElement | null)?.textContent,
+    action: (document.querySelector('#next-action') as HTMLElement | null)?.textContent ?? '',
+    interactKey: (document.querySelector('#interact-prompt kbd') as HTMLElement | null)?.textContent,
+    footer: Array.from(document.querySelectorAll('#controls-strip span'))
+      .find((node) => node.textContent?.includes('escanear'))?.querySelector('kbd')?.textContent
+  }));
+  console.log('RELABELLED', JSON.stringify(relabelled));
+  expect(relabelled.footer, 'the footer hint follows interact').toBe('K');
+  // The panel key hint came from the mission definition, hardcoded as E.
+  // The panel hint came from the mission definition, hardcoded as E; with
+  // interact on K it must now read K, not merely "something other than E".
+  expect(relabelled.nextKey, 'the objective key hint follows the binding').toBe('K');
+  // And the prose sentence must not still say E on its own.
+  expect(relabelled.action, 'no stale bare E survives in the action text')
+    .not.toMatch(/(^|\s)E(\s|$|\.)/);
+
   // Reset puts everything back, including the HUD hints.
   await page.evaluate(() => (document.querySelector('#bindings-reset') as HTMLElement).click());
   await page.waitForTimeout(400);
+  // The run is in the surface phase by now, whose chip table has no reload
+  // entry, so the interact chip is what proves the strip was redrawn.
   const reset = await page.evaluate(() => ({
-    label: (document.querySelector('#bindings-list .binding-row__key[data-action="reload"]') as HTMLElement)?.textContent,
-    footer: (document.querySelector('[data-binding-hint="reload"]') as HTMLElement)?.textContent
+    reload: (document.querySelector('#bindings-list .binding-row__key[data-action="reload"]') as HTMLElement)?.textContent,
+    interact: (document.querySelector('#bindings-list .binding-row__key[data-action="interact"]') as HTMLElement)?.textContent,
+    footer: Array.from(document.querySelectorAll('#controls-strip span'))
+      .find((node) => node.textContent?.includes('escanear'))?.querySelector('kbd')?.textContent
   }));
   console.log('AFTER RESET', JSON.stringify(reset));
-  expect(reset.label, 'reset restores the default').toBe('G');
-  expect(reset.footer, 'and the hint with it').toBe('G');
+  expect(reset.reload, 'reset restores the reload default').toBe('G');
+  expect(reset.interact, 'reset restores the interact default').toBe('E');
+  expect(reset.footer, 'and the strip is redrawn with it').toBe('E');
 
   expect(errors).toEqual([]);
 });

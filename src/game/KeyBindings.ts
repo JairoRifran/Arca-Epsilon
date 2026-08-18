@@ -87,6 +87,28 @@ export function describeCode(code: string): string {
   return code;
 }
 
+/**
+ * The key labels missions and the objective resolver write by hand.
+ *
+ * Mission definitions carry their key inside prose ("Sostén el enlace con E")
+ * and the resolver publishes a bare letter, both written against the default
+ * layout. Mapping those literals back to actions lets the HUD relabel them
+ * without editing twenty-five mission files.
+ */
+const ACTION_BY_DEFAULT_LABEL = new Map<string, BindableAction>([
+  ['E', 'interact'],
+  ['F', 'enterShip'],
+  ['T', 'target'],
+  ['G', 'reload'],
+  ['R', 'torpedo'],
+  ['V', 'camera'],
+  ['M', 'starMap'],
+  ['Q', 'ascend'],
+  ['C', 'descend'],
+  ['SPACE', 'fire'],
+  ['ESPACIO', 'fire']
+]);
+
 export type BindingConflict = { action: BindableAction; label: string };
 
 export class KeyBindings {
@@ -186,6 +208,47 @@ export class KeyBindings {
    */
   isCanonicalInputKey(key: string): boolean {
     return CANONICAL_INPUT_KEYS.has(key);
+  }
+
+  /**
+   * Rewrites a hand-written key label to the key actually bound.
+   *
+   * 'WASD' becomes the four movement keys in order; a single letter becomes
+   * whatever now drives that action. Anything unrecognised is returned as-is,
+   * so a label like 'Mouse' passes through untouched.
+   */
+  relabel(label: string): string {
+    const upper = label.trim().toUpperCase();
+    if (upper === 'WASD') {
+      return (['forward', 'left', 'back', 'right'] as BindableAction[])
+        .map((action) => this.labelFor(action))
+        .join('');
+    }
+    const action = ACTION_BY_DEFAULT_LABEL.get(upper);
+    return action ? this.labelFor(action) : label;
+  }
+
+  /**
+   * Rewrites key mentions inside a sentence.
+   *
+   * Only substitutes for actions whose binding actually moved, so a default
+   * install is a guaranteed no-op and the mission prose is untouched. The word
+   * boundary keeps it from rewriting letters inside ordinary words; a lone
+   * capital in these strings is a key in every case in the script.
+   */
+  relabelText(text: string): string {
+    if (!text) return text;
+    let result = text;
+    for (const [label, action] of ACTION_BY_DEFAULT_LABEL) {
+      if (label.length !== 1) continue;
+      if (this.isDefault(action)) continue;
+      const replacement = this.labelFor(action);
+      // String.raw keeps the escape literal; a plain template literal would
+      // turn the escape into a literal backspace and match nothing.
+      result = result.replace(new RegExp(String.raw`\b${label}\b`, 'g'), replacement);
+    }
+    if (!this.isDefault('forward')) result = result.replace(/\bWASD\b/g, this.relabel('WASD'));
+    return result;
   }
 
   isReserved(code: string): boolean {

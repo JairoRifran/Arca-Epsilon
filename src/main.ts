@@ -3128,7 +3128,19 @@ function formatDistance(meters: number): string {
 }
 
 /** La franja de controles cambia con el modo de vuelo. */
+/** The last mode rendered, so a binding change can redraw the strip in place. */
+let controlHintMode: 'space' | 'surface' | 'foot' | 'combat' = 'space';
+
+/**
+ * Rebuilds the controls strip.
+ *
+ * The chip table is written against the default layout, so every key runs
+ * through `relabel` before it is drawn. This is also why the strip cannot carry
+ * static `data-binding-hint` attributes: it replaces its own innerHTML, which
+ * would wipe them on the first mode change.
+ */
 function setControlHints(mode: 'space' | 'surface' | 'foot' | 'combat'): void {
+  controlHintMode = mode;
   const chips: [string, string][] =
     mode === 'foot'
       ? [
@@ -3172,13 +3184,14 @@ function setControlHints(mode: 'space' | 'surface' | 'foot' | 'combat'): void {
           ['V', 'cambiar cámara']
         ];
   controlsStrip.innerHTML =
-    chips.map(([key, label]) => `<span><kbd>${key}</kbd> ${label}</span>`).join('') +
+    chips.map(([key, label]) => `<span><kbd>${keyBindings.relabel(key)}</kbd> ${label}</span>`).join('') +
     (mode === 'combat'
       ? ''
-      : `<span class="map-hint" id="map-hint-chip"><kbd>M</kbd> ${mode === 'space' ? 'mapa estelar' : 'mapa local'}</span>`);
+      : `<span class="map-hint" id="map-hint-chip"><kbd>${keyBindings.labelFor('starMap')}</kbd> ${mode === 'space' ? 'mapa estelar' : 'mapa local'}</span>`);
   controlsStrip
     .querySelector('#map-hint-chip')
-    ?.addEventListener('click', () => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyM' })));
+    ?.addEventListener('click', () => window.dispatchEvent(
+      new KeyboardEvent('keydown', { code: keyBindings.codeFor('starMap') })));
 }
 
 type OnFootInteraction = {
@@ -12411,8 +12424,8 @@ function updateInteractPrompt(): void {
     key = objectiveContextAction.key;
     label = objectiveContextAction.label;
   }
-  setText(interactKey, key);
-  setText(interactLabel, label);
+  setText(interactKey, keyBindings.relabel(key));
+  setText(interactLabel, keyBindings.relabelText(label));
   interactPrompt.classList.toggle('is-active', label.length > 0);
   interactPrompt.setAttribute('aria-hidden', String(label.length === 0));
 }
@@ -19776,9 +19789,10 @@ function updateHud(nearestThreat: number): void {
   const missingRequirements = currentObjectiveDisplay.missingRequirements.length > 0
     ? ` Pendiente: ${currentObjectiveDisplay.missingRequirements.join(', ')}.`
     : '';
-  setText(nextAction, currentObjectiveDisplay.blockedReason
+  // The action sentence names its key in prose, written against the defaults.
+  setText(nextAction, keyBindings.relabelText(currentObjectiveDisplay.blockedReason
     ? `${currentObjectiveDisplay.blockedReason}${missingRequirements} ${currentObjectiveDisplay.nextAction}`
-    : currentObjectiveDisplay.nextAction);
+    : currentObjectiveDisplay.nextAction));
   setText(objectiveTargetName, currentObjectiveDisplay.target.toUpperCase());
   setText(objectiveDistance, formatDistance(currentObjectiveDisplay.distance));
   objectivePanel.setAttribute('data-urgency', currentObjectiveDisplay.urgency);
@@ -20198,8 +20212,11 @@ function updateHud(nearestThreat: number): void {
 
   // Tecla destacada del siguiente paso, extraída del texto de acción.
   // Solo mayúsculas: evita confundir la "m" de "9 m/s" con la tecla M.
-  const keyMatch = currentObjectiveDisplay.key ? [currentObjectiveDisplay.key, currentObjectiveDisplay.key] : null;
-  nextKey.textContent = keyMatch ? keyMatch[1].toUpperCase() : '›';
+  // Missions publish their key against the default layout, so relabel it before
+  // showing it: a fixed 'E' is a lie the moment the player rebinds interact.
+  setText(nextKey, currentObjectiveDisplay.key
+    ? keyBindings.relabel(currentObjectiveDisplay.key).toUpperCase()
+    : '›');
 
   updateInteractPrompt();
   // Heat vignette: the cockpit edges glow with entry plasma stress.
@@ -22455,6 +22472,7 @@ const accountManager = new AccountManager({
 });
 void accountManager.initialize();
 setupKeyBindingSettings();
+keyBindings.onChange(() => setControlHints(controlHintMode));
 
 function getSelectedShipDefinition(): ShipDefinition {
   playerProfile = profileRepository.load();
