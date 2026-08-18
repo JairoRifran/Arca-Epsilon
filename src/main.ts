@@ -78,6 +78,9 @@ import { GarageView } from './garage/GarageView';
 import { CombatScenarioCatalog, ARK_ORBIT_SURVIVAL } from './combat/CombatScenarioCatalog';
 import { CombatSession } from './combat/CombatSession';
 import { CombatModeView } from './combat/CombatModeView';
+import { AccountManager } from './auth/AccountManager';
+import { createSupabaseAuthGateway } from './auth/SupabaseAuthGateway';
+import { getOrCreateDeviceId, SupabasePlayerDataService } from './auth/SupabasePlayerDataService';
 import {
   MISSION01_ANALYSIS_LINE_SECONDS,
   MISSION01_ANALYSIS_SEQUENCE,
@@ -873,8 +876,14 @@ const diagnosticsMode = urlParams.has('test') || urlParams.has('debug');
 const bootExperience = new BootExperience(bootScreen, diagnosticsMode);
 const gameModes = new GameModeController();
 const shipCatalog = new ShipCatalog();
-const profileRepository: PlayerProfileRepository = new LocalPlayerProfileRepository(window.localStorage, shipCatalog);
+let profileRepository: PlayerProfileRepository = new LocalPlayerProfileRepository(window.localStorage, shipCatalog);
 let playerProfile: PlayerProfile = profileRepository.load();
+const accountAuthGateway = diagnosticsMode && urlParams.get('auth') === 'guest'
+  ? undefined
+  : createSupabaseAuthGateway();
+const accountDataGateway = accountAuthGateway
+  ? new SupabasePlayerDataService(accountAuthGateway.client, shipCatalog, getOrCreateDeviceId(window.localStorage))
+  : undefined;
 const combatScenarioCatalog = new CombatScenarioCatalog();
 let garageView: GarageView | undefined;
 let combatSession: CombatSession | undefined;
@@ -14215,7 +14224,7 @@ function getWeaponTargets(): WeaponTarget[] {
 
 function startAudio(): void {
   try {
-    void audioManager.unlock();
+    void audioManager.unlock().catch(() => undefined);
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!audioContext) {
       audioContext = new AudioContextClass();
@@ -17995,6 +18004,33 @@ function getArkDepartureKeyHint(): string {
     default:
       return '';
   }
+}
+
+let menuAudioUnlockArmed = false;
+
+function requestMenuMusic(): void {
+  musicManager.setDebugTrack('music-main-theme');
+  if (audioManager.isUnlocked || menuAudioUnlockArmed) return;
+  menuAudioUnlockArmed = true;
+  window.addEventListener('pointerdown', unlockMenuAudioFromGesture, true);
+  window.addEventListener('keydown', unlockMenuAudioFromGesture, true);
+}
+
+function unlockMenuAudioFromGesture(): void {
+  disarmMenuAudioUnlock();
+  startAudio();
+}
+
+function disarmMenuAudioUnlock(): void {
+  if (!menuAudioUnlockArmed) return;
+  menuAudioUnlockArmed = false;
+  window.removeEventListener('pointerdown', unlockMenuAudioFromGesture, true);
+  window.removeEventListener('keydown', unlockMenuAudioFromGesture, true);
+}
+
+function releaseMenuMusic(): void {
+  disarmMenuAudioUnlock();
+  musicManager.setDebugTrack(null);
 }
 
 function getCurrentObjectiveDisplay(): ObjectiveDisplay {
@@ -22035,12 +22071,14 @@ void (async () => {
     hasSave: saveSystem.hasSave(),
     savedAt: saveSystem.lastSaveTime || undefined
   });
+  requestMenuMusic();
   window.__arcaGameReady = true;
   animate();
 })().catch((error) => {
   bootExperience.failTask(activeBootTask, 'Carga parcial · modo de compatibilidad activo');
   refreshLoadGameSummary();
   bootExperience.revealMenu({ hasSave: saveSystem.hasSave(), degraded: true });
+  requestMenuMusic();
   console.error('Boot asset load failed', error);
   window.__arcaGameReady = true;
   animate();
@@ -22185,6 +22223,27 @@ function refreshLoadGameSummary(): void {
     : 'Registro local verificado y listo para restaurar.';
 }
 
+const accountManager = new AccountManager({
+  root: document,
+  auth: accountAuthGateway,
+  data: accountDataGateway,
+  storage: window.localStorage,
+  catalog: shipCatalog,
+  saveSystem,
+  onProfileContextChanged: (repository, profile) => {
+    profileRepository = repository;
+    playerProfile = profile;
+  },
+  onSaveContextChanged: () => {
+    refreshLoadGameSummary();
+    bootExperience.updateMenuState({
+      hasSave: saveSystem.hasSave(),
+      savedAt: saveSystem.lastSaveTime || undefined
+    });
+  }
+});
+void accountManager.initialize();
+
 function getSelectedShipDefinition(): ShipDefinition {
   playerProfile = profileRepository.load();
   const selected = shipCatalog.get(playerProfile.selectedShipId);
@@ -22220,7 +22279,7 @@ async function openGarage(): Promise<void> {
 
 function closeGarage(): void {
   garageView?.hide();
-  musicManager.setDebugTrack(null);
+  requestMenuMusic();
   void gameModes.enter('menu');
   bootExperience.showMenu({ hasSave: saveSystem.hasSave(), savedAt: saveSystem.lastSaveTime || undefined });
 }
@@ -22237,7 +22296,7 @@ async function openCombatSetup(): Promise<void> {
 function closeCombatSetup(): void {
   if (combatSession) return;
   combatModeView.hide();
-  musicManager.setDebugTrack(null);
+  requestMenuMusic();
   void gameModes.enter('menu');
   bootExperience.showMenu({ hasSave: saveSystem.hasSave(), savedAt: saveSystem.lastSaveTime || undefined });
 }
@@ -22498,7 +22557,7 @@ function getGameModesFoundationState(): Record<string, unknown> {
     story: {
       missionId: buildSaveGameData().currentMissionId,
       missionStep: buildSaveGameData().currentMissionStep,
-      saveFingerprint: fingerprintText(window.localStorage.getItem(SaveSystem.key))
+      saveFingerprint: fingerprintText(window.localStorage.getItem(saveSystem.activeKey))
     },
     world: {
       mothershipUuid: mothership.group.uuid,
@@ -22547,6 +22606,7 @@ function returnToMainMenu(): void {
     hasSave: saveSystem.hasSave(),
     savedAt: saveSystem.lastSaveTime || undefined
   });
+  requestMenuMusic();
   refreshLoadGameSummary();
   dialogueManager.clearQueue();
   setLaunchButtonLabel('Continuar');
@@ -22578,6 +22638,7 @@ function setLaunchButtonLabel(label: string): void {
 async function launchFromMainMenu(loadExistingSave: boolean): Promise<void> {
   launchButton.blur();
   launchButton.disabled = true;
+  releaseMenuMusic();
   await gameModes.enter('story');
   const savedGame = loadExistingSave ? saveSystem.loadGame() : undefined;
   if (savedGame) {
@@ -26933,6 +26994,7 @@ if (diagnosticsMode) {
 if (window.__arcaDebug) {
   Object.assign(window.__arcaDebug, {
     getGameModesFoundationState: () => getGameModesFoundationState(),
+    getAccountState: () => accountManager.state,
     getGarageState: () => garageView?.state ?? null,
     setGarageView: (yaw: number, pitch?: number) => garageView?.setView(yaw, pitch) ?? null,
     openGarageMode: async () => {

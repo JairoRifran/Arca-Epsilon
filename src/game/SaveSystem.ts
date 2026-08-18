@@ -540,6 +540,8 @@ type LegacySaveGameData = Omit<SaveGameData, 'version' | 'tutorialCompleted'> & 
 
 export type SaveLoadStatus = 'idle' | 'saved' | 'loaded' | 'migrated' | 'missing' | 'corrupt' | 'unsupported' | 'blocked';
 
+export type SaveListener = (save: SaveGameData) => void;
+
 export class SaveSystem {
   static readonly key = 'arca-epsilon-save-v2';
   static readonly legacyKey = 'arca-epsilon-save-v1';
@@ -547,6 +549,36 @@ export class SaveSystem {
   lastSaveTime = 0;
   lastLoadStatus: SaveLoadStatus = 'idle';
   lastWarning = '';
+  private accountScope = '';
+  private readonly saveListeners = new Set<SaveListener>();
+
+  get activeKey(): string {
+    return this.accountScope
+      ? `${SaveSystem.key}:account:${encodeURIComponent(this.accountScope)}`
+      : SaveSystem.key;
+  }
+
+  get activeLegacyKey(): string {
+    return this.accountScope
+      ? `${SaveSystem.legacyKey}:account:${encodeURIComponent(this.accountScope)}`
+      : SaveSystem.legacyKey;
+  }
+
+  get activeAccountId(): string | undefined {
+    return this.accountScope || undefined;
+  }
+
+  setAccountScope(accountId?: string): void {
+    this.accountScope = accountId?.trim() ?? '';
+    this.lastSaveTime = 0;
+    this.lastLoadStatus = 'idle';
+    this.lastWarning = '';
+  }
+
+  onSaved(listener: SaveListener): () => void {
+    this.saveListeners.add(listener);
+    return () => this.saveListeners.delete(listener);
+  }
 
   saveGame(data: Omit<SaveGameData, 'version' | 'savedAt'>): SaveGameData {
     const payload: SaveGameData = {
@@ -556,10 +588,17 @@ export class SaveSystem {
     };
 
     try {
-      window.localStorage.setItem(SaveSystem.key, JSON.stringify(payload));
+      window.localStorage.setItem(this.activeKey, JSON.stringify(payload));
       this.lastSaveTime = payload.savedAt;
       this.lastLoadStatus = 'saved';
       this.lastWarning = '';
+      this.saveListeners.forEach((listener) => {
+        try {
+          listener(payload);
+        } catch {
+          // Saving locally remains successful even if an optional sync hook fails.
+        }
+      });
     } catch {
       this.lastLoadStatus = 'blocked';
       this.lastWarning = 'El navegador bloqueo el almacenamiento local.';
@@ -569,12 +608,12 @@ export class SaveSystem {
   }
 
   loadGame(): SaveGameData | undefined {
-    let sourceKey = SaveSystem.key;
+    let sourceKey = this.activeKey;
     let raw = '';
     try {
-      const currentRaw = window.localStorage.getItem(SaveSystem.key);
-      const legacyRaw = window.localStorage.getItem(SaveSystem.legacyKey);
-      sourceKey = currentRaw !== null ? SaveSystem.key : SaveSystem.legacyKey;
+      const currentRaw = window.localStorage.getItem(this.activeKey);
+      const legacyRaw = window.localStorage.getItem(this.activeLegacyKey);
+      sourceKey = currentRaw !== null ? this.activeKey : this.activeLegacyKey;
       raw = currentRaw ?? legacyRaw ?? '';
       if (!raw) {
         this.lastLoadStatus = 'missing';
@@ -601,7 +640,7 @@ export class SaveSystem {
           playedDialogueIds: parsed.playedDialogueIds ?? [],
           lastCriticalDialogueId: parsed.lastCriticalDialogueId ?? ''
         };
-        window.localStorage.setItem(SaveSystem.key, JSON.stringify(migrated));
+        window.localStorage.setItem(this.activeKey, JSON.stringify(migrated));
         this.lastSaveTime = migrated.savedAt || 0;
         this.lastLoadStatus = 'migrated';
         this.lastWarning = 'Partida anterior migrada al formato actual.';
@@ -626,8 +665,8 @@ export class SaveSystem {
 
   clearSave(): void {
     try {
-      window.localStorage.removeItem(SaveSystem.key);
-      window.localStorage.removeItem(SaveSystem.legacyKey);
+      window.localStorage.removeItem(this.activeKey);
+      window.localStorage.removeItem(this.activeLegacyKey);
     } catch {
       // Ignore blocked storage.
     }
@@ -638,7 +677,7 @@ export class SaveSystem {
 
   hasSave(): boolean {
     try {
-      return window.localStorage.getItem(SaveSystem.key) !== null || window.localStorage.getItem(SaveSystem.legacyKey) !== null;
+      return window.localStorage.getItem(this.activeKey) !== null || window.localStorage.getItem(this.activeLegacyKey) !== null;
     } catch {
       return false;
     }
@@ -646,6 +685,25 @@ export class SaveSystem {
 
   exportDebugSaveObject(): SaveGameData | undefined {
     return this.loadGame();
+  }
+
+  importCloudSave(data: SaveGameData): boolean {
+    if (data.version !== 2 || !this.isStructurallyValid(data)) {
+      this.lastLoadStatus = 'unsupported';
+      this.lastWarning = 'La partida remota pertenece a una version no compatible.';
+      return false;
+    }
+    try {
+      window.localStorage.setItem(this.activeKey, JSON.stringify(data));
+      this.lastSaveTime = data.savedAt || 0;
+      this.lastLoadStatus = 'loaded';
+      this.lastWarning = '';
+      return true;
+    } catch {
+      this.lastLoadStatus = 'blocked';
+      this.lastWarning = 'El navegador bloqueo la copia local de la partida remota.';
+      return false;
+    }
   }
 
   private quarantineCorruptSave(sourceKey: string, raw: string): void {

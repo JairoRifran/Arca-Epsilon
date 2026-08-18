@@ -29,11 +29,13 @@
     "optimize:models": "node scripts/optimize-glb-lod.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "lil-gui": "^0.20.0",
     "three": "^0.166.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.45.3",
+    "@types/node": "^26.2.0",
     "@types/three": "^0.185.0",
     "typescript": "^5.5.4",
     "vite": "^5.3.5"

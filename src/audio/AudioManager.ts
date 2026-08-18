@@ -244,6 +244,10 @@ export class AudioManager {
     return { ...this.settings };
   }
 
+  get isUnlocked(): boolean {
+    return this.context?.state === 'running';
+  }
+
   setSettings(update: Partial<AudioSettings>): void {
     this.updateSettings(update);
   }

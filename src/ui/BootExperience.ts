@@ -114,6 +114,14 @@ export class BootExperience {
     this.root.classList.remove('is-loading');
     this.loadingView.setAttribute('aria-hidden', 'true');
     this.menuView.setAttribute('aria-hidden', 'false');
+    this.updateMenuState(state);
+
+    if (state.degraded || this.hasFailedAsset) {
+      this.saveSummary.textContent += ' · modo de compatibilidad activo';
+    }
+  }
+
+  updateMenuState(state: BootMenuState): void {
     this.launchButton.disabled = false;
     this.loadButton.disabled = !state.hasSave;
 
@@ -124,10 +132,6 @@ export class BootExperience {
       this.saveSummary.textContent = `Expedicion registrada · ${formatted}`;
     } else {
       this.saveSummary.textContent = 'Sin expedicion guardada · el viaje comienza en la Arca';
-    }
-
-    if (state.degraded || this.hasFailedAsset) {
-      this.saveSummary.textContent += ' · modo de compatibilidad activo';
     }
   }
 

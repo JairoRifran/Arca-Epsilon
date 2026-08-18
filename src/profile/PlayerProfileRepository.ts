@@ -18,6 +18,13 @@ export interface PlayerProfileRepository {
 
 const PROFILE_STORAGE_KEY = 'arca-epsilon-player-profile-v1';
 
+export function profileStorageKeyForAccount(accountId?: string): string {
+  const normalized = accountId?.trim();
+  return normalized
+    ? `${PROFILE_STORAGE_KEY}:account:${encodeURIComponent(normalized)}`
+    : PROFILE_STORAGE_KEY;
+}
+
 function starterEntitlement(now: number): ShipEntitlement {
   return {
     id: `local:${STARTER_SHIP_ID}`,
@@ -50,13 +57,14 @@ export class LocalPlayerProfileRepository implements PlayerProfileRepository {
   constructor(
     private readonly storage: ProfileStorage,
     private readonly catalog: ShipCatalog,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly storageKey = PROFILE_STORAGE_KEY
   ) {}
 
   load(): PlayerProfile {
     let parsed: unknown;
     try {
-      const raw = this.storage.getItem(PROFILE_STORAGE_KEY);
+      const raw = this.storage.getItem(this.storageKey);
       if (raw) parsed = JSON.parse(raw);
     } catch {
       parsed = undefined;
@@ -133,7 +141,7 @@ export class LocalPlayerProfileRepository implements PlayerProfileRepository {
 
   private persist(profile: PlayerProfile): void {
     try {
-      this.storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+      this.storage.setItem(this.storageKey, JSON.stringify(profile));
     } catch {
       // Private/blocked storage keeps a valid in-memory profile for this call.
     }

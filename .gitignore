@@ -1,6 +1,7 @@
 .env.local
 .env.*.local
 .vercel/
+supabase/.temp/
 
 
 # Audio generator run report (used by --failed-only)

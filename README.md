@@ -45,6 +45,16 @@ pnpm test:visual
 
 El juego no necesita claves privadas durante la ejecucion en el navegador. Las claves de ElevenLabs se usan solamente con los scripts locales de generacion de audio y deben vivir en `.env.local`, archivo excluido de Git. `.env.example` contiene unicamente valores de ejemplo.
 
+## Cuentas y progreso remoto
+
+El modo invitado funciona sin servicios externos. Para habilitar registro por correo y sincronizacion:
+
+1. Crear un proyecto Supabase.
+2. Ejecutar `supabase/migrations/202608180001_accounts_and_cloud_saves.sql`.
+3. Configurar `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY` en `.env.local` y Vercel.
+
+La clave publicable puede llegar al navegador porque todas las tablas usan Row Level Security. Las claves `secret`, `service_role` y la futura Publisher Key de Steam nunca deben usar el prefijo `VITE_`. La arquitectura y el flujo de vinculacion con Steam estan documentados en `docs/accounts-and-steam.md`.
+
 ## Assets
 
 Los modelos, imagenes y audios necesarios durante el juego se sirven desde `public/`. El navegador nunca realiza llamadas a ElevenLabs durante una partida.

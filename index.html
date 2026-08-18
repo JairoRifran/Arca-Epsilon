@@ -240,6 +240,9 @@
             <button class="menu-command" id="load-game-button" type="button" data-open-menu-panel="load-game" disabled>
               Cargar partida
             </button>
+            <button class="menu-command menu-command--account" id="account-button" type="button" data-open-menu-panel="account">
+              <span>Cuenta</span><small id="account-menu-state">Invitado</small>
+            </button>
             <button class="menu-command" id="settings-button" type="button" data-open-menu-panel="settings">
               Ajustes
             </button>
@@ -278,6 +281,82 @@
               <button id="confirm-load-game-button" type="button" class="menu-command menu-command--primary">Cargar expedición</button>
               <button type="button" class="menu-command" data-close-menu-panel>Volver</button>
             </div>
+          </section>
+
+          <section data-menu-panel="account" aria-hidden="true" hidden>
+            <p class="eyebrow">Registro de piloto</p>
+            <h2>Cuenta</h2>
+
+            <div id="account-unavailable" class="account-unavailable">
+              <strong>Modo invitado activo</strong>
+              <p>El registro remoto estará disponible cuando se conecte el servicio de cuentas.</p>
+            </div>
+
+            <div id="account-signed-out">
+              <div class="account-tabs" role="tablist" aria-label="Acceso a cuenta">
+                <button type="button" class="is-active" data-account-mode="signin" role="tab" aria-selected="true">Ingresar</button>
+                <button type="button" data-account-mode="register" role="tab" aria-selected="false">Crear cuenta</button>
+              </div>
+
+              <form id="account-signin-form" class="account-form">
+                <label>
+                  <span>Correo</span>
+                  <input name="email" type="email" autocomplete="email" required maxlength="254">
+                </label>
+                <label>
+                  <span>Contraseña</span>
+                  <input name="password" type="password" autocomplete="current-password" required minlength="8" maxlength="128">
+                </label>
+                <button type="submit" class="menu-command menu-command--primary">Ingresar</button>
+                <button id="account-reset-password" type="button" class="account-text-command">Recuperar contraseña</button>
+              </form>
+
+              <form id="account-register-form" class="account-form" hidden>
+                <label>
+                  <span>Nombre de piloto</span>
+                  <input name="displayName" type="text" autocomplete="nickname" required minlength="2" maxlength="32">
+                </label>
+                <label>
+                  <span>Correo</span>
+                  <input name="email" type="email" autocomplete="email" required maxlength="254">
+                </label>
+                <label>
+                  <span>Contraseña</span>
+                  <input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="128">
+                </label>
+                <label>
+                  <span>Confirmar contraseña</span>
+                  <input name="passwordConfirm" type="password" autocomplete="new-password" required minlength="8" maxlength="128">
+                </label>
+                <button type="submit" class="menu-command menu-command--primary">Crear cuenta</button>
+              </form>
+            </div>
+
+            <div id="account-signed-in" class="account-session" hidden>
+              <span class="account-session__signal" aria-hidden="true"></span>
+              <strong id="account-display-name">Piloto Epsilon</strong>
+              <span id="account-email"></span>
+              <p id="account-sync-status">Progreso sincronizado</p>
+              <div class="menu-drawer__actions">
+                <button id="account-sync-now" type="button" class="menu-command menu-command--primary">Sincronizar ahora</button>
+                <button id="account-signout" type="button" class="menu-command">Cerrar sesión</button>
+              </div>
+            </div>
+
+            <form id="account-recovery-form" class="account-form" hidden>
+              <p>Define una nueva contraseña para recuperar tu cuenta.</p>
+              <label>
+                <span>Nueva contraseña</span>
+                <input name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="128">
+              </label>
+              <label>
+                <span>Confirmar contraseña</span>
+                <input name="passwordConfirm" type="password" autocomplete="new-password" required minlength="8" maxlength="128">
+              </label>
+              <button type="submit" class="menu-command menu-command--primary">Actualizar contraseña</button>
+            </form>
+
+            <p id="account-status" class="account-status" role="status" aria-live="polite"></p>
           </section>
 
           <section data-menu-panel="settings" aria-hidden="true" hidden>
