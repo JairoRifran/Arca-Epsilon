@@ -81,6 +81,7 @@ import { CombatModeView } from './combat/CombatModeView';
 import { AccountManager } from './auth/AccountManager';
 import { createSupabaseAuthGateway } from './auth/SupabaseAuthGateway';
 import { PlaySessionReporter } from './admin/OwnerDataService';
+import { BINDING_DEFINITIONS, describeCode, KeyBindings, type BindableAction } from './game/KeyBindings';
 import { getOrCreateDeviceId, SupabasePlayerDataService } from './auth/SupabasePlayerDataService';
 import {
   MISSION01_ANALYSIS_LINE_SECONDS,
@@ -782,6 +783,176 @@ function updateObjectiveState(display: ReturnType<typeof getCurrentObjectiveDisp
  */
 const objectiveContextAction = { key: '', label: '' };
 
+/** How long the "listo" confirmation stays up after a reload finishes. */
+const WEAPON_ALERT_READY_SECONDS = 1.4;
+
+const weaponAlertTracker = { readyUntil: -Infinity, wasReloading: false, state: '' };
+
+/**
+ * Drives the weapon alert.
+ *
+ * The reload state used to exist only as a 0.72 rem line in the side panel and
+ * a `weaponReloadMessage` that was never written to the DOM at all, so pressing
+ * the reload key produced no visible response whatsoever. Everything here reads
+ * the weapon system directly rather than a timer of its own, so the bar cannot
+ * drift out of step with the reload it is describing.
+ */
+function updateWeaponAlert(elapsed: number): void {
+  const magazine = weaponSystem.primaryMagazineState;
+  const tubes = weaponSystem.torpedoTubeState;
+  const reloading = magazine.reloading || tubes.reloading;
+  const needsReload =
+    (magazine.current <= 0 && magazine.reserve > 0) || (tubes.loadedCount <= 0 && tubes.reserve > 0);
+  const dry = magazine.current <= 0 && magazine.reserve <= 0 && tubes.loadedCount <= 0 && tubes.reserve <= 0;
+
+  // A reload that just finished earns a brief confirmation of its own.
+  if (weaponAlertTracker.wasReloading && !reloading) weaponAlertTracker.readyUntil = elapsed + WEAPON_ALERT_READY_SECONDS;
+  weaponAlertTracker.wasReloading = reloading;
+
+  let state = '';
+  let text = '';
+  let progress = 0;
+  if (reloading) {
+    state = 'reloading';
+    // Whichever is actually running; the cannon wins when both are.
+    progress = magazine.reloading ? magazine.progress : tubes.progress;
+    text = magazine.reloading && tubes.reloading
+      ? `Recargando cañón y torpedos ${Math.round(progress * 100)}%`
+      : magazine.reloading
+        ? `Recargando cañón ${Math.round(progress * 100)}%`
+        : `Recargando torpedos ${Math.round(progress * 100)}%`;
+  } else if (elapsed < weaponAlertTracker.readyUntil) {
+    state = 'ready';
+    text = 'Armamento listo';
+  } else if (dry) {
+    state = 'empty';
+    text = 'Sin munición';
+  } else if (needsReload) {
+    state = 'needs-reload';
+    text = magazine.current <= 0 && magazine.reserve > 0 ? 'Cargador vacío' : 'Tubos vacíos';
+  }
+
+  const visible = state.length > 0 && playerModeSystem.insideShip;
+  weaponAlert.classList.toggle('is-active', visible);
+  weaponAlert.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  if (!visible) return;
+
+  if (weaponAlertTracker.state !== state) {
+    weaponAlertTracker.state = state;
+    weaponAlert.dataset.state = state;
+  }
+  setText(weaponAlertText, text);
+  setText(weaponAlertKey, keyBindings.labelFor('reload'));
+  weaponAlertFill.style.width = `${Math.round(progress * 100)}%`;
+
+  // The side readouts pick up the same truth, so they agree with the alert.
+  laserStatus.dataset.reloading = String(magazine.reloading);
+  laserStatus.dataset.needsReload = String(magazine.current <= 0 && magazine.reserve > 0 && !magazine.reloading);
+  missileStatus.dataset.reloading = String(tubes.reloading);
+  missileStatus.dataset.needsReload = String(tubes.loadedCount <= 0 && tubes.reserve > 0 && !tubes.reloading);
+}
+
+/**
+ * Renders the rebinding list and the HUD key hints.
+ *
+ * The list is generated from `BINDING_DEFINITIONS` rather than written in HTML,
+ * so it cannot drift out of step with the actions the input handler actually
+ * recognises. Capture uses `event.code`, not `event.key`, so a binding survives
+ * a different keyboard layout.
+ */
+function setupKeyBindingSettings(): void {
+  const list = document.querySelector<HTMLElement>('#bindings-list');
+  const resetButton = document.querySelector<HTMLButtonElement>('#bindings-reset');
+  const hint = document.querySelector<HTMLElement>('#bindings-hint');
+  if (!list || !resetButton) return;
+
+  let capturing: { action: BindableAction; button: HTMLButtonElement } | undefined;
+
+  const stopCapture = (): void => {
+    if (!capturing) return;
+    capturing.button.classList.remove('is-capturing');
+    capturing.button.textContent = keyBindings.labelFor(capturing.action);
+    capturing = undefined;
+  };
+
+  const render = (): void => {
+    let group = '';
+    list.innerHTML = BINDING_DEFINITIONS.map((definition) => {
+      const heading = definition.group === group
+        ? ''
+        : `<p class="bindings-group">${definition.group}</p>`;
+      group = definition.group;
+      return `${heading}
+        <div class="binding-row">
+          <span class="binding-row__label">${definition.label}</span>
+          <button type="button" class="binding-row__key" data-action="${definition.action}"
+            data-custom="${!keyBindings.isDefault(definition.action)}"
+            aria-label="Cambiar tecla de ${definition.label}">${keyBindings.labelFor(definition.action)}</button>
+        </div>`;
+    }).join('');
+  };
+
+  list.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('.binding-row__key');
+    if (!button) return;
+    const action = button.dataset.action as BindableAction | undefined;
+    if (!action) return;
+    // Clicking the row already being captured cancels it.
+    if (capturing?.action === action) { stopCapture(); return; }
+    stopCapture();
+    capturing = { action, button };
+    button.classList.add('is-capturing');
+    button.textContent = 'Presioná…';
+  });
+
+  // Capture on the window during the capture window only, and swallow the key
+  // so it cannot also act on the game behind the menu.
+  window.addEventListener('keydown', (event) => {
+    if (!capturing) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.code === 'Escape') { stopCapture(); return; }
+    if (keyBindings.isReserved(event.code)) {
+      if (hint) hint.textContent = `${describeCode(event.code)} está reservada para el menú.`;
+      return;
+    }
+    const conflict = keyBindings.conflictFor(event.code, capturing.action);
+    keyBindings.assign(capturing.action, event.code);
+    if (hint) {
+      hint.textContent = conflict
+        ? `Intercambiada con "${conflict.label}".`
+        : 'Hacé clic en una tecla y presioná la nueva. Escape cancela.';
+    }
+    stopCapture();
+    render();
+  }, { capture: true });
+
+  resetButton.addEventListener('click', () => {
+    stopCapture();
+    keyBindings.resetAll();
+    if (hint) hint.textContent = 'Controles restaurados a los predeterminados.';
+    render();
+  });
+
+  /** Keeps every `data-binding-hint` label truthful after a remap. */
+  const refreshHints = (): void => {
+    document.querySelectorAll<HTMLElement>('[data-binding-hint]').forEach((node) => {
+      const hintKey = node.dataset.bindingHint;
+      if (hintKey === 'move') {
+        node.textContent = (['forward', 'left', 'back', 'right'] as BindableAction[])
+          .map((action) => keyBindings.labelFor(action))
+          .join('');
+        return;
+      }
+      if (hintKey) node.textContent = keyBindings.labelFor(hintKey as BindableAction);
+    });
+  };
+
+  keyBindings.onChange(refreshHints);
+  render();
+  refreshHints();
+}
+
 function getElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) {
@@ -828,6 +999,10 @@ const objectiveStep = getElement<HTMLElement>('#objective-step');
 const objectiveTargetName = getElement<HTMLElement>('#objective-target-name');
 const objectiveState = getElement<HTMLElement>('#objective-state');
 const objectivePanel = getElement<HTMLElement>('.objective-panel');
+const weaponAlert = getElement<HTMLElement>('#weapon-alert');
+const weaponAlertText = getElement<HTMLElement>('#weapon-alert-text');
+const weaponAlertKey = getElement<HTMLElement>('#weapon-alert-key');
+const weaponAlertFill = getElement<HTMLElement>('#weapon-alert-fill');
 const scannerStatus = getElement<HTMLElement>('#scanner-status');
 const signalStrength = getElement<HTMLElement>('#signal-strength');
 const habitabilityProgress = getElement<HTMLProgressElement>('#habitability-progress');
@@ -879,6 +1054,12 @@ const gameModes = new GameModeController();
 const shipCatalog = new ShipCatalog();
 let profileRepository: PlayerProfileRepository = new LocalPlayerProfileRepository(window.localStorage, shipCatalog);
 let playerProfile: PlayerProfile = profileRepository.load();
+/**
+ * Remappable controls. Physical keys are resolved to actions at the edge of the
+ * input handler, so the ~30 places that read `input.has('w')` never change.
+ */
+const keyBindings = new KeyBindings(window.localStorage);
+
 const accountAuthGateway = diagnosticsMode && urlParams.get('auth') === 'guest'
   ? undefined
   : createSupabaseAuthGateway();
@@ -893,6 +1074,20 @@ const accountAuthGateway = diagnosticsMode && urlParams.get('auth') === 'guest'
 const playSessionReporter = accountAuthGateway
   ? new PlaySessionReporter(accountAuthGateway.client)
   : undefined;
+/**
+ * Whether a beat has anywhere to go.
+ *
+ * `record_play_heartbeat` requires a session, so beating while signed out
+ * produced a 400 on every write. The reporter swallowed the rejection, but the
+ * browser still logged a failed request each minute -- noise in the console for
+ * data that could never be recorded.
+ */
+let playSessionSignedIn = false;
+accountAuthGateway?.onAuthStateChange((session) => {
+  playSessionSignedIn = Boolean(session);
+  // A different account must not keep writing into the previous session's row.
+  if (!session) playSessionReporter?.reset();
+});
 const accountDataGateway = accountAuthGateway
   ? new SupabasePlayerDataService(accountAuthGateway.client, shipCatalog, getOrCreateDeviceId(window.localStorage))
   : undefined;
@@ -19590,7 +19785,8 @@ function updateHud(nearestThreat: number): void {
   updateObjectiveState(currentObjectiveDisplay);
   // Presence beat. The reporter throttles itself to one write a minute, so
   // calling it from the HUD pass costs a timestamp comparison per frame.
-  void playSessionReporter?.beat(currentObjectiveDisplay.stepTitle);
+  if (playSessionSignedIn) void playSessionReporter?.beat(currentObjectiveDisplay.stepTitle);
+  updateWeaponAlert(clock.elapsedTime);
   // Missions set the progress label to their own step title, which now has its
   // own line above -- printing it twice wasted a row and read as a duplicate.
   if (missionProgressLabel.textContent === currentObjectiveDisplay.stepTitle) {
@@ -22258,6 +22454,7 @@ const accountManager = new AccountManager({
   }
 });
 void accountManager.initialize();
+setupKeyBindingSettings();
 
 function getSelectedShipDefinition(): ShipDefinition {
   playerProfile = profileRepository.load();
@@ -22742,15 +22939,15 @@ window.addEventListener('keydown', (event) => {
     return;
   }
 
-  if (gameModes.isStory && !event.repeat && event.code === 'KeyM') {
+  if (gameModes.isStory && !event.repeat && keyBindings.matches(event.code, 'starMap')) {
     dispatchInputAction('map', event.code);
     return;
   }
-  if (event.code === 'KeyE' && event.repeat) {
+  if (keyBindings.matches(event.code, 'interact') && event.repeat) {
     event.preventDefault();
     return;
   }
-  if (event.code === 'KeyE') {
+  if (keyBindings.matches(event.code, 'interact')) {
     // E is the interact key first. It doubles as vertical thrust in vacuum,
     // but only when there is nothing to interact with: overloading it
     // unconditionally meant syncing an Ark link also pushed the ship upward,
@@ -22763,30 +22960,35 @@ window.addEventListener('keydown', (event) => {
     dispatchInputAction('scan', event.code);
     return;
   }
-  if (!event.repeat && event.code === 'KeyF') {
+  if (!event.repeat && keyBindings.matches(event.code, 'enterShip')) {
     dispatchInputAction('shipAccess', event.code);
     return;
   }
-  if (!event.repeat && event.code === 'KeyV') {
+  if (!event.repeat && keyBindings.matches(event.code, 'camera')) {
     dispatchInputAction('toggleCamera', event.code);
     return;
   }
 
   if (gamePaused || starMap.active || playerModeSystem.transitionActive) return;
-  const key = event.key.toLowerCase();
-  input.add(key);
+  // Resolve the physical key to whatever it is bound to. Movement actions enter
+  // the shared set under their default letter; a letter that is *no longer*
+  // bound must not fall through, or the original key would keep steering.
+  const boundKey = keyBindings.inputKeyFor(event.code);
+  const rawKey = event.key.toLowerCase();
+  const key = boundKey ?? rawKey;
+  if (boundKey !== undefined || !keyBindings.isCanonicalInputKey(rawKey)) input.add(key);
   tutorialManager.recordActivity();
   if (['w', 'a', 's', 'd'].includes(key)) {
     tutorialManager.complete(inSurfacePhase ? 'surfaceMove' : 'moveShip');
   }
   // Weapons stay cold from the cradle until the exit corridor is behind us.
-  if (!event.repeat && event.code === 'Space' && playerModeSystem.insideShip && !mission24.ascentActive && !arkDeparture.weaponsLocked) fireLaser();
-  if (!event.repeat && key === 'r' && playerModeSystem.insideShip && !arkDeparture.weaponsLocked) fireMissile();
+  if (!event.repeat && keyBindings.matches(event.code, 'fire') && playerModeSystem.insideShip && !mission24.ascentActive && !arkDeparture.weaponsLocked) fireLaser();
+  if (!event.repeat && keyBindings.matches(event.code, 'torpedo') && playerModeSystem.insideShip && !arkDeparture.weaponsLocked) fireMissile();
   // Manual reload. G was re-audited as free before being taken: Space, R, T, E,
   // F, V, M, Q, C, WASD and Shift are all bound elsewhere. `event.repeat` is
   // already filtered above, so holding the key cannot restart a timer or drain
   // the reserve twice.
-  if (!event.repeat && event.code === 'KeyG' && playerModeSystem.insideShip) {
+  if (!event.repeat && keyBindings.matches(event.code, 'reload') && playerModeSystem.insideShip) {
     weaponAudit.reloadRequestCount += 1;
     const result = weaponSystem.requestReload();
     if (result.message) {
@@ -22798,7 +23000,7 @@ window.addEventListener('keydown', (event) => {
   // Target selection. T was free: M/E/F/V/Space/R/WASD/Shift/Q/C are all taken,
   // so this adds a binding rather than overriding one. First press picks the
   // nearest contact ahead; further presses cycle by distance.
-  if (!event.repeat && key === 't' && playerModeSystem.insideShip) {
+  if (!event.repeat && keyBindings.matches(event.code, 'target') && playerModeSystem.insideShip) {
     const forward = shipForwardScratch.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
     const picked = hostileContacts.currentTargetId
       ? hostileContacts.cycleTarget()
@@ -22808,7 +23010,9 @@ window.addEventListener('keydown', (event) => {
 });
 
 window.addEventListener('keyup', (event) => {
-  input.delete(event.key.toLowerCase());
+  // Mirror the keydown translation exactly, or a rebound key would never clear.
+  const boundKey = keyBindings.inputKeyFor(event.code);
+  input.delete(boundKey ?? event.key.toLowerCase());
 });
 
 window.addEventListener('mousemove', (event) => {

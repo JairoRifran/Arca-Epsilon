@@ -4734,3 +4734,234 @@ progress.is-critical::-webkit-progress-value {
 .contact-marker__bracket {
   transition: transform 90ms ease-out, border-color 90ms ease-out;
 }
+
+/* ---------------------------------------------------------------------------
+   Aviso de armamento
+
+   El estado de recarga sólo se veía como un cambio de texto de 0,72 rem en el
+   panel lateral, fuera del eje de la mirada durante el combate. Este aviso vive
+   sobre el pie de controles y usa movimiento para que se note sin tener que
+   leerlo: pulso mientras hace falta recargar, barra que avanza mientras carga.
+   --------------------------------------------------------------------------- */
+.weapon-alert {
+  position: fixed;
+  left: 50%;
+  bottom: 8.6rem;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 15rem;
+  border: 1px solid var(--panel-border-strong);
+  border-left: 3px solid var(--accent-warn);
+  clip-path: var(--chamfer-sm);
+  background: rgba(10, 16, 22, 0.88);
+  padding: 0.46rem 0.72rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 10px) scale(0.97);
+  transition: opacity 180ms var(--ease-premium), transform 180ms var(--ease-premium);
+}
+
+.weapon-alert.is-active {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.weapon-alert__icon {
+  width: 0.62rem;
+  height: 0.62rem;
+  border-radius: 50%;
+  background: var(--accent-warn);
+}
+
+.weapon-alert__body { display: grid; gap: 0.3rem; }
+
+.weapon-alert__text {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.weapon-alert__track {
+  height: 3px;
+  background: rgba(148, 186, 205, 0.16);
+  overflow: hidden;
+}
+
+.weapon-alert__track > i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent-warn);
+  /* Sigue al progreso real de la recarga, no a un temporizador propio. */
+  transition: width 120ms linear;
+}
+
+.weapon-alert__key {
+  border: 1px solid var(--accent-warn);
+  border-radius: 3px;
+  background: rgba(255, 195, 122, 0.14);
+  padding: 0.1rem 0.44rem;
+  color: var(--accent-warn);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* Hace falta recargar: pulso, porque un color fijo se pierde en combate. */
+.weapon-alert[data-state='needs-reload'] {
+  animation: weapon-alert-pulse 1.05s ease-in-out infinite;
+}
+
+.weapon-alert[data-state='needs-reload'] .weapon-alert__track { display: none; }
+
+/* Cargando: el acento pasa a verde y la barra hace el trabajo. */
+.weapon-alert[data-state='reloading'] {
+  border-left-color: var(--accent-mission);
+}
+
+.weapon-alert[data-state='reloading'] .weapon-alert__icon,
+.weapon-alert[data-state='reloading'] .weapon-alert__track > i {
+  background: var(--accent-mission);
+}
+
+.weapon-alert[data-state='reloading'] .weapon-alert__key {
+  border-color: var(--accent-mission-dim);
+  background: rgba(125, 232, 184, 0.12);
+  color: var(--accent-mission);
+}
+
+/* Listo: confirmación breve, sin barra. */
+.weapon-alert[data-state='ready'] {
+  border-left-color: var(--accent-mission);
+}
+
+.weapon-alert[data-state='ready'] .weapon-alert__icon { background: var(--accent-mission); }
+.weapon-alert[data-state='ready'] .weapon-alert__track { display: none; }
+.weapon-alert[data-state='ready'] .weapon-alert__key { display: none; }
+
+/* Sin reserva: el único estado realmente malo. */
+.weapon-alert[data-state='empty'] { border-left-color: var(--accent-danger); }
+.weapon-alert[data-state='empty'] .weapon-alert__icon { background: var(--accent-danger); }
+.weapon-alert[data-state='empty'] .weapon-alert__track,
+.weapon-alert[data-state='empty'] .weapon-alert__key { display: none; }
+
+@keyframes weapon-alert-pulse {
+  0%, 100% { border-left-color: var(--accent-warn); box-shadow: none; }
+  50% { border-left-color: #ffe0ad; box-shadow: 0 0 18px rgba(255, 195, 122, 0.34); }
+}
+
+/* El indicador de munición del panel lateral acompaña, sin competir. */
+#missile-status[data-reloading='true'],
+#laser-status[data-reloading='true'] {
+  color: var(--accent-mission);
+}
+
+#missile-status[data-needs-reload='true'],
+#laser-status[data-needs-reload='true'] {
+  color: var(--accent-warn);
+  animation: weapon-readout-blink 1.05s ease-in-out infinite;
+}
+
+@keyframes weapon-readout-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weapon-alert[data-state='needs-reload'],
+  #missile-status[data-needs-reload='true'],
+  #laser-status[data-needs-reload='true'] {
+    animation: none;
+  }
+}
+
+.hud.capture-clean .weapon-alert { display: none; }
+
+/* ---------------------------------------------------------------------------
+   Controles reasignables
+   --------------------------------------------------------------------------- */
+.menu-bindings__hint {
+  margin: 0 0 0.7rem;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.bindings-list {
+  display: grid;
+  gap: 0.28rem;
+  max-height: 17rem;
+  overflow-y: auto;
+  padding-right: 0.3rem;
+}
+
+.bindings-group {
+  margin: 0.55rem 0 0.15rem;
+  color: var(--accent-info);
+  font-family: var(--font-display);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.bindings-group:first-child { margin-top: 0; }
+
+.binding-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.binding-row__label { color: var(--text-secondary); font-size: 0.82rem; }
+
+.binding-row__key {
+  min-width: 4.6rem;
+  border: 1px solid var(--panel-border-strong);
+  clip-path: var(--chamfer-sm);
+  background: rgba(148, 186, 205, 0.06);
+  padding: 0.3rem 0.6rem;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+  transition: border-color 140ms var(--ease-premium), color 140ms var(--ease-premium);
+}
+
+.binding-row__key:hover { border-color: var(--accent-mission-dim); color: var(--accent-mission); }
+
+/* Una tecla cambiada se marca, para poder ver de un vistazo qué se tocó. */
+.binding-row__key[data-custom='true'] { border-color: var(--accent-info); color: var(--accent-info); }
+
+/* Capturando: el botón dice qué espera y late, así el foco es inequívoco. */
+.binding-row__key.is-capturing {
+  border-color: var(--accent-warn);
+  background: rgba(255, 195, 122, 0.12);
+  color: var(--accent-warn);
+  animation: binding-capture 0.9s ease-in-out infinite;
+}
+
+@keyframes binding-capture {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.menu-bindings__conflict {
+  margin: 0.5rem 0 0;
+  color: var(--accent-warn);
+  font-size: 0.76rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .binding-row__key.is-capturing { animation: none; }
+}
