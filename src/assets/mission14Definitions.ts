@@ -74,19 +74,32 @@ export const mission14Tuning = {
    */
   carrierCenter: 118,
   carrierAmplitudeSlow: 5,
-  carrierRateSlow: 0.22,
-  carrierAmplitudeFast: 1.5,
-  carrierRateFast: 0.61,
+  // The carrier drifts slowly enough that a good tune survives a few seconds.
+  // At the old rates it walked out of tolerance almost immediately, so the
+  // pilot spent the whole step chasing it and never banked any progress.
+  carrierRateSlow: 0.13,
+  carrierAmplitudeFast: 1.2,
+  carrierRateFast: 0.3,
   /** Tuner travel. E steps the dial up and it wraps at the top of the band. */
   tunerMin: 110,
   tunerMax: 126,
   tunerStep: 1.6,
-  /** Deviation the purge tolerates before it stalls and starts bleeding back. */
-  tunerTolerance: 2.2,
+  /**
+   * Deviation the purge tolerates before it stalls and starts bleeding back.
+   *
+   * Was 2.2, narrower than a single 1.6 step: the dial could jump straight over
+   * the carrier, so landing a tune was closer to luck than aim.
+   */
+  tunerTolerance: 4.5,
   /** Seconds of in-tolerance work needed to purge the power node. */
-  powerPurgeSeconds: 10,
-  /** Purge lost per second while the dial is off the carrier. */
-  powerPurgeDecayPerSecond: 5,
+  powerPurgeSeconds: 3,
+  /**
+   * Purge lost per second while the dial is off the carrier.
+   *
+   * Was 5, which erased a full second of work for every second off-tune and
+   * made the progress bar run backwards faster than it could be filled.
+   */
+  powerPurgeDecayPerSecond: 1.2,
 
   // --- Phase 4: comms node pulse blocking ----------------------------------
   /** Seconds between corrupt pulses leaving the relay. */
