@@ -2189,7 +2189,7 @@ h2 {
 .objective-panel {
   top: 6.1rem;
   left: 1rem;
-  width: min(380px, calc(100vw - 2rem));
+  width: min(318px, calc(100vw - 2rem));
   /* Antes se desbordaba y aparecia una barra de scroll dentro del HUD, que es
      exactamente el aspecto de "web app" que este pase intenta sacar. */
   /* Tope calculado contra .systems-panel: 6.1rem de top + esta altura tiene
@@ -3625,10 +3625,10 @@ progress.is-critical::-webkit-progress-value {
 .colony-panel {
   top: 6.1rem;
   right: 1rem;
-  width: min(21rem, calc(100vw - 2rem));
+  width: min(17.5rem, calc(100vw - 2rem));
   max-height: calc(100vh - 12rem);
   overflow: auto;
-  padding: 1.1rem 1.15rem;
+  padding: 0.85rem 0.9rem;
   display: none;
 }
 
@@ -4977,4 +4977,46 @@ progress.is-critical::-webkit-progress-value {
 .credits-contact:hover,
 .credits-contact:focus-visible {
   border-bottom-color: var(--accent-info);
+}
+
+
+/* ---------------------------------------------------------------------------
+   Atenuación por inactividad
+
+   Tres paneles fijos y una tira de controles ocupaban más de la mitad del
+   ancho, y la mayoría del tiempo repiten información que no cambió: una base
+   al 100 %, un casco intacto, los mismos controles. En vez de esconderlos
+   -- lo que obliga a recordar dónde estaban -- bajan de peso cuando llevan
+   unos segundos sin novedad y vuelven enteros en cuanto algo cambia.
+   El objetivo actual nunca se atenúa: es lo único que siempre importa.
+   --------------------------------------------------------------------------- */
+.hud .systems-panel.is-idle,
+.hud .mission-panel.is-idle,
+.hud .colony-panel.is-idle,
+.hud .controls-strip.is-idle {
+  opacity: 0.3;
+  transition: opacity 900ms var(--ease-premium);
+}
+
+.hud .systems-panel:hover,
+.hud .mission-panel:hover,
+.hud .colony-panel:hover,
+.hud .controls-strip:hover {
+  opacity: 1;
+  transition: opacity 140ms var(--ease-premium);
+}
+
+/* Paneles más compactos: menos aire por fila sin tocar la jerarquía. */
+.colony-panel .meter,
+.systems-panel .meter { gap: 0.2rem; }
+
+.controls-strip { transition: opacity 900ms var(--ease-premium); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hud .systems-panel.is-idle,
+  .hud .mission-panel.is-idle,
+  .hud .colony-panel.is-idle,
+  .hud .controls-strip.is-idle {
+    opacity: 0.55;
+  }
 }

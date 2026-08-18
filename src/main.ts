@@ -953,6 +953,56 @@ function setupKeyBindingSettings(): void {
   refreshHints();
 }
 
+/** Seconds a secondary panel must go unchanged before it steps back. */
+const HUD_IDLE_SECONDS = 6;
+
+type IdlePanel = { node: HTMLElement; signature: string; changedAt: number; idle: boolean };
+let idlePanels: IdlePanel[] = [];
+let idlePanelSampledAt = -Infinity;
+
+/**
+ * Fades secondary HUD panels that have nothing new to say.
+ *
+ * Three fixed panels and a controls strip covered more than half the viewport,
+ * and most of the time they repeat unchanged values -- a base at 100%, an
+ * intact hull, the same key hints. Hiding them outright would force the player
+ * to remember where things were, so instead they lose weight after a few
+ * seconds without news and come back the instant anything changes.
+ *
+ * The objective panel is deliberately absent: it is the one readout that always
+ * matters. Text is sampled twice a second, not per frame, and only the panels
+ * listed here are ever touched.
+ */
+function updateHudIdleFade(elapsed: number): void {
+  if (idlePanels.length === 0) {
+    idlePanels = ['.systems-panel', '.mission-panel', '.colony-panel', '#controls-strip']
+      .map((selector) => document.querySelector<HTMLElement>(selector))
+      .filter((node): node is HTMLElement => Boolean(node))
+      .map((node) => ({ node, signature: '', changedAt: elapsed, idle: false }));
+  }
+  // Twice a second is enough to feel immediate and keeps innerText off the
+  // frame budget; reading it forces layout.
+  if (elapsed - idlePanelSampledAt < 0.5) return;
+  idlePanelSampledAt = elapsed;
+
+  for (const panel of idlePanels) {
+    const signature = panel.node.textContent ?? '';
+    if (signature !== panel.signature) {
+      panel.signature = signature;
+      panel.changedAt = elapsed;
+      if (panel.idle) {
+        panel.idle = false;
+        panel.node.classList.remove('is-idle');
+      }
+      continue;
+    }
+    if (!panel.idle && elapsed - panel.changedAt > HUD_IDLE_SECONDS) {
+      panel.idle = true;
+      panel.node.classList.add('is-idle');
+    }
+  }
+}
+
 function getElement<T extends HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) {
@@ -19801,6 +19851,7 @@ function updateHud(nearestThreat: number): void {
   // calling it from the HUD pass costs a timestamp comparison per frame.
   if (playSessionSignedIn) void playSessionReporter?.beat(currentObjectiveDisplay.stepTitle);
   updateWeaponAlert(clock.elapsedTime);
+  updateHudIdleFade(clock.elapsedTime);
   // Missions set the progress label to their own step title, which now has its
   // own line above -- printing it twice wasted a row and read as a duplicate.
   if (missionProgressLabel.textContent === currentObjectiveDisplay.stepTitle) {
