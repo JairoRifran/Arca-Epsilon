@@ -80,6 +80,7 @@ import { CombatSession } from './combat/CombatSession';
 import { CombatModeView } from './combat/CombatModeView';
 import { AccountManager } from './auth/AccountManager';
 import { createSupabaseAuthGateway } from './auth/SupabaseAuthGateway';
+import { PlaySessionReporter } from './admin/OwnerDataService';
 import { getOrCreateDeviceId, SupabasePlayerDataService } from './auth/SupabasePlayerDataService';
 import {
   MISSION01_ANALYSIS_LINE_SECONDS,
@@ -881,6 +882,17 @@ let playerProfile: PlayerProfile = profileRepository.load();
 const accountAuthGateway = diagnosticsMode && urlParams.get('auth') === 'guest'
   ? undefined
   : createSupabaseAuthGateway();
+/**
+ * Presence reporting for the owner console.
+ *
+ * One row per play session, refreshed on a slow heartbeat, so the dashboard can
+ * answer "is anyone playing" without a telemetry pipeline. Absent when Supabase
+ * is not configured, and every write is fire-and-forget: analytics must never
+ * be able to interrupt play.
+ */
+const playSessionReporter = accountAuthGateway
+  ? new PlaySessionReporter(accountAuthGateway.client)
+  : undefined;
 const accountDataGateway = accountAuthGateway
   ? new SupabasePlayerDataService(accountAuthGateway.client, shipCatalog, getOrCreateDeviceId(window.localStorage))
   : undefined;
@@ -19576,6 +19588,9 @@ function updateHud(nearestThreat: number): void {
   setText(objectiveDistance, formatDistance(currentObjectiveDisplay.distance));
   objectivePanel.setAttribute('data-urgency', currentObjectiveDisplay.urgency);
   updateObjectiveState(currentObjectiveDisplay);
+  // Presence beat. The reporter throttles itself to one write a minute, so
+  // calling it from the HUD pass costs a timestamp comparison per frame.
+  void playSessionReporter?.beat(currentObjectiveDisplay.stepTitle);
   // Missions set the progress label to their own step title, which now has its
   // own line above -- printing it twice wasted a row and read as a duplicate.
   if (missionProgressLabel.textContent === currentObjectiveDisplay.stepTitle) {

@@ -1,0 +1,291 @@
+/*
+ * Owner console styling.
+ *
+ * Shares the game's palette and display face so the console reads as part of
+ * Arca Epsilon, but it is a data tool: denser, flatter, and without any of the
+ * HUD chrome. No imports from the game stylesheet -- that file is 3.8k lines of
+ * in-world UI and none of it applies here.
+ */
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --ink: #05080c;
+  --panel: #0b131a;
+  --panel-2: #101b24;
+  --line: rgba(148, 186, 205, 0.16);
+  --line-strong: rgba(148, 186, 205, 0.32);
+  --text: #e8f2f6;
+  --text-2: #aec4cd;
+  --dim: #74909c;
+  --mission: #7de8b8;
+  --info: #8fc8e8;
+  --warn: #ffc37a;
+  --danger: #ff7a8a;
+  --display: Rajdhani, Inter, system-ui, sans-serif;
+  --body: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 20% -10%, #12222e 0%, var(--ink) 55%);
+  color: var(--text);
+  font-family: var(--body);
+  min-height: 100vh;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--dim);
+  font-family: var(--display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0.2rem 0 0;
+  font-family: var(--display);
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+/* --- Gate ---------------------------------------------------------------- */
+.gate {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 1.5rem;
+}
+
+.gate__card {
+  width: min(26rem, 100%);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 1.6rem;
+}
+
+.gate__message { color: var(--text-2); font-size: 0.9rem; margin: 1rem 0 0; }
+.gate__hint {
+  margin: 1rem 0 0;
+  border-left: 3px solid var(--warn);
+  padding: 0.5rem 0.7rem;
+  background: rgba(255, 195, 122, 0.08);
+  color: var(--warn);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.gate__form { display: grid; gap: 0.8rem; margin-top: 1.2rem; }
+.gate__form label { display: grid; gap: 0.3rem; }
+.gate__form span {
+  color: var(--dim);
+  font-family: var(--display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+input, select {
+  border: 1px solid var(--line-strong);
+  background: var(--ink);
+  padding: 0.55rem 0.65rem;
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 0.9rem;
+}
+
+input:focus, select:focus { outline: 2px solid var(--info); outline-offset: 1px; }
+
+button {
+  border: 1px solid var(--mission);
+  background: rgba(125, 232, 184, 0.12);
+  padding: 0.5rem 0.9rem;
+  color: var(--mission);
+  cursor: pointer;
+  font-family: var(--display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+button:hover:not(:disabled) { background: rgba(125, 232, 184, 0.22); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.is-quiet { border-color: var(--line-strong); background: none; color: var(--text-2); }
+
+/* --- Console ------------------------------------------------------------- */
+.console { padding: 1.4rem clamp(1rem, 3vw, 2.4rem) 3rem; }
+
+.console__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1rem;
+}
+
+.console__bar-actions { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.console__who { color: var(--dim); font-size: 0.8rem; }
+
+.console__error {
+  margin: 1rem 0 0;
+  border-left: 3px solid var(--danger);
+  padding: 0.6rem 0.8rem;
+  background: rgba(255, 122, 138, 0.08);
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.7rem;
+  margin: 1.2rem 0 0;
+}
+
+.kpi {
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--line-strong);
+  background: var(--panel);
+  padding: 0.8rem 0.9rem;
+}
+
+.kpi--accent { border-top-color: var(--mission); }
+
+.kpi__label {
+  color: var(--dim);
+  font-family: var(--display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.kpi__value {
+  margin-top: 0.25rem;
+  font-family: var(--display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.kpi__note { margin-top: 0.2rem; color: var(--text-2); font-size: 0.72rem; }
+
+.panel {
+  margin-top: 1.2rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 1rem 1.1rem 1.1rem;
+}
+
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+}
+
+.panel__note { margin: 0; color: var(--dim); font-size: 0.75rem; }
+
+/* --- Chart --------------------------------------------------------------- */
+.chart { width: 100%; overflow-x: auto; }
+.chart svg { display: block; width: 100%; min-width: 30rem; height: 13rem; }
+
+.legend {
+  display: flex;
+  gap: 1.1rem;
+  margin: 0.7rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-2);
+  font-size: 0.75rem;
+}
+
+.legend li { display: flex; align-items: center; gap: 0.35rem; }
+.swatch { width: 0.7rem; height: 0.7rem; display: inline-block; }
+.swatch--signups { background: var(--mission); }
+.swatch--active { background: var(--info); }
+.swatch--sessions { background: var(--warn); }
+
+/* --- Progression --------------------------------------------------------- */
+.progression { display: grid; gap: 0.45rem; }
+
+.progression__row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 14rem) 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 0.82rem;
+}
+
+.progression__name { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progression__bar { height: 0.6rem; background: rgba(148, 186, 205, 0.1); }
+.progression__bar i { display: block; height: 100%; background: var(--info); }
+.progression__count { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* --- Table --------------------------------------------------------------- */
+.table-scroll { overflow-x: auto; }
+
+.players { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 44rem; }
+
+.players th {
+  border-bottom: 1px solid var(--line-strong);
+  padding: 0.45rem 0.6rem;
+  color: var(--dim);
+  font-family: var(--display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.players td { border-bottom: 1px solid var(--line); padding: 0.5rem 0.6rem; color: var(--text-2); }
+.players td:first-child { color: var(--text); font-weight: 600; }
+.players .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.players tr:hover td { background: var(--panel-2); }
+
+.tag {
+  display: inline-block;
+  border: 1px solid var(--line-strong);
+  padding: 0.05rem 0.35rem;
+  margin-left: 0.35rem;
+  color: var(--dim);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tag--unverified { border-color: var(--warn); color: var(--warn); }
+
+.empty { padding: 1.4rem; color: var(--dim); text-align: center; font-size: 0.85rem; }
+
+.pager { display: flex; align-items: center; justify-content: flex-end; gap: 0.7rem; margin-top: 0.9rem; }
+.pager span { color: var(--dim); font-size: 0.78rem; }
+
+@media (max-width: 40rem) {
+  .console__bar { align-items: flex-start; }
+  .progression__row { grid-template-columns: minmax(6rem, 9rem) 1fr auto; }
+}
