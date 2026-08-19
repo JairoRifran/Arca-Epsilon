@@ -953,12 +953,77 @@ function setupKeyBindingSettings(): void {
   refreshHints();
 }
 
+/**
+ * Keeps the right-hand panels from drawing on top of each other.
+ *
+ * `.descent-panel`, `.colony-panel` and `.habitability-panel` were all authored
+ * at `top: 6.1rem; right: 1rem`, on the assumption that only one is ever up.
+ * That does not hold on the surface, where descent and colony are both live and
+ * render as one illegible pile of overlapping text.
+ *
+ * Stacking them at runtime rather than restructuring the DOM: they are siblings
+ * of a dozen other absolutely positioned panels, and turning that into a flow
+ * layout would put every one of them at risk for one bug.
+ */
+const RIGHT_STACK_SELECTORS = ['.descent-panel', '.colony-panel', '.habitability-panel'];
+const RIGHT_STACK_TOP = 98;
+const RIGHT_STACK_GAP = 8;
+/** Clearance kept above the bottom-right mission log. */
+const RIGHT_STACK_BOTTOM = 96;
+
+let rightStackNodes: HTMLElement[] = [];
+
+function layoutRightPanels(): void {
+  if (rightStackNodes.length === 0) {
+    rightStackNodes = RIGHT_STACK_SELECTORS
+      .map((selector) => document.querySelector<HTMLElement>(selector))
+      .filter((node): node is HTMLElement => Boolean(node));
+  }
+  const visible = rightStackNodes.filter((node) => {
+    const style = window.getComputedStyle(node);
+    return style.display !== 'none' && style.visibility !== 'hidden';
+  });
+  if (visible.length === 0) {
+    for (const node of rightStackNodes) {
+      node.style.removeProperty('top');
+      node.style.removeProperty('max-height');
+    }
+    return;
+  }
+
+  // The mission log is anchored to the bottom of the same column, so it is the
+  // real floor -- not a guessed margin. Capping only when two panels stack was
+  // the first version's mistake: a single tall colony panel still grew straight
+  // through the log underneath it.
+  const log = document.querySelector<HTMLElement>('.mission-panel');
+  const logVisible = log && window.getComputedStyle(log).display !== 'none';
+  const floor = logVisible
+    ? log.getBoundingClientRect().top - RIGHT_STACK_GAP
+    : window.innerHeight - RIGHT_STACK_BOTTOM;
+
+  // No minimum height here. An earlier version floored the slice at 120 px,
+  // which guaranteed a panel could be taller than the room left for it and put
+  // the overlap straight back. When space is tight the panels shrink and scroll
+  // instead -- staying inside the column is the invariant, not their size.
+  const available = floor - RIGHT_STACK_TOP - RIGHT_STACK_GAP * (visible.length - 1);
+  const slice = Math.max(48, Math.floor(available / visible.length));
+  let top = RIGHT_STACK_TOP;
+  for (const node of visible) {
+    // Never let a panel start below its own floor, however cramped it gets.
+    const height = Math.max(48, Math.min(slice, floor - top));
+    node.style.top = `${top}px`;
+    node.style.maxHeight = `${height}px`;
+    top += Math.min(node.offsetHeight, height) + RIGHT_STACK_GAP;
+  }
+}
+
 /** Seconds a secondary panel must go unchanged before it steps back. */
 const HUD_IDLE_SECONDS = 6;
 
 type IdlePanel = { node: HTMLElement; signature: string; changedAt: number; idle: boolean };
 let idlePanels: IdlePanel[] = [];
 let idlePanelSampledAt = -Infinity;
+let hudLayoutDue = true;
 
 /**
  * Fades secondary HUD panels that have nothing new to say.
@@ -984,6 +1049,9 @@ function updateHudIdleFade(elapsed: number): void {
   // frame budget; reading it forces layout.
   if (elapsed - idlePanelSampledAt < 0.5) return;
   idlePanelSampledAt = elapsed;
+  // Same tick drives the right-hand stack: panels appear and disappear with
+  // mission phase, so their positions have to be recomputed, not set once.
+  hudLayoutDue = true;
 
   for (const panel of idlePanels) {
     const signature = panel.node.textContent ?? '';
@@ -19852,6 +19920,7 @@ function updateHud(nearestThreat: number): void {
   if (playSessionSignedIn) void playSessionReporter?.beat(currentObjectiveDisplay.stepTitle);
   updateWeaponAlert(clock.elapsedTime);
   updateHudIdleFade(clock.elapsedTime);
+  if (hudLayoutDue) { hudLayoutDue = false; layoutRightPanels(); }
   // Missions set the progress label to their own step title, which now has its
   // own line above -- printing it twice wasted a row and read as a duplicate.
   if (missionProgressLabel.textContent === currentObjectiveDisplay.stepTitle) {

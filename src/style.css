@@ -2182,14 +2182,14 @@ h2 {
 .objective-panel,
 .habitability-panel,
 .descent-panel {
-  width: min(320px, calc(100vw - 2rem));
+  width: min(298px, calc(100vw - 2rem));
   padding: 1rem 1.05rem;
 }
 
 .objective-panel {
   top: 6.1rem;
   left: 1rem;
-  width: min(318px, calc(100vw - 2rem));
+  width: min(296px, calc(100vw - 2rem));
   /* Antes se desbordaba y aparecia una barra de scroll dentro del HUD, que es
      exactamente el aspecto de "web app" que este pase intenta sacar. */
   /* Tope calculado contra .systems-panel: 6.1rem de top + esta altura tiene
