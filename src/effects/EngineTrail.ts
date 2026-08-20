@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import { createSoftParticleTexture } from '../assets/materials';
+import {
+  COMBAT_VFX_QUALITY,
+  type CombatVfxPresentationConfig
+} from '../systems/CombatVfxPresentation';
+import type { WeaponVisualQuality } from '../systems/WeaponVisualDirector';
 
 export class EngineTrail {
   readonly group = new THREE.Group();
@@ -7,6 +12,8 @@ export class EngineTrail {
   private readonly materials: THREE.PointsMaterial[] = [];
 
   private readonly trails: THREE.Points[] = [];
+
+  private presentationEnabled = true;
 
   constructor(parent: THREE.Object3D) {
     this.group.name = 'Player Engine Trail';
@@ -56,7 +63,21 @@ export class EngineTrail {
     }
   }
 
+  setPresentationConfig(config: CombatVfxPresentationConfig): void {
+    this.presentationEnabled = config.engineTrails;
+    this.group.visible = config.engineTrails;
+  }
+
+  setQuality(quality: WeaponVisualQuality): void {
+    const count = COMBAT_VFX_QUALITY[quality].engineTrailParticles;
+    for (let index = 0; index < this.trails.length; index += 1) {
+      this.trails[index].geometry.setDrawRange(0, count);
+    }
+  }
+
   update(boosting: boolean, speed: number, elapsed: number, thrust = 0, braking = false): void {
+    this.group.visible = this.presentationEnabled;
+    if (!this.presentationEnabled) return;
     // A ship can coast quickly with its engines quiet. Speed contributes only a
     // small residual ion trail; live thrust owns plume length and brightness.
     const coast = Math.min(speed * 0.006, 0.12);

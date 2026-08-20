@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { CombatVfxPresentationConfig } from '../systems/CombatVfxPresentation';
 
 const SHIELD_VERTEX = /* glsl */ `
 varying vec3 vNormal;
@@ -78,6 +79,10 @@ export class ShieldEffect {
 
   private impactCursor = 0;
 
+  private performanceMarker?: (name: string) => void;
+
+  private presentationEnabled = true;
+
   constructor(parent: THREE.Object3D, radius = 7.4) {
     this.material = new THREE.ShaderMaterial({
       uniforms: {
@@ -106,6 +111,7 @@ export class ShieldEffect {
   }
 
   registerImpact(worldPosition?: THREE.Vector3): void {
+    this.performanceMarker?.('player-shield-hit');
     const index = this.impactCursor;
     this.impactCursor = (this.impactCursor + 1) % this.impactEnergies.length;
     if (worldPosition) {
@@ -116,12 +122,24 @@ export class ShieldEffect {
     this.impactEnergies[index] = 1;
   }
 
+  /** Debug-only event sink; absent during normal gameplay. */
+  setPerformanceMarker(marker?: (name: string) => void): void {
+    this.performanceMarker = marker;
+  }
+
+  setPresentationConfig(config: CombatVfxPresentationConfig): void {
+    this.presentationEnabled = config.shield;
+    this.mesh.visible = config.shield;
+  }
+
   update(delta: number, hull: number, energy: number, elapsed: number): void {
     let accumulatedImpact = 0;
     for (let index = 0; index < this.impactEnergies.length; index += 1) {
       this.impactEnergies[index] = Math.max(0, this.impactEnergies[index] - delta * 1.75);
       accumulatedImpact += this.impactEnergies[index];
     }
+    this.mesh.visible = this.presentationEnabled;
+    if (!this.presentationEnabled) return;
 
     const lowEnergy = energy < 24;
     const flicker = lowEnergy ? (Math.sin(elapsed * 30) > 0.4 ? 0.4 : 1) : 1;

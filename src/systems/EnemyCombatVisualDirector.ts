@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { createSoftParticleTexture } from '../assets/materials';
+import {
+  COMBAT_VFX_DISTANCE,
+  COMBAT_VFX_QUALITY,
+  createCombatVfxConfig,
+  type CombatVfxPresentationConfig
+} from './CombatVfxPresentation';
 import type {
   CombatEnvironment,
   CombatImpactVisual,
@@ -20,6 +26,7 @@ export type EnemyCombatVisualDiagnostics = {
   activeMuzzleFlashes: number;
   activeDamageRigs: number;
   activeLeaks: number;
+  activeLeakParticles: number;
   activeEngineFailures: number;
   activeCombatLights: number;
   nearMisses: number;
@@ -99,16 +106,6 @@ const DAMAGE_RIG_POOL_SIZE = 12;
 const LEAK_PARTICLES = 8;
 const POOL_CAPACITY = PROJECTILE_POOL_SIZE + MUZZLE_POOL_SIZE + DAMAGE_RIG_POOL_SIZE;
 
-const QUALITY_BUDGETS: Record<WeaponVisualQuality, {
-  projectiles: number;
-  damageRigs: number;
-  leakParticles: number;
-}> = {
-  performance: { projectiles: 7, damageRigs: 4, leakParticles: 3 },
-  high: { projectiles: 10, damageRigs: 8, leakParticles: 6 },
-  ultra: { projectiles: 12, damageRigs: 12, leakParticles: 8 }
-};
-
 const WEAPON_SPEED: Record<EnemyWeaponClass, number> = {
   light: 760,
   medium: 610,
@@ -148,6 +145,7 @@ export class EnemyCombatVisualDirector {
   private readonly muzzles: MuzzleSlot[] = [];
   private readonly damageRigs: DamageRigSlot[] = [];
   private readonly particleTexture = createSoftParticleTexture(64);
+  private readonly viewerPosition = new THREE.Vector3();
   private readonly yAxis = new THREE.Vector3(0, 1, 0);
   private readonly zAxis = new THREE.Vector3(0, 0, 1);
   private readonly directionScratch = new THREE.Vector3();
@@ -175,9 +173,28 @@ export class EnemyCombatVisualDirector {
   private readonly lastTrailHead = new THREE.Vector3();
   private readonly lastTrailTail = new THREE.Vector3();
   private readonly lastImpactPoint = new THREE.Vector3();
+  private performanceMarker?: (name: string) => void;
+  private presentation = createCombatVfxConfig();
 
   constructor() {
     this.group.name = 'Enemy Combat Visuals // Pooled';
+  }
+
+  prepareResources(): void {
+    this.ensureBuilt();
+  }
+
+  setPerformanceMarker(marker?: (name: string) => void): void {
+    this.performanceMarker = marker;
+  }
+
+  setPresentationConfig(config: CombatVfxPresentationConfig): void {
+    this.presentation = createCombatVfxConfig(config);
+    this.applyPresentationVisibility();
+  }
+
+  setViewerPosition(position: THREE.Vector3): void {
+    this.viewerPosition.copy(position);
   }
 
   setQuality(quality: WeaponVisualQuality): void {
@@ -194,13 +211,15 @@ export class EnemyCombatVisualDirector {
     weapon: EnemyWeaponClass,
     viewerPosition: THREE.Vector3
   ): boolean {
+    this.performanceMarker?.('enemy-shot');
     this.ensureBuilt();
     this.directionScratch.copy(destination).sub(origin);
     const distance = this.directionScratch.length();
     if (distance < 0.01) return false;
     this.directionScratch.multiplyScalar(1 / distance);
 
-    const budget = QUALITY_BUDGETS[this.quality].projectiles;
+    this.viewerPosition.copy(viewerPosition);
+    const budget = COMBAT_VFX_QUALITY[this.quality].enemyProjectiles;
     const slot = this.projectiles[this.projectileCursor % budget];
     this.projectileCursor = (this.projectileCursor + 1) % budget;
     if (slot.active) this.releaseProjectile(slot);
@@ -214,8 +233,8 @@ export class EnemyCombatVisualDirector {
     slot.current.copy(origin);
     slot.previous.copy(origin);
     slot.direction.copy(this.directionScratch);
-    slot.core.visible = true;
-    slot.trail.visible = true;
+    slot.core.visible = this.presentation.projectiles;
+    slot.trail.visible = this.presentation.trails;
     slot.core.position.copy(origin);
     slot.coreMaterial.color.setHex(WEAPON_CORE_COLOR[weapon]);
     slot.trailMaterial.color.setHex(WEAPON_GLOW_COLOR[weapon]);
@@ -265,13 +284,17 @@ export class EnemyCombatVisualDirector {
     const slot = this.findDamageRig(event.target);
     slot.active = true;
     slot.age = 0;
-    slot.duration = event.destroyed ? (mass === 'heavy' ? 2.1 : 1.25) : this.damageVisualState === 'stable' ? 3.2 : 18;
+    slot.duration = event.destroyed
+      ? (mass === 'heavy' ? 2.1 : 1.25)
+      : this.damageVisualState === 'stable'
+        ? 3.2
+        : COMBAT_VFX_QUALITY[this.quality].damageRigDuration;
     slot.target = event.target;
     slot.targetGeneration = Number(event.target.userData.combatVisualGeneration ?? 0);
     slot.state = this.damageVisualState;
     slot.mass = mass;
-    slot.group.visible = true;
-    slot.hotZone.visible = true;
+    slot.group.visible = this.presentation.damageMarks || this.presentation.damageSmoke;
+    slot.hotZone.visible = this.presentation.damageMarks;
     slot.hotMaterial.opacity = this.damageVisualState === 'stable' ? 0.32 : 0.68;
     slot.hotMaterial.color.setHex(this.damageVisualState === 'critical' || event.destroyed ? 0xff6a31 : 0xc34325);
     slot.hotZone.scale.setScalar(THREE.MathUtils.clamp(event.scale * (mass === 'heavy' ? 3.1 : 1.45), 0.8, 7.5));
@@ -284,10 +307,16 @@ export class EnemyCombatVisualDirector {
     this.resolveEngineAnchor(event.target, slot.localImpact, slot.localEngine);
 
     const leaksVisible = this.damageVisualState === 'damaged' || this.damageVisualState === 'critical' || event.destroyed;
-    slot.leak.visible = leaksVisible;
-    slot.engine.visible = leaksVisible;
-    const leakBudget = QUALITY_BUDGETS[this.quality].leakParticles;
-    slot.leak.geometry.setDrawRange(0, leaksVisible ? leakBudget : 0);
+    slot.leak.visible = leaksVisible && this.presentation.damageSmoke;
+    slot.engine.visible = leaksVisible && this.presentation.damageMarks;
+    const distance = this.viewerPosition.distanceTo(event.point);
+    const qualityLeakBudget = COMBAT_VFX_QUALITY[this.quality].leakParticles;
+    const leakBudget = distance > COMBAT_VFX_DISTANCE.far
+      ? 0
+      : distance > COMBAT_VFX_DISTANCE.close
+        ? Math.ceil(qualityLeakBudget * 0.75)
+        : qualityLeakBudget;
+    slot.leak.geometry.setDrawRange(0, leaksVisible && this.presentation.damageSmoke ? leakBudget : 0);
     slot.leakMaterial.opacity = this.damageVisualState === 'critical' || event.destroyed ? 0.42 : 0.2;
     slot.engineMaterial.opacity = this.damageVisualState === 'critical' || event.destroyed ? 0.22 : 0.38;
     slot.engineMaterial.color.setHex(this.damageVisualState === 'critical' || event.destroyed ? 0xc5402d : 0x5f9da6);
@@ -318,6 +347,7 @@ export class EnemyCombatVisualDirector {
     let rigs = 0;
     let leaks = 0;
     let engines = 0;
+    let leakParticles = 0;
     if (this.built) {
       for (let index = 0; index < this.projectiles.length; index += 1) if (this.projectiles[index].active) projectiles += 1;
       for (let index = 0; index < this.muzzles.length; index += 1) if (this.muzzles[index].active) muzzles += 1;
@@ -325,7 +355,10 @@ export class EnemyCombatVisualDirector {
         const slot = this.damageRigs[index];
         if (!slot.active) continue;
         rigs += 1;
-        if (slot.leak.visible) leaks += 1;
+        if (slot.leak.visible) {
+          leaks += 1;
+          leakParticles += slot.leak.geometry.drawRange.count;
+        }
         if (slot.engine.visible) engines += 1;
       }
     }
@@ -340,6 +373,7 @@ export class EnemyCombatVisualDirector {
       activeMuzzleFlashes: muzzles,
       activeDamageRigs: rigs,
       activeLeaks: leaks,
+      activeLeakParticles: leakParticles,
       activeEngineFailures: engines,
       activeCombatLights: 0,
       nearMisses: this.events.nearMisses,
@@ -450,6 +484,7 @@ export class EnemyCombatVisualDirector {
       const leakGeometry = new THREE.BufferGeometry();
       leakGeometry.setAttribute('position', new THREE.BufferAttribute(leakPositions, 3));
       leakGeometry.setDrawRange(0, 0);
+      leakGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 6);
       const leakMaterial = new THREE.PointsMaterial({
         map: this.particleTexture,
         color: 0x8eb4b5,
@@ -459,7 +494,7 @@ export class EnemyCombatVisualDirector {
         depthWrite: false
       });
       const leak = new THREE.Points(leakGeometry, leakMaterial);
-      leak.frustumCulled = false;
+      leak.frustumCulled = true;
       group.add(hotZone, engine, leak);
       this.group.add(group);
       this.damageRigs.push({
@@ -491,7 +526,7 @@ export class EnemyCombatVisualDirector {
     slot.active = true;
     slot.age = 0;
     slot.duration = weapon === 'light' ? 0.075 : weapon === 'medium' ? 0.09 : 0.12;
-    slot.group.visible = true;
+    slot.group.visible = this.presentation.muzzle;
     slot.group.position.copy(origin);
     slot.group.quaternion.setFromUnitVectors(this.yAxis, direction);
     slot.coreMaterial.color.setHex(WEAPON_CORE_COLOR[weapon]);
@@ -510,6 +545,8 @@ export class EnemyCombatVisualDirector {
       if (!slot.active) continue;
       slot.age += delta;
       const progress = Math.min(1, slot.age / slot.duration);
+      slot.core.visible = this.presentation.projectiles;
+      slot.trail.visible = this.presentation.trails;
       slot.previous.copy(slot.current);
       slot.current.lerpVectors(slot.start, slot.end, progress);
       slot.core.position.copy(slot.current);
@@ -543,6 +580,7 @@ export class EnemyCombatVisualDirector {
       const slot = this.muzzles[index];
       if (!slot.active) continue;
       slot.age += delta;
+      slot.group.visible = this.presentation.muzzle;
       const life = Math.max(0, 1 - slot.age / slot.duration);
       slot.coreMaterial.opacity = life;
       slot.plumeMaterial.opacity = life * 0.45;
@@ -552,7 +590,7 @@ export class EnemyCombatVisualDirector {
   }
 
   private updateDamageRigs(delta: number, elapsed: number): void {
-    const rigBudget = QUALITY_BUDGETS[this.quality].damageRigs;
+    const rigBudget = COMBAT_VFX_QUALITY[this.quality].damageRigs;
     for (let index = 0; index < this.damageRigs.length; index += 1) {
       const slot = this.damageRigs[index];
       if (!slot.active) continue;
@@ -570,6 +608,19 @@ export class EnemyCombatVisualDirector {
       slot.target.getWorldQuaternion(this.targetQuaternionScratch);
       slot.group.position.copy(this.targetPositionScratch);
       slot.group.quaternion.copy(this.targetQuaternionScratch);
+      slot.group.visible = this.presentation.damageMarks || this.presentation.damageSmoke;
+      slot.hotZone.visible = this.presentation.damageMarks;
+      slot.engine.visible = this.presentation.damageMarks && slot.state !== 'stable';
+      const distance = this.viewerPosition.distanceTo(this.targetPositionScratch);
+      const qualityLeakBudget = COMBAT_VFX_QUALITY[this.quality].leakParticles;
+      const leakCount = distance > COMBAT_VFX_DISTANCE.far
+        ? 0
+        : distance > COMBAT_VFX_DISTANCE.close
+          ? Math.ceil(qualityLeakBudget * 0.75)
+          : qualityLeakBudget;
+      const leakDamageVisible = slot.state === 'damaged' || slot.state === 'critical' || slot.state === 'destroyed';
+      slot.leak.visible = this.presentation.damageSmoke && leakDamageVisible && leakCount > 0;
+      slot.leak.geometry.setDrawRange(0, slot.leak.visible ? leakCount : 0);
       slot.hotZone.position.copy(slot.localImpact).addScaledVector(slot.localNormal, 0.08);
       slot.engine.position.copy(slot.localEngine);
       slot.leak.position.copy(slot.localImpact);
@@ -578,8 +629,7 @@ export class EnemyCombatVisualDirector {
       slot.hotMaterial.opacity = Math.max(0, (critical ? 0.72 : slot.state === 'damaged' ? 0.45 : 0.24) * pulse);
       slot.engineMaterial.opacity = Math.max(0, (critical ? 0.17 : 0.34) * pulse);
       const positions = slot.leakPositions;
-      const leakCount = QUALITY_BUDGETS[this.quality].leakParticles;
-      for (let particle = 0; particle < leakCount; particle += 1) {
+      for (let particle = 0; this.presentation.damageSmoke && particle < leakCount; particle += 1) {
         const offset = particle * 3;
         positions[offset] += slot.localNormal.x * delta * (0.8 + particle * 0.12);
         positions[offset + 1] += slot.localNormal.y * delta * (0.8 + particle * 0.12) + delta * 0.08;
@@ -590,7 +640,9 @@ export class EnemyCombatVisualDirector {
           positions[offset + 2] = 0;
         }
       }
-      (slot.leak.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+      if (this.presentation.damageSmoke) {
+        (slot.leak.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+      }
       if (slot.age >= slot.duration) this.releaseDamageRig(slot);
     }
   }
@@ -600,7 +652,7 @@ export class EnemyCombatVisualDirector {
       const slot = this.damageRigs[index];
       if (slot.active && slot.target === target) return slot;
     }
-    const budget = QUALITY_BUDGETS[this.quality].damageRigs;
+    const budget = COMBAT_VFX_QUALITY[this.quality].damageRigs;
     for (let offset = 0; offset < budget; offset += 1) {
       const index = (this.damageCursor + offset) % budget;
       const slot = this.damageRigs[index];
@@ -656,5 +708,24 @@ export class EnemyCombatVisualDirector {
 
   private vectorTuple(vector: THREE.Vector3): [number, number, number] {
     return [vector.x, vector.y, vector.z];
+  }
+
+  private applyPresentationVisibility(): void {
+    if (!this.built) return;
+    for (let index = 0; index < this.projectiles.length; index += 1) {
+      const slot = this.projectiles[index];
+      slot.core.visible = slot.active && this.presentation.projectiles;
+      slot.trail.visible = slot.active && this.presentation.trails;
+    }
+    for (let index = 0; index < this.muzzles.length; index += 1) {
+      this.muzzles[index].group.visible = this.muzzles[index].active && this.presentation.muzzle;
+    }
+    for (let index = 0; index < this.damageRigs.length; index += 1) {
+      const slot = this.damageRigs[index];
+      slot.group.visible = slot.active && (this.presentation.damageMarks || this.presentation.damageSmoke);
+      slot.hotZone.visible = slot.active && this.presentation.damageMarks;
+      slot.engine.visible = slot.active && this.presentation.damageMarks && slot.state !== 'stable';
+      slot.leak.visible = slot.active && this.presentation.damageSmoke && slot.state !== 'stable';
+    }
   }
 }

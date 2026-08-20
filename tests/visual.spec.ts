@@ -2194,6 +2194,10 @@ declare global {
       setWeaponEnergy: (value: number) => number;
       resetWeaponAudit: () => boolean;
       getWeaponResourceState: () => Record<string, unknown>;
+      profileFrames: (label: string, seconds?: number) => Promise<import('../src/core/FrameProfiler').ProfileResult>;
+      setRenderDiagnostic: (patch: import('../src/core/PerformanceDebugOverlay').RenderDiagnosticPatch) => unknown;
+      getRenderDiagnosticState: () => Record<string, unknown>;
+      resetRenderDiagnostics: () => boolean;
       getInputGateState: () => Record<string, unknown>;
       setCameraLookAt: (target: CameraLookAtInput) => CameraProbeResult | undefined;
       frameCameraTarget: (

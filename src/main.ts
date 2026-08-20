@@ -82,6 +82,39 @@ import { AccountManager } from './auth/AccountManager';
 import { createSupabaseAuthGateway } from './auth/SupabaseAuthGateway';
 import { PlaySessionReporter } from './admin/OwnerDataService';
 import { BINDING_DEFINITIONS, describeCode, KeyBindings, type BindableAction } from './game/KeyBindings';
+import { FrameProfiler } from './core/FrameProfiler';
+import {
+  PerformanceDebugOverlay,
+  type RenderDiagnosticPatch,
+  type RenderDiagnosticState
+} from './core/PerformanceDebugOverlay';
+import { RealGpuP0Runner, type RealGpuBenchmarkConfig } from './core/RealGpuP0Runner';
+import { GpuResourcePrewarmer, type GpuPrewarmResult } from './core/GpuResourcePrewarmer';
+import { RealGpuP3Runner, type P3BenchmarkMode } from './core/RealGpuP3Runner';
+import { RealGpuP4Runner, type P4BenchmarkMode } from './core/RealGpuP4Runner';
+import { GroundPerformanceTelemetry } from './core/GroundPerformanceTelemetry';
+import { GroundResolutionController } from './core/GroundResolutionController';
+import {
+  RealGpuGroundRunner,
+  type GroundBenchmarkMode,
+  type GroundCheckpoint,
+  type GroundDiagnosticPreset,
+  type GroundSceneInventory
+} from './core/RealGpuGroundRunner';
+import { GroundP15Diagnostics } from './core/GroundP15Diagnostics';
+import {
+  RealGpuGroundP15Runner,
+  type GroundP15Mode
+} from './core/RealGpuGroundP15Runner';
+import { auditCombatVfxMaterials } from './core/CombatVfxMaterialAudit';
+import {
+  COMBAT_VFX_DISTANCE,
+  COMBAT_VFX_QUALITY,
+  combatVfxPreset,
+  createCombatVfxConfig,
+  type CombatVfxDiagnosticPreset,
+  type CombatVfxPresentationConfig
+} from './systems/CombatVfxPresentation';
 import { getOrCreateDeviceId, SupabasePlayerDataService } from './auth/SupabasePlayerDataService';
 import {
   MISSION01_ANALYSIS_LINE_SECONDS,
@@ -1167,6 +1200,100 @@ const meters = {
 
 const urlParams = new URLSearchParams(window.location.search);
 const diagnosticsMode = urlParams.has('test') || urlParams.has('debug');
+const performanceDebugMode = urlParams.get('debugPerformance') === '1';
+const autoPerformanceBaseline =
+  performanceDebugMode && urlParams.get('autoPerformanceBaseline') === '1';
+const autoPostProcessingP1 =
+  performanceDebugMode && urlParams.get('autoPostProcessingP1') === '1';
+const autoPostProcessingP2 =
+  performanceDebugMode && urlParams.get('autoPostProcessingP2') === '1';
+const requestedP3Mode = urlParams.get('autoStutterP3');
+const autoStutterP3: P3BenchmarkMode | undefined =
+  performanceDebugMode && (
+    requestedP3Mode === 'baseline' || requestedP3Mode === 'optimized' || requestedP3Mode === 'direct'
+  )
+    ? requestedP3Mode
+    : undefined;
+const requestedP4Mode = urlParams.get('autoVfxP4');
+const autoCombatVfxP4: P4BenchmarkMode | undefined =
+  performanceDebugMode && (requestedP4Mode === 'baseline' || requestedP4Mode === 'optimized')
+    ? requestedP4Mode
+    : undefined;
+const p4Direct = autoCombatVfxP4 !== undefined && urlParams.get('p4Direct') === '1';
+const requestedGroundMode = urlParams.get('autoGround');
+const autoGroundBenchmark: GroundBenchmarkMode | undefined =
+  performanceDebugMode && (
+    requestedGroundMode === 'baseline' ||
+    requestedGroundMode === 'isolation' ||
+    requestedGroundMode === 'optimized'
+  )
+    ? requestedGroundMode
+    : undefined;
+const requestedGroundP15Mode = urlParams.get('autoGroundP15');
+const autoGroundP15: GroundP15Mode | undefined =
+  performanceDebugMode && (requestedGroundP15Mode === 'baseline' || requestedGroundP15Mode === 'optimized')
+    ? requestedGroundP15Mode
+    : undefined;
+const GROUND_DIAGNOSTIC_PRESETS: readonly GroundDiagnosticPreset[] = [
+  'normal', 'original-ground', 'pr-1', 'optimized-normal', 'optimized-pr-085', 'optimized-pr-075',
+  'bloom-half', 'bloom-off', 'post-off', 'shadow-1024',
+  'shadows-off', 'character-off', 'rocks-off', 'base-off', 'base-detail-off',
+  'particles-off', 'environment-minimal'
+];
+const requestedGroundPresets = (urlParams.get('groundPresets') ?? '')
+  .split(',')
+  .filter((value): value is GroundDiagnosticPreset =>
+    GROUND_DIAGNOSTIC_PRESETS.includes(value as GroundDiagnosticPreset));
+const P4_CORE_PRESETS: readonly CombatVfxDiagnosticPreset[] = [
+  'full',
+  'no-explosions',
+  'no-shield',
+  'no-impacts',
+  'no-trails',
+  'no-debris',
+  'no-temp-lights',
+  'no-particles',
+  'minimal',
+  'full'
+];
+const P4_DESTRUCTION_PRESETS: readonly CombatVfxDiagnosticPreset[] = [
+  'full',
+  'no-explosions',
+  'destruction-no-plasma',
+  'destruction-no-ring',
+  'no-debris',
+  'no-temp-lights',
+  'minimal'
+];
+const P4_PARTICLE_PRESETS: readonly CombatVfxDiagnosticPreset[] = [
+  'full',
+  'no-impact-particles',
+  'no-damage-smoke',
+  'destruction-no-plasma',
+  'no-particles',
+  'minimal'
+];
+const requestedP4Set = urlParams.get('p4Set');
+const p4Presets = requestedP4Set === 'destruction'
+  ? P4_DESTRUCTION_PRESETS
+  : requestedP4Set === 'particles'
+    ? P4_PARTICLE_PRESETS
+  : requestedP4Set === 'final'
+    ? (['full', 'full'] as const)
+  : requestedP4Set === 'dominant'
+    ? ([
+        'full', 'no-explosions', 'no-particles', 'no-shield', 'no-trails',
+        'no-debris', 'no-temp-lights', 'minimal', 'full'
+      ] as const)
+    : requestedP4Set === 'visual'
+      ? (['full'] as const)
+    : P4_CORE_PRESETS;
+const p3PrewarmEnabled = autoStutterP3 !== 'baseline';
+let p3BenchmarkActive = false;
+let p4BenchmarkActive = false;
+let groundBenchmarkActive = false;
+let groundP15BenchmarkActive = false;
+let groundBenchmarkCameraTurnRate = 0;
 const bootExperience = new BootExperience(bootScreen, diagnosticsMode);
 const gameModes = new GameModeController();
 const shipCatalog = new ShipCatalog();
@@ -1177,6 +1304,40 @@ let playerProfile: PlayerProfile = profileRepository.load();
  * input handler, so the ~30 places that read `input.has('w')` never change.
  */
 const keyBindings = new KeyBindings(window.localStorage);
+
+/**
+ * Frame-time recorder and the diagnostic switches that isolate a bottleneck.
+ *
+ * The switches exist to answer "CPU or GPU" by subtraction -- drop the pixel
+ * count and see whether the frame time moves -- and are reachable only through
+ * the debug surface. Nothing in gameplay reads them.
+ */
+let frameSampleMs = 16.7;
+const frameProfiler = new FrameProfiler();
+const groundPerformanceTelemetry = new GroundPerformanceTelemetry();
+const ORIGINAL_BLOOM_SCALE = 1;
+const NORMAL_BLOOM_SCALE = 0.75;
+const NORMAL_COMPOSER_SAMPLES = 0;
+const NORMAL_FUSED_OUTPUT_GRADE = true;
+const HUD_UPDATE_INTERVAL = 1 / 15;
+let hudUpdateAccumulator = Number.POSITIVE_INFINITY;
+const renderDiagnostics: RenderDiagnosticState = {
+  bypassPost: false,
+  forcePixelRatio: 0,
+  disableShadows: false,
+  postPasses: {
+    render: true,
+    bloom: !diagnosticsMode,
+    output: !NORMAL_FUSED_OUTPUT_GRADE,
+    grade: !NORMAL_FUSED_OUTPUT_GRADE,
+    combined: NORMAL_FUSED_OUTPUT_GRADE
+  },
+  bloomScale: NORMAL_BLOOM_SCALE,
+  composerSamples: NORMAL_COMPOSER_SAMPLES,
+  fusedOutputGrade: NORMAL_FUSED_OUTPUT_GRADE,
+  lastRenderPath: 'post'
+};
+let performanceDebugOverlay: PerformanceDebugOverlay | undefined;
 
 const accountAuthGateway = diagnosticsMode && urlParams.get('auth') === 'guest'
   ? undefined
@@ -1323,11 +1484,38 @@ camera.name = 'Main Camera';
 camera.position.set(0, 9, 34);
 scene.add(camera);
 
-const post = new PostProcessing(renderer, scene, camera, { samples: diagnosticsMode ? 0 : 4 });
+const post = new PostProcessing(renderer, scene, camera, {
+  samples: NORMAL_COMPOSER_SAMPLES,
+  bloomScale: NORMAL_BLOOM_SCALE,
+  fusedOutputGrade: NORMAL_FUSED_OUTPUT_GRADE
+});
+const gpuResourcePrewarmer = new GpuResourcePrewarmer(renderer, scene);
+let lastStoryPrewarm: GpuPrewarmResult | null = null;
+let lastCombatPrewarm: GpuPrewarmResult | null = null;
 // UnrealBloomPass is the dominant SwiftShader cost in Playwright and can
 // starve DOM/debug probes after repeated reloads. Diagnostics already use the
 // performance profile; keep the cinematic grade but skip bloom only there.
 post.bloomPass.enabled = !diagnosticsMode;
+const GROUND_RENDER_QUALITY: Record<RenderProfile, {
+  bloom: boolean;
+  shadowMapSize: number;
+  shadowUpdateHz: number;
+}> = {
+  performance: { bloom: false, shadowMapSize: 1024, shadowUpdateHz: 15 },
+  high: { bloom: false, shadowMapSize: 1024, shadowUpdateHz: 20 },
+  ultra: { bloom: true, shadowMapSize: 2048, shadowUpdateHz: 30 }
+};
+let automaticGroundQualityOnFoot: boolean | undefined;
+let automaticGroundQualityProfile: RenderProfile | undefined;
+const groundResolutionController = new GroundResolutionController({
+  getBasePixelRatio: (profile) => Math.min(window.devicePixelRatio, RENDER_PROFILES[profile].maxPixelRatio),
+  getActualPixelRatio: () => renderer.getPixelRatio(),
+  applyPixelRatio: (pixelRatio) => {
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    post.setSize(window.innerWidth, window.innerHeight);
+  }
+});
 
 const clock = new THREE.Clock();
 const ship = new THREE.Group();
@@ -1515,7 +1703,7 @@ const bootBackdropReady = new Promise<void>((resolve) => {
 
 const assetLoader = new AssetLoader(updateLoadingState);
 assetLoader.enableKTX2(renderer, '/basis/');
-const diagnostics = new Diagnostics();
+const diagnostics = new Diagnostics(diagnosticsMode || performanceDebugMode);
 const mothership = new Mothership(assetLoader);
 const scannerPulse = new ScannerPulse();
 const discoveryEffect = new DiscoveryEffect();
@@ -1661,8 +1849,14 @@ const auroraSectorRoute = new AuroraSectorRoute((x, z) => planetaryWorld.getHeig
  * is safe to use for every Aurora placement and for on-foot ground contact.
  */
 function surfaceGroundHeight(x: number, z: number): number {
+  const startedAt = groundPerformanceTelemetry.enabled ? performance.now() : 0;
+  const raycastActive = auroraRevealEffect.groundHeightRaycastActive;
   const valley = auroraRevealEffect.groundHeightAt(x, z);
-  return Number.isFinite(valley) ? valley : planetaryWorld.getHeightAt(x, z);
+  const height = Number.isFinite(valley) ? valley : planetaryWorld.getHeightAt(x, z);
+  if (groundPerformanceTelemetry.enabled) {
+    groundPerformanceTelemetry.recordSurfaceHeight(performance.now() - startedAt, raycastActive);
+  }
+  return height;
 }
 // Stages the expedition: legs, weather ramps and ambience cues. Sound goes
 // through playAmbient so every cue keeps its own cooldown, and missing Aurora
@@ -1921,6 +2115,7 @@ const premiumVisuals = new PremiumVisualLayer();
  */
 function applyRenderProfile(profile: RenderProfile): void {
   renderProfile = profile;
+  groundResolutionController.setProfile(profile);
   const settings = RENDER_PROFILES[profile];
   if (!diagnosticsMode) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.maxPixelRatio));
@@ -1931,7 +2126,11 @@ function applyRenderProfile(profile: RenderProfile): void {
   premiumVisuals.setQuality(settings.premiumQuality);
   weaponSystem.setQuality(profile);
   enemyCombatVisuals.setQuality(profile);
+  coalitionDrones.setQuality(profile);
+  engineTrail.setQuality(profile);
   planetaryWorld.setDetailProfile(profile);
+  automaticGroundQualityOnFoot = undefined;
+  automaticGroundQualityProfile = undefined;
   auroraSettlementInfrastructure.setDetailProfile(profile);
   try {
     window.localStorage.setItem(RENDER_PROFILE_STORAGE_KEY, profile);
@@ -2216,6 +2415,11 @@ const cockpitInterior = new CockpitInterior(assetLoader);
 const playerModeSystem = new PlayerModeSystem();
 const inputActionRouter = new InputActionRouter();
 const surfaceCharacter = new SurfaceCharacter(assetLoader);
+const groundP15Diagnostics = new GroundP15Diagnostics({
+  character: surfaceCharacter.group,
+  planetaryWorld: planetaryWorld.group,
+  colonyModule: planetaryWorld.colonyModule.group
+});
 const playerShipLandingGear = new PlayerShipLandingGear();
 // Parented to the ship: the legs are part of the airframe, so they inherit its
 // transform instead of being re-synced every frame.
@@ -2652,6 +2856,16 @@ const cameraCockpitDesiredScratch = new THREE.Vector3();
 const cameraBasisScratch = new THREE.Quaternion();
 const cameraEulerScratch = new THREE.Euler(0, 0, 0, 'YXZ');
 const cameraExternalQuaternionScratch = new THREE.Quaternion();
+const onFootCameraBasisForward = new THREE.Vector3();
+const onFootCameraBasisRight = new THREE.Vector3();
+const onFootCameraBasis = { forward: onFootCameraBasisForward, right: onFootCameraBasisRight };
+const onFootCameraCharacterTarget = new THREE.Vector3();
+const onFootCameraLookTarget = new THREE.Vector3();
+const onFootCameraDesired = new THREE.Vector3();
+const onFootCameraCollisionRay = new THREE.Vector3();
+const onFootCameraObstacleCenter = new THREE.Vector3();
+const onFootCameraObstacleDelta = new THREE.Vector3();
+const onFootCameraCollisionResult = new THREE.Vector3();
 let cameraJumpDistance = 0;
 let shipCameraJumpDistance = 0;
 let lastCameraModeTransition = 'boot';
@@ -2976,7 +3190,9 @@ function registerWorldCollisionVolumes(): void {
     id: 'ship-boarding-anchor', category: COLLISION_CATEGORY.INTERACTION,
     center: [0, 0, 0], radius: 2.4, owner: shipAccessLift.boardingAnchor,
     dynamic: true, blocksCharacter: false, blocksShip: false,
-    enabled: () => inSurfacePhase && shipAccessLift.group.visible
+    // Rendering may distance-cull the fine access hardware. Interaction
+    // authority follows the mechanical state, never visual visibility.
+    enabled: () => inSurfacePhase && shipAccessLift.state !== 'retracted'
   });
   collisionWorld.registerSphere({
     id: 'landing-zone-trigger', category: COLLISION_CATEGORY.TRIGGER,
@@ -3025,8 +3241,8 @@ keyStar.castShadow = false;
 const surfaceSunShadowOffset = new THREE.Vector3(270, 310, -210).normalize().multiplyScalar(55);
 const characterShadowAnchor = new THREE.Vector3();
 /** Shadow-map refresh budget: ~30 Hz is indistinguishable from per-frame here. */
-const CHARACTER_SHADOW_INTERVAL = 1 / 30;
-let characterShadowAccumulator = CHARACTER_SHADOW_INTERVAL;
+let characterShadowInterval = 1 / 30;
+let characterShadowAccumulator = characterShadowInterval;
 /** Frame delta captured for the shadow throttle; set once per frame. */
 let lastFrameDelta = 1 / 60;
 
@@ -3074,6 +3290,79 @@ scene.add(ship);
 const shieldEffect = new ShieldEffect(ship, shieldRadius(playerShip.hullBounds));
 const engineTrail = new EngineTrail(ship);
 const entryEffect = new AtmosphericEntryEffect(ship);
+let combatVfxPresentation = createCombatVfxConfig();
+
+function applyCombatVfxPresentation(config: CombatVfxPresentationConfig): CombatVfxPresentationConfig {
+  combatVfxPresentation = createCombatVfxConfig(config);
+  weaponSystem.setPresentationConfig(combatVfxPresentation);
+  enemyCombatVisuals.setPresentationConfig(combatVfxPresentation);
+  shieldEffect.setPresentationConfig(combatVfxPresentation);
+  engineTrail.setPresentationConfig(combatVfxPresentation);
+  coalitionDrones.setPresentationConfig(combatVfxPresentation);
+  return { ...combatVfxPresentation };
+}
+
+function setCombatVfxDiagnostic(
+  presetOrPatch: CombatVfxDiagnosticPreset | Partial<CombatVfxPresentationConfig>
+): CombatVfxPresentationConfig {
+  return applyCombatVfxPresentation(
+    typeof presetOrPatch === 'string'
+      ? combatVfxPreset(presetOrPatch)
+      : createCombatVfxConfig({ ...combatVfxPresentation, ...presetOrPatch })
+  );
+}
+
+function getCombatVfxMaterialAudit() {
+  return auditCombatVfxMaterials([
+    { name: 'player-weapons', object: weaponSystem.group },
+    { name: 'enemy-weapons', object: enemyCombatVisuals.group },
+    { name: 'player-shield', object: shieldEffect.mesh },
+    { name: 'player-engine-trails', object: engineTrail.group },
+    { name: 'coalition-drones', object: coalitionDrones.group }
+  ], camera, renderer.domElement.clientWidth, renderer.domElement.clientHeight);
+}
+
+function captureFrameProfilerContext() {
+  const playerVfx = weaponSystem.getDiagnostics();
+  const enemyVfx = enemyCombatVisuals.getDiagnostics();
+  const shieldVfx = shieldEffect.getDiagnostics();
+  return {
+    activeVfx:
+      playerVfx.flashesActive +
+      playerVfx.burstPulsesActive +
+      playerVfx.impactsActive +
+      playerVfx.fragmentsActive +
+      playerVfx.destructionsActive +
+      enemyVfx.activeMuzzleFlashes +
+      enemyVfx.activeTrails +
+      enemyVfx.activeDamageRigs,
+    projectiles: playerVfx.activeProjectiles + enemyVfx.activeProjectiles,
+    enemies:
+      coalitionDrones.activeCount +
+      coalitionBreachDrones.activeCount +
+      Number(coalitionJammer.isActive),
+    explosions: playerVfx.destructionsActive,
+    impacts: playerVfx.impactsActive,
+    shieldEffects: playerVfx.shieldImpactsActive + shieldVfx.activeImpacts,
+    fragments: playerVfx.fragmentsActive,
+    damageMarks: playerVfx.decalsActive + enemyVfx.activeDamageRigs,
+    temporaryLights: playerVfx.combatLightsActive,
+    trails: playerVfx.trailsActive + enemyVfx.activeTrails + Number(engineTrail.group.visible),
+    ...groundPerformanceTelemetry.currentFrameContext,
+    ...groundP15Diagnostics.currentFrameContext
+  };
+}
+
+function markPerformanceEvent(name: string): void {
+  frameProfiler.mark(name, renderer, captureFrameProfilerContext);
+}
+
+if (performanceDebugMode) {
+  weaponSystem.setPerformanceMarker(markPerformanceEvent);
+  enemyCombatVisuals.setPerformanceMarker(markPerformanceEvent);
+  coalitionDrones.setPerformanceMarker(markPerformanceEvent);
+  shieldEffect.setPerformanceMarker(markPerformanceEvent);
+}
 /**
  * Staged drivers for the atmospheric entry. Written in place every frame by
  * `updateEntryProfile`, then read by the plasma sheath, the sky/fog blend, the
@@ -3088,6 +3377,8 @@ const entryProfile = createEntryProfile();
 const CLOUD_BREAK_HOLD_SECONDS = 2.6;
 /** Elapsed time at which the cloud-break beat ends; -1 when not pending. */
 let cloudBreakHoldUntil = -1;
+const p4BenchmarkCameraOffset = new THREE.Vector3(13, 8, 20);
+const p4BenchmarkCameraTarget = new THREE.Vector3();
 
 // ---------------------------------------------------------------------------
 // Environment: layered starfield, nebula banks, planets, asteroid belt, dust
@@ -3353,6 +3644,7 @@ function getActivePlayerPosition(): THREE.Vector3 {
  * before, plus the character's shadow.
  */
 let shadowCastersRestricted = false;
+let characterShadowUpdatedThisFrame = false;
 function restrictShadowCastersToPilot(): void {
   if (shadowCastersRestricted) return;
   shadowCastersRestricted = true;
@@ -3370,6 +3662,7 @@ function restrictShadowCastersToPilot(): void {
 }
 
 function updateCharacterShadow(): void {
+  characterShadowUpdatedThisFrame = false;
   const sun = planetaryWorld.surfaceSun;
   if (!sun) return;
   const pilotVisible =
@@ -3381,6 +3674,7 @@ function updateCharacterShadow(): void {
       sun.castShadow = false;
       // One final pass so the stale shadow does not linger on the ground.
       renderer.shadowMap.needsUpdate = true;
+      characterShadowUpdatedThisFrame = true;
     }
     return;
   }
@@ -3408,9 +3702,10 @@ function updateCharacterShadow(): void {
   // GPUs. The camera itself still follows the pilot every frame, so the shadow
   // never lags behind the character's position.
   characterShadowAccumulator += lastFrameDelta;
-  if (characterShadowAccumulator >= CHARACTER_SHADOW_INTERVAL) {
+  if (characterShadowAccumulator >= characterShadowInterval) {
     characterShadowAccumulator = 0;
     renderer.shadowMap.needsUpdate = true;
+    characterShadowUpdatedThisFrame = true;
   }
 }
 
@@ -7110,16 +7405,16 @@ function performMission16Interaction(position: THREE.Vector3): boolean {
   const inRange =
     distance <= (mission16.step === 'synchronizeNodes' ? mission16Tuning.nodeRange : mission16Tuning.stationRange);
 
-  // Node sync is the one step that needs discrete presses: each nudges the
-  // emitter phase. Everything else is a hold — standing in range progresses it,
-  // and the press just reports status.
+  // Node sync takes one press to capture the node's harmonic; after that the
+  // emitter tracks it and the pilot just holds position. Everything else is a
+  // hold — standing in range progresses it, and the press reports status.
   if (mission16.step === 'synchronizeNodes') {
-    if (inRange && mission16.nudgeNodePhase()) {
+    if (inRange && mission16.nudgeNodePhase(clock.elapsedTime)) {
       void sfxManager.play('confirm', 0.28);
     }
     const active = mission16.activeNodeIndex;
     missionText.textContent = mission16.isNodeRevealed()
-      ? `Fase ${Math.round(mission16.readout.nodePhase)} // objetivo ${Math.round(mission16.readout.nodePhaseTarget)} — E para alinear.`
+      ? `Fase ${Math.round(mission16.readout.nodePhase)} // objetivo ${Math.round(mission16.readout.nodePhaseTarget)} — E para enganchar, luego mantené posición.`
       : active >= 0
         ? `Señal ${mission16.readout.nodeSignal}% hacia el ${getBearingLabel(position, station)}.`
         : 'Nodos Pleyadianos sincronizados.';
@@ -14938,9 +15233,9 @@ function updateOnFootCameraOrbit(delta: number): void {
 }
 
 function getOnFootCameraBasis(): { forward: THREE.Vector3; right: THREE.Vector3 } {
-  const forward = new THREE.Vector3(-Math.sin(footCameraYaw), 0, -Math.cos(footCameraYaw)).normalize();
-  const right = new THREE.Vector3().crossVectors(forward, WORLD_UP).normalize();
-  return { forward, right };
+  onFootCameraBasisForward.set(-Math.sin(footCameraYaw), 0, -Math.cos(footCameraYaw)).normalize();
+  onFootCameraBasisRight.crossVectors(onFootCameraBasisForward, WORLD_UP).normalize();
+  return onFootCameraBasis;
 }
 
 function orientOnFootCameraAwayFromShip(characterPosition: THREE.Vector3): void {
@@ -17138,6 +17433,12 @@ function updateMission05Systems(delta: number, elapsed: number): void {
   }
 }
 
+function updatePlanetaryWorldMeasured(delta: number, elapsed: number): void {
+  const startedAt = groundPerformanceTelemetry.beginStage();
+  planetaryWorld.update(delta, elapsed, camera.position);
+  groundPerformanceTelemetry.endStage('planetaryWorld', startedAt);
+}
+
 function updateMissionSystems(delta: number, elapsed: number, mission01Delta = delta): void {
   const planetDistance = candidatePlanet.distanceTo(ship.position);
   const signal = candidatePlanet.signalStrengthFrom(ship.position);
@@ -17146,7 +17447,7 @@ function updateMissionSystems(delta: number, elapsed: number, mission01Delta = d
   const markerInRange = markerDistance <= orbitalMarkerSystem.scanRadius;
 
   if (mission24.started) {
-    if (inBasin || inSurfacePhase) planetaryWorld.update(delta, elapsed, camera.position);
+    if (inBasin || inSurfacePhase) updatePlanetaryWorldMeasured(delta, elapsed);
     updateMission24Systems(delta, elapsed);
     updateMission25Systems(delta, elapsed);
     return;
@@ -17169,7 +17470,7 @@ function updateMissionSystems(delta: number, elapsed: number, mission01Delta = d
 
   threatDirector.update(delta);
   if (inBasin || inSurfacePhase) {
-    planetaryWorld.update(delta, clock.elapsedTime, camera.position);
+    updatePlanetaryWorldMeasured(delta, clock.elapsedTime);
   }
   if (inSurfacePhase) {
     surfaceResourceSystem.update(clock.elapsedTime, getActivePlayerPosition());
@@ -20416,37 +20717,59 @@ function updateHud(nearestThreat: number): void {
 }
 
 function resolveOnFootCameraCollision(target: THREE.Vector3, desired: THREE.Vector3): THREE.Vector3 {
-  const ray = desired.clone().sub(target);
-  const desiredDistance = ray.length();
-  if (desiredDistance <= onFootCameraTuning.MIN_COLLISION_DISTANCE) return desired;
-  const direction = ray.normalize();
-  let allowedDistance = desiredDistance;
-  const obstacles = [
-    { center: ship.position.clone().add(new THREE.Vector3(0, -0.25, 0)), radius: 4.65 }
-  ];
-  if (planetaryWorld.colonyModule.group.visible) {
-    obstacles.push({
-      center: planetaryWorld.colonyModule.group.position.clone().add(new THREE.Vector3(0, 2.8, 0)),
-      radius: 5.4
-    });
+  groundPerformanceTelemetry.recordCameraCollisionQuery();
+  const direction = onFootCameraCollisionRay.copy(desired).sub(target);
+  const desiredDistance = direction.length();
+  if (desiredDistance <= onFootCameraTuning.MIN_COLLISION_DISTANCE) {
+    return onFootCameraCollisionResult.copy(desired);
   }
-
-  for (const obstacle of obstacles) {
-    const targetToCenter = obstacle.center.clone().sub(target);
-    if (targetToCenter.lengthSq() <= obstacle.radius * obstacle.radius) continue;
-    const projection = targetToCenter.dot(direction);
-    if (projection <= 0 || projection >= allowedDistance) continue;
-    const closestDistanceSq = targetToCenter.lengthSq() - projection * projection;
-    const radiusSq = obstacle.radius * obstacle.radius;
-    if (closestDistanceSq >= radiusSq) continue;
-    const entryDistance = projection - Math.sqrt(radiusSq - closestDistanceSq) - 0.18;
-    allowedDistance = Math.min(
-      allowedDistance,
-      Math.max(onFootCameraTuning.MIN_COLLISION_DISTANCE, entryDistance)
+  direction.normalize();
+  let allowedDistance = desiredDistance;
+  allowedDistance = limitOnFootCameraObstacle(
+    target,
+    direction,
+    onFootCameraObstacleCenter.copy(ship.position).setY(ship.position.y - 0.25),
+    4.65,
+    allowedDistance
+  );
+  if (planetaryWorld.colonyModule.group.visible) {
+    allowedDistance = limitOnFootCameraObstacle(
+      target,
+      direction,
+      onFootCameraObstacleCenter.copy(planetaryWorld.colonyModule.group.position).addScaledVector(WORLD_UP, 2.8),
+      5.4,
+      allowedDistance
     );
   }
+  return onFootCameraCollisionResult.copy(target).addScaledVector(direction, allowedDistance);
+}
 
-  return target.clone().addScaledVector(direction, allowedDistance);
+function updateHudOnFrame(nearestThreat: number, delta: number): void {
+  hudUpdateAccumulator += delta;
+  if (hudUpdateAccumulator < HUD_UPDATE_INTERVAL) return;
+  hudUpdateAccumulator %= HUD_UPDATE_INTERVAL;
+  const hudStartedAt = groundPerformanceTelemetry.beginStage();
+  updateHud(nearestThreat);
+  groundPerformanceTelemetry.endStage('hud', hudStartedAt);
+}
+
+function limitOnFootCameraObstacle(
+  target: THREE.Vector3,
+  direction: THREE.Vector3,
+  center: THREE.Vector3,
+  radius: number,
+  allowedDistance: number
+): number {
+  const targetToCenter = onFootCameraObstacleDelta.copy(center).sub(target);
+  const radiusSq = radius * radius;
+  const centerDistanceSq = targetToCenter.lengthSq();
+  if (centerDistanceSq <= radiusSq) return allowedDistance;
+  const projection = targetToCenter.dot(direction);
+  if (projection <= 0 || projection >= allowedDistance) return allowedDistance;
+  const closestDistanceSq = centerDistanceSq - projection * projection;
+  if (closestDistanceSq >= radiusSq) return allowedDistance;
+  const entryDistance = projection - Math.sqrt(radiusSq - closestDistanceSq) - 0.18;
+  return Math.min(allowedDistance, Math.max(onFootCameraTuning.MIN_COLLISION_DISTANCE, entryDistance));
 }
 
 function normalizeCameraProbeName(value: string): string {
@@ -20627,6 +20950,17 @@ function updateCamera(delta: number): void {
     applyDebugCameraProbe();
     return;
   }
+  if (p4BenchmarkActive) {
+    p4BenchmarkCameraTarget.copy(ship.position).addScaledVector(WORLD_UP, 0.5);
+    cameraTargetPrevious.copy(cameraTargetCurrent);
+    cameraTargetCurrent.copy(p4BenchmarkCameraTarget);
+    camera.position.copy(ship.position).add(p4BenchmarkCameraOffset);
+    camera.lookAt(p4BenchmarkCameraTarget);
+    camera.fov = 58;
+    camera.near = 0.08;
+    camera.updateProjectionMatrix();
+    return;
+  }
   cameraTargetPrevious.copy(cameraTargetCurrent);
   if (inSurfacePhase && playerModeSystem.transitionActive) {
     const boardingTarget = shipAccessLift.getBoardingLookTarget();
@@ -20655,20 +20989,21 @@ function updateCamera(delta: number): void {
   }
 
   if (inSurfacePhase && playerModeSystem.characterVisible) {
-    const characterTarget = surfaceCharacter.group.position
-      .clone()
-      .add(new THREE.Vector3(0, onFootCameraTuning.TARGET_HEIGHT, 0));
+    const characterTarget = onFootCameraCharacterTarget
+      .copy(surfaceCharacter.group.position)
+      .addScaledVector(WORLD_UP, onFootCameraTuning.TARGET_HEIGHT);
     cameraTargetCurrent.copy(characterTarget);
-    const lookTarget = characterTarget.clone();
+    const lookTarget = onFootCameraLookTarget.copy(characterTarget);
     const transitioning = playerModeSystem.transitionActive;
     if (transitioning) {
-      lookTarget.lerp(ship.position.clone().add(new THREE.Vector3(0, 0.35, 0)), 0.2);
+      onFootCameraObstacleCenter.copy(ship.position).addScaledVector(WORLD_UP, 0.35);
+      lookTarget.lerp(onFootCameraObstacleCenter, 0.2);
     }
     const distance = transitioning ? onFootCameraTuning.TRANSITION_DISTANCE : onFootCameraTuning.DISTANCE;
     const horizontalDistance = Math.cos(footCameraPitch) * distance;
     const cameraBasis = getOnFootCameraBasis();
-    const desiredUnresolved = characterTarget
-      .clone()
+    const desiredUnresolved = onFootCameraDesired
+      .copy(characterTarget)
       .addScaledVector(cameraBasis.forward, -horizontalDistance)
       .addScaledVector(cameraBasis.right, transitioning ? 0.4 : onFootCameraTuning.SHOULDER_OFFSET);
     desiredUnresolved.y += onFootCameraTuning.HEIGHT + Math.sin(footCameraPitch) * distance;
@@ -21097,7 +21432,10 @@ function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta):
       )
     : 0;
   const propulsionBoosting = boosting && playerShip.brakeInput < 0.1;
-  playerShip.update(delta, elapsed, speed, propulsionBoosting, camera.position.distanceTo(ship.position));
+  const playerShipCameraDistance = camera.position.distanceTo(ship.position);
+  shipAccessLift.setObserverDistance(playerShipCameraDistance);
+  playerShipLandingGear.setObserverDistance(playerShipCameraDistance);
+  playerShip.update(delta, elapsed, speed, propulsionBoosting, playerShipCameraDistance);
   // The propulsion mix hears exactly what the nozzles show: same intents.
   engineAudio.update(delta, elapsed, {
     active: pilotFlying,
@@ -21140,6 +21478,7 @@ function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta):
   } else if (sfxManager.isLoopActive('playerTorpedoEngine')) {
     sfxManager.stopLoop('playerTorpedoEngine', 0.08);
   }
+  enemyCombatVisuals.setViewerPosition(camera.position);
   enemyCombatVisuals.update(delta, elapsed);
   if (enemyCombatVisuals.events.nearMisses > enemyNearMissCursor) {
     enemyNearMissCursor = enemyCombatVisuals.events.nearMisses;
@@ -21192,9 +21531,16 @@ function mission01RealtimeFlightActive(): boolean {
 }
 
 function animate(): void {
+  // `frameSampleMs` and renderer.info still describe the frame that just
+  // finished. Capture both before resetting Three's counters for this frame.
+  if (frameProfiler.active) frameProfiler.sample(frameSampleMs, renderer, captureFrameProfilerContext);
   renderer.info.reset();
   collisionWorld.beginFrame();
+  groundPerformanceTelemetry.beginFrame();
   const rawDelta = clock.getDelta();
+  // The profiler must see wall-clock, not the clamped simulation step: `delta`
+  // is capped at 50 ms, so a 200 ms hitch would be recorded as a 50 ms one.
+  frameSampleMs = rawDelta * 1000;
   const delta = Math.min(rawDelta, 0.05);
   // M01 is the first-flight tutorial and must stay responsive on SwiftShader.
   // Integrate its physics below in stable 50 ms slices, while clocks, attitude
@@ -21213,10 +21559,15 @@ function animate(): void {
   const mission24LiftTransition = mission24.started && playerModeSystem.transitionActive;
   if (launched && !gamePaused && (!dialoguePausesGameplay || mission24LiftTransition)) {
     if (inSurfacePhase) {
+      if (groundBenchmarkActive && groundBenchmarkCameraTurnRate !== 0) {
+        footCameraTargetYaw += groundBenchmarkCameraTurnRate * Math.min(rawDelta, 0.1);
+      }
       const surfacePlayerDelta = playerModeSystem.transitionActive
         ? mission24.started ? rawDelta : Math.min(rawDelta, 0.25)
         : delta;
+      const surfacePlayerStartedAt = groundPerformanceTelemetry.beginStage();
       updateSurfacePlayer(surfacePlayerDelta);
+      groundPerformanceTelemetry.endStage('surfacePlayer', surfacePlayerStartedAt);
     } else {
       playerModeSystem.syncShipContext(false, cameraModeSystem.mode === 'cockpit');
     }
@@ -21284,17 +21635,21 @@ function animate(): void {
       updateCombatSession(delta, elapsed, Math.min(rawDelta, 0.25));
       updateEnemyThreatFeedback(delta);
     } else if (gameModes.isStory) {
-      updateArkDeparture(mission01RealtimeDelta, elapsed);
-      updateSafeZone(delta);
-      updateHazards(delta);
-      updateBufferedLateMissionInteraction();
-      updateMissionSystems(delta, elapsed, mission01RealtimeDelta);
-      updateEnemyThreatFeedback(delta);
-      nearestThreat = updateThreats(delta, elapsed);
-      updateHud(nearestThreat);
+      if (!p3BenchmarkActive) {
+        updateArkDeparture(mission01RealtimeDelta, elapsed);
+        updateSafeZone(delta);
+        updateHazards(delta);
+        updateBufferedLateMissionInteraction();
+        const missionSystemsStartedAt = groundPerformanceTelemetry.beginStage();
+        updateMissionSystems(delta, elapsed, mission01RealtimeDelta);
+        groundPerformanceTelemetry.endStage('missionSystems', missionSystemsStartedAt);
+        updateEnemyThreatFeedback(delta);
+        nearestThreat = updateThreats(delta, elapsed);
+      }
+      updateHudOnFrame(nearestThreat, rawDelta);
     }
   } else if (launched) {
-    updateHud(nearestThreat);
+    updateHudOnFrame(nearestThreat, rawDelta);
   } else {
     updateHomeMarker();
   }
@@ -21373,7 +21728,9 @@ function animate(): void {
   // skipped or replaced line fades its take with it.
   voiceManager.syncDialogue(dialogueManager.current?.id, dialogueManager.current?.speakerId);
 
+  const sceneMotionStartedAt = groundPerformanceTelemetry.beginStage();
   updateSceneMotion(gamePaused ? 0 : delta, elapsed, gamePaused ? 0 : rawDelta);
+  groundPerformanceTelemetry.endStage('sceneMotion', sceneMotionStartedAt);
   // Point-light budget. Runs on the real frame delta so it keeps working while
   // the game is paused and the camera can still be moved.
   // Mission hardware is added to the scene long after boot, so the budget
@@ -21429,7 +21786,9 @@ function animate(): void {
   cameraShake = Math.max(0, cameraShake - delta * 0.55);
   cameraPositionBeforeUpdate.copy(camera.position);
   cameraFollowInitializedThisFrame = false;
+  const cameraStartedAt = groundPerformanceTelemetry.beginStage();
   updateCamera(mission01RealtimeDelta);
+  groundPerformanceTelemetry.endStage('camera', cameraStartedAt);
   cameraJumpDistance = cameraFollowInitializedThisFrame
     ? 0
     : camera.position.distanceTo(cameraPositionBeforeUpdate);
@@ -21526,12 +21885,37 @@ function animate(): void {
     camera.updateMatrixWorld(true);
   }
   lastFrameDelta = delta;
+  syncAutomaticGroundRenderQuality();
+  groundResolutionController.update(
+    rawDelta,
+    (!performanceDebugMode || autoGroundBenchmark === 'optimized' || Boolean(autoGroundP15)) &&
+      inSurfacePhase &&
+      playerModeSystem.onFootActive
+  );
+  const characterShadowStartedAt = groundPerformanceTelemetry.beginStage();
   updateCharacterShadow();
-  post.render(delta, elapsed);
+  groundPerformanceTelemetry.endStage('characterShadow', characterShadowStartedAt);
+  // Diagnostic bypass: renders the scene straight to the canvas so the cost of
+  // the whole composer stack can be read off as a difference.
+  const renderStartedAt = groundPerformanceTelemetry.beginStage();
+  if (renderDiagnostics.bypassPost) {
+    renderer.render(scene, camera);
+    renderDiagnostics.lastRenderPath = 'direct';
+  } else {
+    if (frameProfiler.active && post.bloomPass.enabled) {
+      frameProfiler.markOnce('bloom-frame', renderer, captureFrameProfilerContext);
+    }
+    post.render(delta, elapsed);
+    renderDiagnostics.lastRenderPath = 'post';
+  }
+  groundP15Diagnostics.captureRenderedFrame(renderer, scene, camera, characterShadowUpdatedThisFrame);
+  groundPerformanceTelemetry.endStage('render', renderStartedAt);
+  performanceDebugOverlay?.update(performance.now());
   // The diagnostics snapshot is only published every 100 ms, so assembling
   // this patch on frames that cannot publish it is pure waste: it walks the
   // whole mission state, formats ~100 numbers and allocates several arrays.
   // Frame-rate accounting and the renderer counters still run every frame.
+  const diagnosticsStartedAt = groundPerformanceTelemetry.beginStage();
   if (diagnostics.patchDue(rawDelta)) {
       const diagnosticObjective = getCurrentObjectiveDisplay();
       const inputActionState = getInputActionState();
@@ -22271,6 +22655,8 @@ function animate(): void {
   } else {
     diagnostics.update(renderer, rawDelta, EMPTY_DIAGNOSTICS_PATCH);
   }
+  groundPerformanceTelemetry.endStage('diagnostics', diagnosticsStartedAt);
+  groundPerformanceTelemetry.endFrame(collisionWorld.diagnostics);
   requestAnimationFrame(animate);
 }
 
@@ -22422,6 +22808,15 @@ void (async () => {
   requestMenuMusic();
   window.__arcaGameReady = true;
   animate();
+  if (autoPerformanceBaseline || autoPostProcessingP1 || autoPostProcessingP2 || autoStutterP3 || autoCombatVfxP4 || autoGroundBenchmark || autoGroundP15) {
+    window.setTimeout(() => {
+      if (autoGroundP15) void runRealGpuGroundP15();
+      else if (autoGroundBenchmark) void runRealGpuGroundBenchmark();
+      else if (autoCombatVfxP4) void runRealGpuP4();
+      else if (autoStutterP3) void runRealGpuP3();
+      else void runRealGpuP0Baseline();
+    }, 1000);
+  }
 })().catch((error) => {
   bootExperience.failTask(activeBootTask, 'Carga parcial · modo de compatibilidad activo');
   refreshLoadGameSummary();
@@ -22634,9 +23029,40 @@ function closeGarage(): void {
   bootExperience.showMenu({ hasSave: saveSystem.hasSave(), savedAt: saveSystem.lastSaveTime || undefined });
 }
 
+async function prepareStorySceneResources(): Promise<GpuPrewarmResult | null> {
+  if (!p3PrewarmEnabled || autoStutterP3) return null;
+  weaponSystem.clearTransient();
+  lastStoryPrewarm = await gpuResourcePrewarmer.prepare('story', [
+    weaponSystem.group,
+    shieldEffect.mesh
+  ]);
+  weaponSystem.clearTransient();
+  return lastStoryPrewarm;
+}
+
+async function prepareCombatSceneResources(): Promise<GpuPrewarmResult | null> {
+  if (!p3PrewarmEnabled) return null;
+  coalitionDrones.prepareResources();
+  enemyCombatVisuals.prepareResources();
+  coalitionDrones.clearAll();
+  weaponSystem.clearTransient();
+  enemyCombatVisuals.clearTransient();
+  lastCombatPrewarm = await gpuResourcePrewarmer.prepare('combat', [
+    weaponSystem.group,
+    enemyCombatVisuals.group,
+    coalitionDrones.group,
+    shieldEffect.mesh
+  ]);
+  coalitionDrones.clearAll();
+  weaponSystem.clearTransient();
+  enemyCombatVisuals.clearTransient();
+  return lastCombatPrewarm;
+}
+
 async function openCombatSetup(): Promise<void> {
   if (launched) return;
   await gameModes.enter('combat');
+  await prepareCombatSceneResources();
   bootExperience.hide();
   const definition = getSelectedShipDefinition();
   combatModeView.showSetup(combatScenarioCatalog.require(ARK_ORBIT_SURVIVAL.id), definition);
@@ -22990,6 +23416,7 @@ async function launchFromMainMenu(loadExistingSave: boolean): Promise<void> {
   launchButton.disabled = true;
   releaseMenuMusic();
   await gameModes.enter('story');
+  await prepareStorySceneResources();
   const savedGame = loadExistingSave ? saveSystem.loadGame() : undefined;
   if (savedGame) {
     applySaveGame(savedGame);
@@ -23426,6 +23853,747 @@ if (urlParams.has('debug')) {
   });
 }
 
+async function profileFrames(label: string, seconds = 8) {
+  frameProfiler.start(label, renderer);
+  await new Promise((resolve) => window.setTimeout(resolve, Math.max(1, seconds) * 1000));
+  const result = frameProfiler.stop(renderer);
+  // If F9 is visible it resumes its own rolling window on the next update.
+  performanceDebugOverlay?.update(performance.now());
+  return result;
+}
+
+function setRenderDiagnostic(patch: RenderDiagnosticPatch): RenderDiagnosticState {
+  if (patch.bypassPost !== undefined) renderDiagnostics.bypassPost = patch.bypassPost;
+  if (patch.shadows !== undefined) {
+    renderDiagnostics.disableShadows = !patch.shadows;
+    renderer.shadowMap.enabled = patch.shadows;
+    renderer.shadowMap.needsUpdate = true;
+  }
+  if (patch.pixelRatio !== undefined && patch.pixelRatio > 0) {
+    renderDiagnostics.forcePixelRatio = patch.pixelRatio;
+    renderer.setPixelRatio(patch.pixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    post.setSize(window.innerWidth, window.innerHeight);
+  }
+  if (patch.fusedOutputGrade !== undefined) {
+    post.setFusedOutputGrade(patch.fusedOutputGrade);
+    renderDiagnostics.fusedOutputGrade = patch.fusedOutputGrade;
+    renderDiagnostics.postPasses.output = !patch.fusedOutputGrade;
+    renderDiagnostics.postPasses.grade = !patch.fusedOutputGrade;
+    renderDiagnostics.postPasses.combined = patch.fusedOutputGrade;
+  }
+  if (patch.postPasses) {
+    for (const id of ['render', 'bloom', 'output', 'grade', 'combined'] as const) {
+      const enabled = patch.postPasses[id];
+      if (enabled === undefined) continue;
+      post.setPassEnabled(id, enabled);
+      renderDiagnostics.postPasses[id] = enabled;
+    }
+  }
+  if (patch.bloomScale !== undefined) {
+    post.setBloomScale(patch.bloomScale);
+    renderDiagnostics.bloomScale = THREE.MathUtils.clamp(patch.bloomScale, 0.2, 1);
+  }
+  if (patch.composerSamples !== undefined) {
+    const samples = Math.max(0, Math.round(patch.composerSamples));
+    post.setComposerSamples(samples);
+    renderDiagnostics.composerSamples = samples;
+  }
+  return { ...renderDiagnostics, postPasses: { ...renderDiagnostics.postPasses } };
+}
+
+function getRenderDiagnosticState() {
+  const context = renderer.getContext();
+  return {
+    ...renderDiagnostics,
+    postPasses: { ...renderDiagnostics.postPasses },
+    actualPixelRatio: renderer.getPixelRatio(),
+    shadowsEnabled: renderer.shadowMap.enabled,
+    drawingBuffer: [context.drawingBufferWidth, context.drawingBufferHeight] as const,
+    postProcessing: post.getDiagnostics()
+  };
+}
+
+function resetRenderDiagnostics(): boolean {
+  renderDiagnostics.bypassPost = false;
+  renderDiagnostics.disableShadows = false;
+  renderDiagnostics.forcePixelRatio = 0;
+  renderDiagnostics.postPasses = {
+    render: true,
+    bloom: !diagnosticsMode,
+    output: !NORMAL_FUSED_OUTPUT_GRADE,
+    grade: !NORMAL_FUSED_OUTPUT_GRADE,
+    combined: NORMAL_FUSED_OUTPUT_GRADE
+  };
+  renderDiagnostics.bloomScale = NORMAL_BLOOM_SCALE;
+  renderDiagnostics.composerSamples = NORMAL_COMPOSER_SAMPLES;
+  renderDiagnostics.fusedOutputGrade = NORMAL_FUSED_OUTPUT_GRADE;
+  renderDiagnostics.lastRenderPath = 'post';
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.needsUpdate = true;
+  applyRenderProfile(renderProfile);
+  post.resetDiagnostics({
+    bloomScale: NORMAL_BLOOM_SCALE,
+    samples: NORMAL_COMPOSER_SAMPLES,
+    bloomEnabled: !diagnosticsMode,
+    fusedOutputGrade: NORMAL_FUSED_OUTPUT_GRADE
+  });
+  return true;
+}
+
+type RealGpuP0Pose = {
+  position: THREE.Vector3;
+  quaternion: THREE.Quaternion;
+  velocity: THREE.Vector3;
+  yaw: number;
+  pitch: number;
+  smoothYaw: number;
+  smoothPitch: number;
+  bankRoll: number;
+  altitudeHoldY: number | undefined;
+};
+
+const ORIGINAL_POST_DIAGNOSTIC: RenderDiagnosticPatch = {
+  bloomScale: ORIGINAL_BLOOM_SCALE,
+  composerSamples: 4,
+  fusedOutputGrade: false
+};
+
+const POST_P1_CONFIGS: readonly RealGpuBenchmarkConfig[] = [
+  { id: 'REAL_GPU_FULL_POST', label: 'Full Post', patch: { ...ORIGINAL_POST_DIAGNOSTIC } },
+  {
+    id: 'REAL_GPU_RENDER_PASS_OFF', label: 'RenderPass Off',
+    patch: { ...ORIGINAL_POST_DIAGNOSTIC, postPasses: { render: false } }
+  },
+  {
+    id: 'REAL_GPU_BLOOM_OFF', label: 'UnrealBloomPass Off',
+    patch: { ...ORIGINAL_POST_DIAGNOSTIC, postPasses: { bloom: false } }
+  },
+  {
+    id: 'REAL_GPU_OUTPUT_OFF', label: 'OutputPass Off',
+    patch: { ...ORIGINAL_POST_DIAGNOSTIC, postPasses: { output: false } }
+  },
+  {
+    id: 'REAL_GPU_GRADE_OFF', label: 'CinematicGrade Off',
+    patch: { ...ORIGINAL_POST_DIAGNOSTIC, postPasses: { grade: false } }
+  },
+  {
+    id: 'REAL_GPU_MSAA_OFF', label: 'Composer MSAA Off',
+    patch: { ...ORIGINAL_POST_DIAGNOSTIC, composerSamples: 0 }
+  },
+  {
+    id: 'REAL_GPU_DIRECT', label: 'Direct Render',
+    patch: { ...ORIGINAL_POST_DIAGNOSTIC, bypassPost: true }
+  }
+];
+
+const POST_P2_CONFIGS: readonly RealGpuBenchmarkConfig[] = [
+  { id: 'REAL_GPU_ORIGINAL', label: 'Original', patch: { ...ORIGINAL_POST_DIAGNOSTIC } },
+  { id: 'REAL_GPU_OPTIMIZED', label: 'Optimized Post' },
+  { id: 'REAL_GPU_DIRECT', label: 'Direct Render', patch: { bypassPost: true } }
+];
+
+async function runRealGpuP0Baseline(): Promise<void> {
+  if (!autoPerformanceBaseline && !autoPostProcessingP1 && !autoPostProcessingP2) return;
+  if (!performanceDebugOverlay?.isVisible) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'F9' }));
+  }
+  const resultKind = autoPostProcessingP1
+    ? 'REAL_GPU_POSTPROCESSING_P1' as const
+    : autoPostProcessingP2
+      ? 'REAL_GPU_POSTPROCESSING_P2' as const
+      : 'REAL_GPU_BASELINE' as const;
+  const configs = autoPostProcessingP1
+    ? POST_P1_CONFIGS
+    : autoPostProcessingP2
+      ? POST_P2_CONFIGS
+      : undefined;
+  const runner = new RealGpuP0Runner<RealGpuP0Pose>({
+    scenario: 'M01 / salida del Arca',
+    resultKind,
+    configs,
+    capturePauseSeconds: autoPerformanceBaseline ? 8 : 2,
+    prepareScene: async () => {
+      if (!launched) await launchFromMainMenu(false);
+      dialogueManager.clearQueue();
+      gamePaused = false;
+      starMap.close();
+      input.clear();
+      await new Promise((resolve) => window.setTimeout(resolve, 4000));
+      dialogueManager.clearQueue();
+    },
+    capturePose: () => ({
+      position: ship.position.clone(),
+      quaternion: ship.quaternion.clone(),
+      velocity: velocity.clone(),
+      yaw,
+      pitch,
+      smoothYaw,
+      smoothPitch,
+      bankRoll,
+      altitudeHoldY: shipAltitudeHoldY
+    }),
+    restorePose: (pose) => {
+      input.clear();
+      ship.position.copy(pose.position);
+      ship.quaternion.copy(pose.quaternion);
+      velocity.copy(pose.velocity);
+      yaw = pose.yaw;
+      pitch = pose.pitch;
+      smoothYaw = pose.smoothYaw;
+      smoothPitch = pose.smoothPitch;
+      bankRoll = pose.bankRoll;
+      shipAltitudeHoldY = pose.altitudeHoldY;
+      ship.updateMatrixWorld(true);
+      requestCameraFollowSync('real-gpu-p0');
+    },
+    setMovement: (forward, turn, boost) => {
+      input.delete('w');
+      input.delete('a');
+      input.delete('d');
+      input.delete('shift');
+      if (forward) input.add('w');
+      if (turn < 0) input.add('a');
+      if (turn > 0) input.add('d');
+      if (boost) input.add('shift');
+    },
+    profileFrames,
+    setRenderDiagnostic,
+    resetRenderDiagnostics,
+    getProgramCount: () => renderer.info.programs?.length ?? 0,
+    getMetadata: () => {
+      const context = renderer.getContext();
+      return {
+        postProcessing: post.getDiagnostics(),
+        renderer: {
+          antialias: context.getContextAttributes()?.antialias ?? false,
+          toneMapping: renderer.toneMapping,
+          toneMappingExposure: renderer.toneMappingExposure,
+          outputColorSpace: renderer.outputColorSpace
+        }
+      };
+    }
+  });
+  await runner.run();
+}
+
+function resetP3CombatSequence(): void {
+  input.clear();
+  combatPacingProbeActive = true;
+  combatHudProbeActive = false;
+  combatJammerProbeActive = false;
+  coalitionDrones.clearAll();
+  coalitionDrones.clearNavigationObstacle();
+  coalitionDrones.setOrigin(ship.position.x, ship.position.y, ship.position.z - 360);
+  enemyCombatVisuals.clearTransient();
+  weaponSystem.clearTransient();
+  weaponSystem.refillWeaponStores();
+  weaponProbeTarget.health = 0;
+  weaponProbeTarget.hostile = false;
+  weaponProbeObject.visible = false;
+  weaponProbeVelocity.set(0, 0, 0);
+  combatCameraImpulse.reset();
+}
+
+async function runP3CombatSequence(): Promise<void> {
+  const wait = (milliseconds: number) => new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+  const captureP4 = (label: string): void => {
+    if (requestedP4Set !== 'visual') return;
+    if (label === 'multiple-enemies') {
+      const target = coalitionDrones.nearestActiveTarget(ship.position);
+      if (target) {
+        const point = target.object.getWorldPosition(new THREE.Vector3());
+        frameDebugCameraTarget([point.x, point.y, point.z], [32, 18, 42]);
+      }
+    }
+    const capture = (window as unknown as { __arcaCaptureP4Stage?: (stage: string) => Promise<void> })
+      .__arcaCaptureP4Stage;
+    if (!capture) return;
+    const delay = label === 'torpedo' ? 700 : label === 'multiple-enemies' ? 80 : 70;
+    window.setTimeout(() => {
+      if (label !== 'multiple-enemies') {
+        const impact = weaponSystem.getDiagnostics().lastImpactPoint;
+        frameDebugCameraTarget(impact, [18, 10, 24]);
+      }
+      if (label === 'destruction' || label === 'explosion' || label === 'torpedo') {
+        weaponProbeObject.visible = false;
+      }
+      window.requestAnimationFrame(() => { void capture(label); });
+    }, delay);
+  };
+  await wait(700);
+  coalitionDrones.launchWave(1);
+  captureP4('multiple-enemies');
+  await wait(800);
+  fireEnemyCombatVisualProbe('near-miss', 'light');
+  await wait(700);
+  weaponSystem.fireLaser(ship, []);
+  await wait(1200);
+  fireWeaponVisualProbe('laser', 'hull');
+  await wait(1200);
+  fireWeaponVisualProbe('laser', 'shield');
+  captureP4('shield-hit');
+  await wait(1100);
+  shieldEffect.registerImpact(ship.position);
+  await wait(1200);
+  fireWeaponVisualProbe('laser', 'hull', true);
+  captureP4('destruction');
+  await wait(1400);
+  fireWeaponVisualProbe('missile', 'structure');
+  captureP4('torpedo');
+  await wait(2000);
+  coalitionDrones.clearAll();
+  coalitionDrones.launchWave(1);
+  await wait(1000);
+  fireWeaponVisualProbe('laser', 'hull', true);
+  captureP4('explosion');
+}
+
+async function runRealGpuP3(): Promise<import('./core/RealGpuP3Runner').RealGpuP3Result | undefined> {
+  if (!autoStutterP3) return undefined;
+  if (!performanceDebugOverlay?.isVisible) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'F9' }));
+  }
+  const runner = new RealGpuP3Runner({
+    mode: autoStutterP3,
+    scenario: 'M01 congelada / VFX reproducible',
+    sampleSeconds: 15,
+    prepareScene: async () => {
+      p3BenchmarkActive = true;
+      if (!launched) await launchFromMainMenu(false);
+      if (autoStutterP3 !== 'baseline') await prepareCombatSceneResources();
+      dialogueManager.clearQueue();
+      gamePaused = false;
+      starMap.close();
+      input.clear();
+      await new Promise((resolve) => window.setTimeout(resolve, 2500));
+      dialogueManager.clearQueue();
+    },
+    getPreparation: () => lastCombatPrewarm,
+    resetScenario: resetP3CombatSequence,
+    runSequence: runP3CombatSequence,
+    profileFrames,
+    getProgramCount: () => renderer.info.programs?.length ?? 0,
+    getMetadata: () => ({
+      postProcessing: post.getDiagnostics(),
+      combatPoolPrepared: coalitionDrones.resourcesPrepared,
+      storyPrewarm: lastStoryPrewarm,
+      combatPrewarm: lastCombatPrewarm
+    }),
+    setDirect: (enabled) => {
+      setRenderDiagnostic({ bypassPost: enabled });
+    }
+  });
+  try {
+    return await runner.run();
+  } finally {
+    p3BenchmarkActive = false;
+  }
+}
+
+function syncAutomaticGroundRenderQuality(): void {
+  // Manual performance probes own these switches. The optimized route is the
+  // one exception: it must measure the shipped ground profile itself.
+  if (performanceDebugMode && autoGroundBenchmark !== 'optimized' && !autoGroundP15) return;
+  const onFoot = inSurfacePhase && playerModeSystem.onFootActive;
+  if (automaticGroundQualityOnFoot === onFoot && automaticGroundQualityProfile === renderProfile) return;
+  automaticGroundQualityOnFoot = onFoot;
+  automaticGroundQualityProfile = renderProfile;
+  const quality = GROUND_RENDER_QUALITY[renderProfile];
+  characterShadowInterval = 1 / (onFoot ? quality.shadowUpdateHz : 30);
+  if (onFoot) planetaryWorld.setSurfaceShadowMapSize(quality.shadowMapSize);
+  const bloomEnabled = diagnosticsMode ? false : onFoot ? quality.bloom : true;
+  post.setPassEnabled('bloom', bloomEnabled);
+  renderDiagnostics.postPasses.bloom = bloomEnabled;
+}
+
+function getCombatVfxRuntimeState() {
+  return {
+    config: { ...combatVfxPresentation },
+    player: weaponSystem.getDiagnostics(),
+    enemies: enemyCombatVisuals.getDiagnostics(),
+    shield: shieldEffect.getDiagnostics(),
+    droneCount: coalitionDrones.activeCount,
+    dronePoolPrepared: coalitionDrones.resourcesPrepared
+  };
+}
+
+async function runRealGpuP4(): Promise<import('./core/RealGpuP4Runner').RealGpuP4Result | undefined> {
+  if (!autoCombatVfxP4) return undefined;
+  if (!performanceDebugOverlay?.isVisible) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'F9' }));
+  }
+  const runner = new RealGpuP4Runner({
+    mode: autoCombatVfxP4,
+    direct: p4Direct,
+    scenario: 'Secuencia pesada P3 / aislamiento visual P4',
+    presets: p4Presets,
+    sampleSeconds: 15,
+    prepareScene: async () => {
+      p3BenchmarkActive = true;
+      p4BenchmarkActive = true;
+      if (!launched) await launchFromMainMenu(false);
+      await prepareCombatSceneResources();
+      applyCombatVfxPresentation(combatVfxPresentation);
+      dialogueManager.clearQueue();
+      gamePaused = false;
+      starMap.close();
+      input.clear();
+      await new Promise((resolve) => window.setTimeout(resolve, 2500));
+      dialogueManager.clearQueue();
+    },
+    getPreparation: () => lastCombatPrewarm,
+    resetScenario: resetP3CombatSequence,
+    runSequence: runP3CombatSequence,
+    profileFrames,
+    setPreset: (preset) => setCombatVfxDiagnostic(preset),
+    getMaterialAudit: getCombatVfxMaterialAudit,
+    getMetadata: () => ({
+      postProcessing: post.getDiagnostics(),
+      combatPoolPrepared: coalitionDrones.resourcesPrepared,
+      combatPrewarm: lastCombatPrewarm,
+      activeCounters: getCombatVfxRuntimeState(),
+      resolution: {
+        css: [renderer.domElement.clientWidth, renderer.domElement.clientHeight],
+        drawingBuffer: [renderer.getContext().drawingBufferWidth, renderer.getContext().drawingBufferHeight],
+        pixelRatio: renderer.getPixelRatio()
+      }
+    }),
+    setDirect: (enabled) => {
+      setRenderDiagnostic({ bypassPost: enabled });
+    }
+  });
+  try {
+    return await runner.run();
+  } finally {
+    p3BenchmarkActive = false;
+    p4BenchmarkActive = false;
+    applyCombatVfxPresentation(combatVfxPreset('full'));
+    setRenderDiagnostic({ bypassPost: false });
+  }
+}
+
+function applyGroundDiagnosticPreset(preset: GroundDiagnosticPreset): GroundDiagnosticPreset {
+  resetRenderDiagnostics();
+  planetaryWorld.setSurfaceShadowMapSize();
+  const minimal = preset === 'environment-minimal';
+  const rocks = !minimal && preset !== 'rocks-off';
+  const particles = !minimal && preset !== 'particles-off';
+  const baseVisible = !minimal && preset !== 'base-off';
+  const baseDetail = baseVisible && preset !== 'base-detail-off';
+  const environment = !minimal;
+
+  planetaryWorld.setPerformanceIsolation({ rocks, particles, baseDetail });
+  planetaryWorld.colonyModule.group.visible = baseVisible;
+  surfaceResourceSystem.group.visible = environment;
+  landingZone.group.visible = environment;
+  surfaceCharacter.group.visible = preset !== 'character-off';
+  if (preset === 'pr-1') setRenderDiagnostic({ pixelRatio: 1 });
+  if (preset === 'original-ground') {
+    setRenderDiagnostic({ pixelRatio: 1, postPasses: { bloom: true } });
+    planetaryWorld.setSurfaceShadowMapSize(2048);
+  }
+  if (preset === 'optimized-normal' || preset === 'optimized-pr-085' || preset === 'optimized-pr-075') {
+    setRenderDiagnostic({ postPasses: { bloom: false } });
+    planetaryWorld.setSurfaceShadowMapSize(1024);
+  }
+  if (preset === 'optimized-pr-085') setRenderDiagnostic({ pixelRatio: 0.85 });
+  if (preset === 'optimized-pr-075') setRenderDiagnostic({ pixelRatio: 0.75 });
+  if (preset === 'bloom-half') setRenderDiagnostic({ bloomScale: 0.45 });
+  if (preset === 'bloom-off') setRenderDiagnostic({ postPasses: { bloom: false } });
+  if (preset === 'post-off') setRenderDiagnostic({ bypassPost: true });
+  if (preset === 'shadow-1024') planetaryWorld.setSurfaceShadowMapSize(1024);
+  if (preset === 'shadows-off') setRenderDiagnostic({ shadows: false });
+  return preset;
+}
+
+function prepareGroundCheckpoint(checkpoint: GroundCheckpoint): void {
+  const position = checkpoint === 'nereida-base'
+    ? new THREE.Vector3(8, 0, -72)
+    : checkpoint === 'dense-ground'
+      ? new THREE.Vector3(-118, 0, 72)
+      : checkpoint === 'sprint'
+        ? new THREE.Vector3(115, 0, -18)
+        : checkpoint === 'walk-turn'
+          ? new THREE.Vector3(0, 0, -38)
+          : new THREE.Vector3(176, 0, -182);
+  position.y = surfaceGroundHeight(position.x, position.z) + 0.04;
+  surfaceCharacter.placeAt(position, checkpoint === 'dense-ground' ? -0.5 : Math.PI);
+  surfaceCharacter.velocity.set(0, 0, 0);
+  surfaceCharacter.setAnimation('idle');
+  collisionWorld.setSafeCharacterPosition(position);
+  footCameraYaw = checkpoint === 'dense-ground' ? -0.5 : Math.PI;
+  footCameraTargetYaw = footCameraYaw;
+  footCameraPitch = 0.24;
+  footCameraTargetPitch = footCameraPitch;
+  snapOnFootCameraNextFrame = true;
+  requestCameraFollowSync(`ground-${checkpoint}`);
+}
+
+function getGroundSceneInventory(): GroundSceneInventory {
+  let visibleMeshes = 0;
+  let skinnedMeshes = 0;
+  let shadowCasters = 0;
+  let lights = 0;
+  let characterBones = 0;
+  const visit = (object: THREE.Object3D, parentVisible: boolean): void => {
+    const visible = parentVisible && object.visible;
+    if (!visible) return;
+    if (object instanceof THREE.Mesh) {
+      visibleMeshes += 1;
+      if (object.castShadow) shadowCasters += 1;
+      if (object instanceof THREE.SkinnedMesh) {
+        skinnedMeshes += 1;
+        characterBones += object.skeleton.bones.length;
+      }
+    }
+    if (object instanceof THREE.Light && object.visible && object.intensity > 0) lights += 1;
+    for (let index = 0; index < object.children.length; index += 1) visit(object.children[index], visible);
+  };
+  visit(scene, true);
+  const world = planetaryWorld.getProceduralDiagnostics();
+  return {
+    visibleMeshes,
+    skinnedMeshes,
+    shadowCasters,
+    lights,
+    activeAnimations: surfaceCharacter.mixerActive ? 1 : 0,
+    characterMeshes: surfaceCharacter.visibleMeshCount,
+    characterBones,
+    characterMaterials: surfaceCharacter.diagnostics.materialCount,
+    characterTriangles: surfaceCharacter.visibleTriangleCount,
+    rockClusters: world.visibleRockClusters,
+    rockInstances: world.rockInstances,
+    baseMidDetailVisible: world.baseInfrastructure.midDetailVisible && planetaryWorld.colonyModule.group.visible,
+    baseCloseDetailVisible: world.baseInfrastructure.closeDetailVisible && planetaryWorld.colonyModule.group.visible,
+    groundResolutionScale: groundResolutionController.state.scale,
+    rendererPixelRatio: Number(renderer.getPixelRatio().toFixed(3))
+  };
+}
+
+async function prepareGroundBenchmarkScene(): Promise<void> {
+  if (!launched) await launchFromMainMenu(false);
+  gamePaused = false;
+  starMap.close();
+  dialogueManager.clearQueue();
+  input.clear();
+  if (!inSurfacePhase) enterSurfacePhase(false);
+  if (!colonyManager.state.habitatOnline) colonyManager.registerModuleDeployment();
+  if (!planetaryWorld.colonyModule.group.visible) {
+    const habitatPosition = HABITAT_SITE_LOCAL.clone();
+    habitatPosition.y = planetaryWorld.getHeightAt(habitatPosition.x, habitatPosition.z);
+    planetaryWorld.colonyModule.deployAt(habitatPosition);
+  }
+  planetaryWorld.colonyModule.setOnline(clock.elapsedTime);
+  colonyManager.revealSurfaceSites();
+  surfaceResourceSystem.syncFromColony(colonyManager);
+  transitionGroundHeight = surfaceGroundHeight(ship.position.x, ship.position.z);
+  parkShipOnTerrain(ship.position, true);
+  previousVerticalInput = 0;
+  shipAccessLift.updateAnchor(ship.position, smoothYaw, transitionGroundHeight, 1, 1, clock.elapsedTime);
+  playerModeSystem.forceOnFoot();
+  surfaceCharacter.setVisible(true);
+  shipAccessLift.state = 'deployed';
+  setControlHints('foot');
+  groundBenchmarkActive = true;
+  groundPerformanceTelemetry.setEnabled(true);
+  applyGroundDiagnosticPreset('normal');
+  prepareGroundCheckpoint('terrain-open');
+  await new Promise((resolve) => window.setTimeout(resolve, 4000));
+  dialogueManager.clearQueue();
+}
+
+async function runRealGpuGroundBenchmark(): Promise<import('./core/RealGpuGroundRunner').RealGpuGroundResult | undefined> {
+  if (!autoGroundBenchmark) return undefined;
+  // The runner has its own fixed-cost status panel. Keeping F9 open here would
+  // snapshot/sort the growing profiler window every 300 ms and contaminate the
+  // very frame-pacing spikes this route is meant to measure.
+  const captureHost = window as unknown as {
+    __arcaCaptureGroundStage?: (stage: string) => Promise<void>;
+  };
+  const runner = new RealGpuGroundRunner({
+    mode: autoGroundBenchmark,
+    warmupSeconds: autoGroundBenchmark === 'isolation' ? 4 : 8,
+    sampleSeconds: autoGroundBenchmark === 'isolation' ? 8 : 15,
+    isolationPresets: requestedGroundPresets.length > 0 ? requestedGroundPresets : undefined,
+    prepareScene: prepareGroundBenchmarkScene,
+    prepareCheckpoint: prepareGroundCheckpoint,
+    setMovement: (forward, strafe, sprint) => {
+      input.delete('w');
+      input.delete('s');
+      input.delete('a');
+      input.delete('d');
+      input.delete('shift');
+      if (forward > 0) input.add('w');
+      if (forward < 0) input.add('s');
+      if (strafe < 0) input.add('a');
+      if (strafe > 0) input.add('d');
+      if (sprint) input.add('shift');
+    },
+    setCameraTurn: (speed) => {
+      groundBenchmarkCameraTurnRate = speed;
+    },
+    setPreset: applyGroundDiagnosticPreset,
+    resetDiagnostics: () => {
+      applyGroundDiagnosticPreset('normal');
+    },
+    beginGroundWindow: () => groundPerformanceTelemetry.resetWindow(),
+    endGroundWindow: () => groundPerformanceTelemetry.snapshot(),
+    getInventory: getGroundSceneInventory,
+    getMetadata: () => ({
+      renderProfile,
+      shadowMapSize: planetaryWorld.surfaceShadowMapSize,
+      shadowUpdateHz: Math.round(1 / characterShadowInterval),
+      character: { ...surfaceCharacter.diagnostics },
+      world: planetaryWorld.getProceduralDiagnostics(),
+      collision: { ...collisionWorld.diagnostics },
+      postProcessing: post.getDiagnostics(),
+      groundResolution: groundResolutionController.state
+    }),
+    profileFrames,
+    captureStage: captureHost.__arcaCaptureGroundStage
+      ? (stage) => captureHost.__arcaCaptureGroundStage?.(stage)
+      : undefined
+  });
+  try {
+    return await runner.run();
+  } finally {
+    input.clear();
+    groundBenchmarkCameraTurnRate = 0;
+    groundBenchmarkActive = false;
+    groundPerformanceTelemetry.setEnabled(false);
+    applyGroundDiagnosticPreset('normal');
+  }
+}
+
+function setGroundP15Grade(enabled: boolean): void {
+  setRenderDiagnostic({
+    bypassPost: false,
+    fusedOutputGrade: enabled,
+    postPasses: enabled
+      ? { render: true, bloom: false, output: false, grade: false, combined: true }
+      : { render: true, bloom: false, output: true, grade: false, combined: false }
+  });
+}
+
+async function runRealGpuGroundP15(): Promise<import('./core/RealGpuGroundP15Runner').RealGpuGroundP15Result | undefined> {
+  if (!autoGroundP15) return undefined;
+  const captureHost = window as unknown as {
+    __arcaCaptureGroundP15Stage?: (stage: string) => Promise<void>;
+  };
+  groundP15BenchmarkActive = true;
+  groundP15Diagnostics.setEnabled(true);
+  const runner = new RealGpuGroundP15Runner({
+    mode: autoGroundP15,
+    prepareScene: prepareGroundBenchmarkScene,
+    prepareBase: () => prepareGroundCheckpoint('nereida-base'),
+    prepareWalkTurn: () => prepareGroundCheckpoint('walk-turn'),
+    setMovement: (forward, strafe, sprint) => {
+      input.delete('w');
+      input.delete('s');
+      input.delete('a');
+      input.delete('d');
+      input.delete('shift');
+      if (forward > 0) input.add('w');
+      if (forward < 0) input.add('s');
+      if (strafe < 0) input.add('a');
+      if (strafe > 0) input.add('d');
+      if (sprint) input.add('shift');
+    },
+    setCameraYaw: (yaw) => {
+      footCameraTargetYaw = yaw;
+    },
+    readCameraYaw: () => footCameraYaw,
+    setGrade: setGroundP15Grade,
+    resetDiagnostics: () => {
+      setGroundP15Grade(true);
+    },
+    beginGroundWindow: () => groundPerformanceTelemetry.resetWindow(),
+    endGroundWindow: () => groundPerformanceTelemetry.snapshot(),
+    getInventory: getGroundSceneInventory,
+    getCensus: () => groundP15Diagnostics.census(renderer, scene, camera),
+    getMetadata: () => ({
+      renderProfile,
+      shadowMapSize: planetaryWorld.surfaceShadowMapSize,
+      shadowUpdateHz: Math.round(1 / characterShadowInterval),
+      postProcessing: post.getDiagnostics(),
+      groundResolution: groundResolutionController.state,
+      character: { ...surfaceCharacter.diagnostics },
+      world: planetaryWorld.getProceduralDiagnostics(),
+      baseHabitatStaticDrawCallsSaved: planetaryWorld.colonyModule.habitatStaticDrawCallsSaved,
+      parkedShipRuntimeAccentsVisible: playerShip.diagnostics.runtimeAccentsVisible,
+      collision: { ...collisionWorld.diagnostics }
+    }),
+    profileFrames,
+    markEvent: markPerformanceEvent,
+    captureStage: captureHost.__arcaCaptureGroundP15Stage
+      ? (stage) => captureHost.__arcaCaptureGroundP15Stage?.(stage)
+      : undefined
+  });
+  try {
+    return await runner.run();
+  } finally {
+    input.clear();
+    groundBenchmarkActive = false;
+    groundP15BenchmarkActive = false;
+    groundPerformanceTelemetry.setEnabled(false);
+    groundP15Diagnostics.setEnabled(false);
+    setGroundP15Grade(true);
+  }
+}
+
+if (performanceDebugMode) {
+  performanceDebugOverlay = new PerformanceDebugOverlay({
+    profiler: frameProfiler,
+    renderer,
+    getFrameMs: () => frameSampleMs,
+    getDiagnosticState: () => ({ ...renderDiagnostics }),
+    setDiagnostic: setRenderDiagnostic,
+    resetDiagnostic: resetRenderDiagnostics
+  });
+}
+
+// The performance flag gets only measurement/render switches. Mission cheats,
+// scene handles and automation hooks remain restricted to the existing modes.
+if (performanceDebugMode && !diagnosticsMode) {
+  window.__arcaDebug = {
+    profileFrames,
+    setRenderDiagnostic,
+    getRenderDiagnosticState,
+    resetRenderDiagnostics,
+    markPerformanceEvent,
+    prepareStoryScene: prepareStorySceneResources,
+    prepareCombatScene: prepareCombatSceneResources,
+    getP3PreparationState: () => ({ story: lastStoryPrewarm, combat: lastCombatPrewarm }),
+    runStutterP3: runRealGpuP3,
+    setCombatVfxDiagnostic,
+    getCombatVfxDiagnostic: getCombatVfxRuntimeState,
+    getCombatVfxMaterialAudit,
+    getCombatVfxQualityState: () => ({
+      profile: renderProfile,
+      budgets: { ...COMBAT_VFX_QUALITY[renderProfile] },
+      distance: { ...COMBAT_VFX_DISTANCE }
+    }),
+    runVfxP4: runRealGpuP4,
+    runGroundBenchmark: runRealGpuGroundBenchmark,
+    runGroundP15: runRealGpuGroundP15,
+    prepareGroundScene: prepareGroundBenchmarkScene,
+    prepareGroundCheckpoint,
+    setGroundDiagnostic: applyGroundDiagnosticPreset,
+    getGroundPerformanceState: () => ({
+      active: groundBenchmarkActive,
+      p15Active: groundP15BenchmarkActive,
+      telemetry: groundPerformanceTelemetry.snapshot(),
+      inventory: getGroundSceneInventory(),
+      resolution: groundResolutionController.state,
+      baseHabitatStaticDrawCallsSaved: planetaryWorld.colonyModule.habitatStaticDrawCallsSaved,
+      parkedShipRuntimeAccentsVisible: playerShip.diagnostics.runtimeAccentsVisible,
+      p15Frame: groundP15Diagnostics.currentFrameContext
+    }),
+    getGroundP15Census: () => groundP15Diagnostics.census(renderer, scene, camera)
+  } as unknown as Window['__arcaDebug'];
+}
+
 if (diagnosticsMode) {
   // Test/debug hook: lets automation inspect the live scene graph.
   window.__arcaScene = scene;
@@ -23834,6 +25002,21 @@ if (diagnosticsMode) {
       weaponsLocked: arkDeparture.weaponsLocked,
       expeditionStartedThisSession
     }),
+    /**
+     * Records a window of frames and returns its distribution.
+     *
+     * Async on purpose: the caller awaits the real window rather than sampling
+     * whatever the last frame happened to cost.
+     */
+    profileFrames,
+    /**
+     * Diagnostic switches. Each one removes a suspected cost so the frame time
+     * difference names the culprit; none of them is a shipped quality setting.
+     */
+    setRenderDiagnostic,
+    getRenderDiagnosticState,
+    /** Puts every diagnostic switch back where it was. */
+    resetRenderDiagnostics,
     getWeaponResourceState: () => {
       const mag = weaponSystem.primaryMagazineState;
       const tubes = weaponSystem.torpedoTubeState;
@@ -27348,12 +28531,36 @@ if (diagnosticsMode) {
     };
   }
 
-if (window.__arcaDebug) {
+if (diagnosticsMode && window.__arcaDebug) {
   Object.assign(window.__arcaDebug, {
+    setCombatVfxDiagnostic,
+    getCombatVfxDiagnostic: getCombatVfxRuntimeState,
+    getCombatVfxMaterialAudit,
+    getCombatVfxQualityState: () => ({
+      profile: renderProfile,
+      budgets: { ...COMBAT_VFX_QUALITY[renderProfile] },
+      distance: { ...COMBAT_VFX_DISTANCE }
+    }),
+    runGroundBenchmark: runRealGpuGroundBenchmark,
+    runGroundP15: runRealGpuGroundP15,
+    prepareGroundScene: prepareGroundBenchmarkScene,
+    prepareGroundCheckpoint,
+    setGroundDiagnostic: applyGroundDiagnosticPreset,
+    getGroundPerformanceState: () => ({
+      active: groundBenchmarkActive,
+      p15Active: groundP15BenchmarkActive,
+      telemetry: groundPerformanceTelemetry.snapshot(),
+      inventory: getGroundSceneInventory(),
+      baseHabitatStaticDrawCallsSaved: planetaryWorld.colonyModule.habitatStaticDrawCallsSaved,
+      parkedShipRuntimeAccentsVisible: playerShip.diagnostics.runtimeAccentsVisible,
+      p15Frame: groundP15Diagnostics.currentFrameContext
+    }),
+    getGroundP15Census: () => groundP15Diagnostics.census(renderer, scene, camera),
     getGameModesFoundationState: () => getGameModesFoundationState(),
     getAccountState: () => accountManager.state,
     getGarageState: () => garageView?.state ?? null,
     setGarageView: (yaw: number, pitch?: number) => garageView?.setView(yaw, pitch) ?? null,
+    inspectGarage: () => garageView?.inspect() ?? null,
     openGarageMode: async () => {
       await openGarage();
       return garageView?.state ?? null;
@@ -27734,6 +28941,10 @@ declare global {
       setWeaponEnergy: (value: number) => number;
       resetWeaponAudit: () => boolean;
       getWeaponResourceState: () => Record<string, unknown>;
+      profileFrames: (label: string, seconds?: number) => Promise<import('./core/FrameProfiler').ProfileResult>;
+      setRenderDiagnostic: (patch: RenderDiagnosticPatch) => unknown;
+      getRenderDiagnosticState: () => Record<string, unknown>;
+      resetRenderDiagnostics: () => boolean;
       getInputGateState: () => Record<string, unknown>;
       setCameraLookAt: (target: CameraLookAtInput) => CameraProbeResult | undefined;
       frameCameraTarget: (

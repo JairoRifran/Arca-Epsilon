@@ -266,6 +266,10 @@ export class AuroraRevealEffect {
   private readonly floorRayOrigin = new THREE.Vector3();
   private static readonly FLOOR_RAY_DOWN = new THREE.Vector3(0, -1, 0);
 
+  get groundHeightRaycastActive(): boolean {
+    return this.terrainBaked;
+  }
+
   constructor(private readonly getGroundHeight: (x: number, z: number) => number) {
     this.group.name = 'Sector Aurora Reveal';
     this.group.visible = false;

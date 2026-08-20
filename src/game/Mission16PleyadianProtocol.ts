@@ -83,6 +83,9 @@ export class Mission16PleyadianProtocol {
   private revelationTimer = 0;
   /** Sync phase: emitter phase of the active node and the stable time held. */
   private nodePhaseValue = 50;
+
+  /** True once a press has captured the harmonic; cleared by leaving range. */
+  private nodePhaseLocked = false;
   private nodeSyncHeld = 0;
   /** Distance to the node currently being aligned. */
   private nodeSearchDistance = Number.POSITIVE_INFINITY;
@@ -334,15 +337,25 @@ export class Mission16PleyadianProtocol {
 
   private prepareSync(): void {
     this.nodePhaseValue = 50;
+    this.nodePhaseLocked = false;
     this.nodeSyncHeld = 0;
     this.nodeSearchDistance = Number.POSITIVE_INFINITY;
   }
 
-  /** One press nudges the active node's emitter phase. */
-  nudgeNodePhase(): boolean {
+  /**
+   * One press locks the emitter onto the node's current harmonic phase.
+   *
+   * This used to add a blind +9 with wraparound, which meant chasing a moving
+   * target by mashing E: the phase drifts continuously, so a static value fell
+   * out of the band within a second or two and the pilot had to keep pressing
+   * for the whole five-second hold, three times over. A press now means
+   * "capture this phase", which is what the pilot was trying to express all
+   * along, and one press per node is enough to open the hold.
+   */
+  nudgeNodePhase(elapsed = 0): boolean {
     if (this.step !== 'synchronizeNodes' || this.activeNodeIndex < 0) return false;
-    this.nodePhaseValue += mission16Tuning.phaseStep;
-    if (this.nodePhaseValue > 100) this.nodePhaseValue -= 100;
+    this.nodePhaseValue = this.nodePhaseTarget(elapsed);
+    this.nodePhaseLocked = true;
     return true;
   }
 
@@ -355,9 +368,17 @@ export class Mission16PleyadianProtocol {
     if (this.step !== 'synchronizeNodes') return false;
     const index = this.activeNodeIndex;
     if (index < 0) return false;
+    // Once captured, the emitter tracks the drifting harmonic on its own while
+    // the pilot stays in range. Holding position is the skill being asked for
+    // here; re-pressing E every second was never part of it.
+    if (inRange && this.nodePhaseLocked) {
+      this.nodePhaseValue = this.nodePhaseTarget(elapsed);
+    }
     if (inRange && this.isPhaseStable(elapsed)) {
       this.nodeSyncHeld += deltaSeconds;
     } else {
+      // Leaving range breaks the capture: the pilot re-acquires with one press.
+      if (!inRange) this.nodePhaseLocked = false;
       this.nodeSyncHeld = Math.max(0, this.nodeSyncHeld - deltaSeconds * 0.8);
       return false;
     }
@@ -603,6 +624,7 @@ export class Mission16PleyadianProtocol {
     this.terminalProgress = 0;
     this.revelationTimer = 0;
     this.nodePhaseValue = 50;
+    this.nodePhaseLocked = false;
     this.nodeSyncHeld = 0;
     this.nodeSearchDistance = Number.POSITIVE_INFINITY;
   }

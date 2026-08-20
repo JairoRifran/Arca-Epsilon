@@ -200,6 +200,8 @@ export class ShipAccessLift {
 
   private readonly groundExitLocal = new THREE.Vector3(6.25, 0.05, 1.05);
 
+  private distanceDetailVisible = true;
+
   constructor() {
     this.group.name = 'Scout Ship Ventral Access Lift';
     this.group.visible = false;
@@ -401,9 +403,21 @@ export class ShipAccessLift {
       if (child instanceof THREE.Mesh) {
         child.castShadow = false;
         child.receiveShadow = true;
-        child.frustumCulled = false;
+        child.frustumCulled = true;
       }
     });
+  }
+
+  /** Keep boarding hardware close-up, but not at unreadable Base-route range. */
+  setObserverDistance(distance: number): void {
+    if (this.state !== 'deployed') {
+      this.distanceDetailVisible = true;
+    } else if (this.distanceDetailVisible && distance > 60) {
+      this.distanceDetailVisible = false;
+    } else if (!this.distanceDetailVisible && distance < 52) {
+      this.distanceDetailVisible = true;
+    }
+    this.group.visible = this.hatchProgressValue > 0.01 && this.distanceDetailVisible;
   }
 
   /**
@@ -506,7 +520,8 @@ export class ShipAccessLift {
   ): void {
     const open = THREE.MathUtils.clamp(openProgress, 0, 1);
     const liftDown = THREE.MathUtils.clamp(liftDownProgress, 0, 1);
-    this.group.visible = open > 0.01;
+    const settled = open > 0.995 && liftDown > 0.995 && this.state === 'deployed';
+    this.group.visible = open > 0.01 && (!settled || this.distanceDetailVisible);
     this.group.position.set(shipPosition.x, groundHeight, shipPosition.z);
     this.group.rotation.y = shipYaw;
 

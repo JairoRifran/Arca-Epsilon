@@ -1,7 +1,17 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { AssetLoader } from '../core/AssetLoader';
 import { PlayerShip } from '../entities/PlayerShip';
 import type { ShipDefinition } from '../ships/ShipCatalog';
+
+/**
+ * Air left around the silhouette.
+ *
+ * 1.12 was measured too tight once the camera aimed dead centre: the port
+ * nacelle sat exactly on the left edge of the stage. This leaves the ship at
+ * roughly two thirds of the hero cell, which is the brief's target.
+ */
+const FRAMING_MARGIN = 1.34;
 
 export type GarageDiagnostics = {
   visible: boolean;
@@ -36,7 +46,18 @@ export class GarageView {
     rendererWidth: 1,
     rendererHeight: 1
   };
+  private readonly stage: HTMLElement;
   private raf = 0;
+  /**
+   * Framing derived from the ship's own bounds.
+   *
+   * Nothing here is tuned for `epsilon-scout`: the camera distance comes from
+   * the model's bounding sphere, so a longer or taller ship frames itself
+   * without a second set of magic numbers.
+   */
+  private framing = { height: 8, spread: 19.4, centerY: 0, distance: 27 };
+  private environment?: THREE.Texture;
+  private keyLight?: THREE.DirectionalLight;
   private loadedDefinition?: ShipDefinition;
   private yaw = -0.55;
   private targetYaw = -0.55;
@@ -62,6 +83,22 @@ export class GarageView {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.08;
     this.loader.enableKTX2(this.renderer, '/basis/');
+    // Soft shadows: the ship had none at all, so it read as floating over a
+    // dark ellipse rather than standing on a platform.
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // A generated studio environment. Every hull material is metallic, and a
+    // metal with nothing to reflect resolves to near black wherever a light is
+    // not pointing -- which is why the fuselage looked flat and plasticky.
+    // RoomEnvironment ships with three; no external HDRI, no new dependency.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.environment;
+    // Kept low: the environment is for reflections, not for flattening the key.
+    this.scene.environmentIntensity = 0.42;
+    pmrem.dispose();
+
     this.scene.background = new THREE.Color(0x020608);
     this.scene.fog = new THREE.Fog(0x020608, 34, 78);
     this.buildHangar();
@@ -69,8 +106,12 @@ export class GarageView {
     this.camera.position.set(0, 5.8, 27);
     this.camera.lookAt(0, 0.8, 0);
     this.scene.add(this.camera);
+    // Observe the stage cell, not the whole screen. The screen also contains
+    // the information column, and measuring against it is exactly what made the
+    // renderer believe it had space the panel was covering.
+    this.stage = root.querySelector<HTMLElement>('#garage-stage') ?? root;
     this.observer = new ResizeObserver(this.resize);
-    this.observer.observe(root);
+    this.observer.observe(this.stage);
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointermove', this.onPointerMove);
     canvas.addEventListener('pointerup', this.onPointerUp);
@@ -133,7 +174,13 @@ export class GarageView {
         original: definition.model.gameplayOriginal
       });
       this.ship.group.position.set(0, 0.35, 0);
+      // The hull is the only shadow caster; the hangar shell would only add
+      // shadow-map draws for silhouettes nobody looks at.
+      this.ship.group.traverse((object) => {
+        if (object instanceof THREE.Mesh) object.castShadow = true;
+      });
       this.loadedDefinition = definition;
+      this.frameShip();
       this.diagnostics.loadState = 'ready';
     } catch {
       this.diagnostics.loadState = 'failed';
@@ -141,18 +188,14 @@ export class GarageView {
   }
 
   private buildHangar(): void {
-    const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x151b1e, roughness: 0.74, metalness: 0.56 });
+    // Same reasoning as the deck: a shadow needs a diffuse surface to fall on.
+    const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x161c20, roughness: 0.86, metalness: 0.12 });
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(54, 42), floorMaterial);
     floor.name = 'Garage service floor';
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = -3.1;
-    floor.receiveShadow = false;
+    floor.receiveShadow = true;
     this.scene.add(floor);
-
-    const recessMaterial = new THREE.MeshStandardMaterial({ color: 0x05090b, roughness: 0.42, metalness: 0.82 });
-    const recess = new THREE.Mesh(new THREE.CylinderGeometry(8.5, 8.5, 0.28, 48), recessMaterial);
-    recess.position.y = -2.96;
-    this.scene.add(recess);
 
     const frameGeometry = new THREE.BoxGeometry(0.42, 13, 0.65);
     const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x273035, roughness: 0.48, metalness: 0.78 });
@@ -179,21 +222,236 @@ export class GarageView {
     stripes.instanceMatrix.needsUpdate = true;
     this.scene.add(stripes);
 
-    const key = new THREE.DirectionalLight(0xd6f4ff, 4.4);
-    key.position.set(-8, 12, 10);
-    const rim = new THREE.DirectionalLight(0x62a9bd, 3.2);
-    rim.position.set(10, 5, -12);
-    const bounce = new THREE.HemisphereLight(0x89aeb8, 0x101315, 1.25);
-    this.scene.add(key, rim, bounce);
+    // Key. The only light that casts: one shadow map is enough for a single
+    // hero object, and more would cost without being read.
+    const key = new THREE.DirectionalLight(0xdCEEFF, 3.4);
+    key.position.set(-9, 13, 9);
+    key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    // Frustum sized to the platform, not the room: a map stretched over the
+    // whole hangar would spend its resolution on empty floor.
+    const extent = 12;
+    key.shadow.camera.left = -extent;
+    key.shadow.camera.right = extent;
+    key.shadow.camera.top = extent;
+    key.shadow.camera.bottom = -extent;
+    key.shadow.camera.near = 1;
+    key.shadow.camera.far = 46;
+    // normalBias rather than a large constant bias: it removes the acne on the
+    // hull's curved panels without detaching the contact shadow from the feet.
+    key.shadow.bias = -0.0004;
+    key.shadow.normalBias = 0.035;
+    key.shadow.radius = 3;
+    this.keyLight = key;
+
+    // Rim, cooler and behind, to cut the silhouette away from the dark hangar.
+    const rim = new THREE.DirectionalLight(0x6FB2C8, 2.6);
+    rim.position.set(11, 6, -13);
+
+    // Fill only lifts the underside; the environment now carries most of the
+    // ambient response, so this is much weaker than it used to be.
+    const bounce = new THREE.HemisphereLight(0x89aeb8, 0x0d1113, 0.55);
+    this.scene.add(key, key.target, rim, bounce);
+    this.buildPlatform();
+  }
+
+  /**
+   * The service pedestal.
+   *
+   * The old scene put a near-black recessed disc under the ship, which read as
+   * a hole rather than a surface and gave the hull nothing to sit on. This is a
+   * shallow lit platform that receives the shadow, so the ship gains weight and
+   * a believable contact point.
+   */
+  private buildPlatform(): void {
+    const deck = new THREE.Mesh(
+      new THREE.CylinderGeometry(9.2, 9.2, 0.5, 64),
+      // Mostly dielectric on purpose. A metallic surface has almost no diffuse
+      // response, and a shadow map only darkens *direct* light -- so with
+      // metalness 0.7 and an IBL environment carrying most of the illumination,
+      // the shadow had nearly nothing to subtract and stayed invisible. The
+      // pipeline was never broken; the receiver could not show it.
+      new THREE.MeshStandardMaterial({ color: 0x2a343a, roughness: 0.78, metalness: 0.18 })
+    );
+    deck.name = 'Garage service platform';
+    deck.position.y = -3.05;
+    deck.receiveShadow = true;
+    this.scene.add(deck);
+
+    // A raised rim reads as engineering rather than a painted circle, and it
+    // catches the key light, which is what separates the deck from the floor.
+    const rim = new THREE.Mesh(
+      new THREE.TorusGeometry(9.2, 0.16, 8, 72),
+      new THREE.MeshStandardMaterial({ color: 0x2c3a40, roughness: 0.4, metalness: 0.85 })
+    );
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.y = -2.8;
+    this.scene.add(rim);
+
+    // Inset guide strips. Emissive-only, so they cost no light and still give
+    // the deck a sense of being powered.
+    const stripGeometry = new THREE.BoxGeometry(0.12, 0.03, 2.6);
+    const stripMaterial = new THREE.MeshBasicMaterial({ color: 0x59b8c6 });
+    const strips = new THREE.InstancedMesh(stripGeometry, stripMaterial, 8);
+    const matrix = new THREE.Matrix4();
+    for (let index = 0; index < 8; index += 1) {
+      const angle = (index / 8) * Math.PI * 2;
+      matrix.makeRotationY(-angle);
+      matrix.setPosition(Math.sin(angle) * 7.4, -2.78, Math.cos(angle) * 7.4);
+      strips.setMatrixAt(index, matrix);
+    }
+    strips.instanceMatrix.needsUpdate = true;
+    this.scene.add(strips);
+  }
+
+  /**
+   * Points the camera at the loaded ship, sized from its own bounds.
+   *
+   * The camera used to sit at a fixed (0, 5.8, 27) chosen for this one hull.
+   * Distance now comes from the bounding sphere and the narrower of the two
+   * field-of-view axes, so the ship fills the same fraction of frame whatever
+   * its size, and the shadow frustum follows it.
+   */
+  private frameShip(): void {
+    const box = new THREE.Box3().setFromObject(this.ship.group);
+    if (box.isEmpty()) return;
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
+    // Height and the widest horizontal extent are tracked separately. The ship
+    // spins in yaw, so its worst-case silhouette width is the larger of width
+    // and depth; its height never changes.
+    this.framing.height = size.y;
+    this.framing.spread = Math.max(size.x, size.z);
+    this.framing.centerY = centre.y;
+    this.applyFraming();
+  }
+
+  private applyFraming(): void {
+    const vertical = THREE.MathUtils.degToRad(this.camera.fov);
+    const horizontal = 2 * Math.atan(Math.tan(vertical / 2) * this.camera.aspect);
+    // Fit each axis against the field of view that actually constrains it.
+    //
+    // The previous version fitted the *bounding sphere* to the narrower FOV.
+    // That sphere had radius 13.6 because the hull is 19.4 long, so the ship's
+    // length was being reserved as vertical screen space and the camera pulled
+    // back to 44 units for a hull only 8 units tall. Measured, not guessed:
+    // the diagnostic printed both numbers.
+    const forHeight = (this.framing.height / 2) / Math.tan(vertical / 2);
+    const forWidth = (this.framing.spread / 2) / Math.tan(horizontal / 2);
+    // The horizontal fit is computed against the *usable* width, since the
+    // stats panel covers part of the canvas.
+    const distance = Math.max(forHeight, forWidth) * FRAMING_MARGIN;
+    this.framing.distance = distance;
+    // Shift the aim toward the free side so the hull sits in clear canvas
+    // rather than behind the panel. The ship itself is never moved.
+    // Measured against the real panel edge, which starts at about 0.56 of the
+    // canvas: the ship's centre has to sit near a third of the way across, not
+    // halfway, for its tail to clear the stats card. Kept separate from the
+    // distance term so widening the shift does not shrink the ship.
+    // Dead centre. The offset that used to live here was compensating for a
+    // panel drawn over the canvas; with a real stage cell there is nothing to
+    // dodge, and three different values of it all measured worse than simply
+    // aiming at the ship.
+    const aimX = 0;
+    this.camera.position.set(aimX, this.framing.centerY + distance * 0.22, distance * 0.9);
+    this.camera.lookAt(aimX, this.framing.centerY, 0);
+    if (this.keyLight) {
+      this.keyLight.target.position.set(0, this.framing.centerY, 0);
+      this.keyLight.target.updateMatrixWorld();
+    }
+  }
+
+  /**
+   * Everything needed to explain a bad frame or a missing shadow.
+   *
+   * Reports the presentation bounds alongside the raw ones, names the meshes
+   * that push the raw box outwards, and dumps the whole shadow pipeline. Built
+   * because both defects were invisible from the outside: the camera looked
+   * correct and the shadow was switched on, yet neither did its job.
+   */
+  inspect(): Record<string, unknown> {
+    const raw = new THREE.Box3().setFromObject(this.ship.group);
+    const rawSphere = raw.getBoundingSphere(new THREE.Sphere());
+
+    // Which meshes reach furthest from the ship's centre. A trail or a plume
+    // sitting metres behind the hull inflates the radius and pushes the camera
+    // back, which is exactly the symptom being chased.
+    const centre = rawSphere.center;
+    const reach: { name: string; radius: number; visible: boolean; type: string }[] = [];
+    const box = new THREE.Box3();
+    this.ship.group.traverse((object) => {
+      if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Points) &&
+          !(object instanceof THREE.Sprite)) return;
+      box.setFromObject(object);
+      if (box.isEmpty()) return;
+      const corners = [box.min, box.max];
+      let furthest = 0;
+      for (const corner of corners) furthest = Math.max(furthest, corner.distanceTo(centre));
+      reach.push({
+        name: object.name || '(unnamed)',
+        radius: Number(furthest.toFixed(2)),
+        visible: object.visible,
+        type: object.type
+      });
+    });
+    reach.sort((a, b) => b.radius - a.radius);
+
+    let meshes = 0;
+    let casters = 0;
+    this.ship.group.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      meshes += 1;
+      if (object.castShadow) casters += 1;
+    });
+
+    const key = this.keyLight;
+    const shadowCamera = key?.shadow.camera;
+    return {
+      rawBounds: {
+        min: raw.min.toArray().map((n) => Number(n.toFixed(2))),
+        max: raw.max.toArray().map((n) => Number(n.toFixed(2))),
+        size: raw.getSize(new THREE.Vector3()).toArray().map((n) => Number(n.toFixed(2))),
+        centre: centre.toArray().map((n) => Number(n.toFixed(2))),
+        radius: Number(rawSphere.radius.toFixed(2))
+      },
+      framing: {
+        height: Number(this.framing.height.toFixed(2)),
+        spread: Number(this.framing.spread.toFixed(2))
+      },
+      cameraDistance: Number(this.framing.distance.toFixed(2)),
+      cameraPosition: this.camera.position.toArray().map((n) => Number(n.toFixed(2))),
+      topReach: reach.slice(0, 10),
+      shadow: {
+        rendererEnabled: this.renderer.shadowMap.enabled,
+        type: this.renderer.shadowMap.type,
+        keyCastShadow: key?.castShadow ?? false,
+        keyPosition: key?.position.toArray() ?? null,
+        keyTarget: key?.target.position.toArray() ?? null,
+        shipMeshes: meshes,
+        shipCasters: casters,
+        camera: shadowCamera
+          ? {
+            left: (shadowCamera as THREE.OrthographicCamera).left,
+            right: (shadowCamera as THREE.OrthographicCamera).right,
+            top: (shadowCamera as THREE.OrthographicCamera).top,
+            bottom: (shadowCamera as THREE.OrthographicCamera).bottom,
+            near: shadowCamera.near,
+            far: shadowCamera.far
+          }
+          : null,
+        shipWorldY: Number(this.ship.group.position.y.toFixed(2)),
+        platformTopY: -2.8
+      }
+    };
   }
 
   private readonly resize = (): void => {
-    const width = Math.max(1, this.root.clientWidth);
-    const height = Math.max(1, this.root.clientHeight);
+    const width = Math.max(1, this.stage.clientWidth);
+    const height = Math.max(1, this.stage.clientHeight);
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.ship.group.position.x = width > 620 && width <= 900 && height <= 520 ? -4 : 0;
+    this.applyFraming();
     this.diagnostics.rendererWidth = width;
     this.diagnostics.rendererHeight = height;
   };
@@ -205,12 +463,6 @@ export class GarageView {
     if (!this.dragging && this.loadedDefinition) this.targetYaw += delta * 0.09;
     this.yaw += (this.targetYaw - this.yaw) * (1 - Math.exp(-delta * 8));
     this.pitch += (this.targetPitch - this.pitch) * (1 - Math.exp(-delta * 8));
-    this.ship.group.position.x =
-      this.diagnostics.rendererWidth > 620 &&
-      this.diagnostics.rendererWidth <= 900 &&
-      this.diagnostics.rendererHeight <= 520
-        ? -4
-        : 0;
     this.ship.group.rotation.set(this.pitch, this.yaw, 0);
     this.ship.thrustInput = 0.12;
     this.ship.update(delta, this.clock.elapsedTime, 0, false, 27);

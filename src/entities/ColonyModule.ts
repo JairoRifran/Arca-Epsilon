@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { habitatModuleNereida01 } from '../assets/colonyDefinitions';
 import { createSoftParticleTexture } from '../assets/materials';
+import { freezeStaticChildren, mergeStaticDecoration } from '../assets/materialCache';
 import {
   NereidaBaseInfrastructure,
   type NereidaBaseDetailProfile,
@@ -455,6 +456,8 @@ export class ColonyModule {
   private readonly impactScarMaterial: THREE.MeshBasicMaterial;
   private readonly accessDoor: THREE.Group;
   private readonly entryRamp: THREE.Group;
+
+  private readonly staticDrawCallsSaved: number;
 
   private readonly coarseDust: THREE.Points;
   private readonly coarseDustMaterial: THREE.PointsMaterial;
@@ -1018,6 +1021,18 @@ export class ColonyModule {
     this.fineDust.frustumCulled = false;
     this.group.add(this.fineDust);
 
+    // Batch only the compact, immutable habitat shell. Articulated landing
+    // gear, solar wings, mast, airlock and the independently culled Base
+    // infrastructure remain separate roots with their original lifecycle.
+    this.infrastructure.group.userData.dynamic = true;
+    this.accessDoor.userData.noMerge = true;
+    this.entryRamp.userData.dynamic = true;
+    this.mast.userData.dynamic = true;
+    for (const leg of this.legs) leg.pivot.userData.dynamic = true;
+    for (const wing of this.solarWings) wing.rootPivot.userData.dynamic = true;
+    freezeStaticChildren(this.body);
+    this.staticDrawCallsSaved = mergeStaticDecoration(this.body, 'Nereida Habitat Static');
+
     this.setStagePose(0);
   }
 
@@ -1093,8 +1108,16 @@ export class ColonyModule {
     this.infrastructure.setDetailProfile(profile);
   }
 
+  setInfrastructureDiagnosticVisible(visible: boolean): void {
+    this.infrastructure.setDiagnosticVisible(visible);
+  }
+
   getInfrastructureDiagnostics(): NereidaBaseInfrastructureDiagnostics {
     return this.infrastructure.getDiagnostics();
+  }
+
+  get habitatStaticDrawCallsSaved(): number {
+    return this.staticDrawCallsSaved;
   }
 
   consumeOnlineAnnouncement(): boolean {

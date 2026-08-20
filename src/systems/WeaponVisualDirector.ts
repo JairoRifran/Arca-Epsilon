@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import { createSoftParticleTexture } from '../assets/materials';
+import {
+  COMBAT_VFX_DISTANCE,
+  COMBAT_VFX_QUALITY,
+  createCombatVfxConfig,
+  type CombatVfxPresentationConfig
+} from './CombatVfxPresentation';
 
 export type WeaponVisualQuality = 'performance' | 'high' | 'ultra';
 export type CombatEnvironment = 'vacuum' | 'atmosphere';
@@ -39,6 +45,8 @@ export type WeaponVisualDiagnostics = {
   hullImpactsActive: number;
   decalsActive: number;
   fragmentsActive: number;
+  muzzleParticlesActive: number;
+  impactParticlesActive: number;
   destructionsActive: number;
   secondaryDestructionsActive: number;
   destructionStage: 'none' | 'ignition' | 'rupture' | 'dissipation';
@@ -142,6 +150,7 @@ type DestructionSlot = TimedSlot & {
   coreMaterial: THREE.SpriteMaterial;
   plasma: THREE.Sprite[];
   plasmaMaterials: THREE.SpriteMaterial[];
+  plasmaLayerCount: number;
   ring: THREE.Mesh;
   ringMaterial: THREE.MeshBasicMaterial;
   fragments: THREE.InstancedMesh;
@@ -170,19 +179,6 @@ const BURST_PULSE_COUNT = 1;
 const MAX_MUZZLE_PARTICLES = 4;
 const MAX_IMPACT_PARTICLES = 12;
 const MAX_FRAGMENTS = 8;
-
-const QUALITY_BUDGETS: Record<WeaponVisualQuality, {
-  impactParticles: number;
-  fragments: number;
-  marks: number;
-  lights: number;
-  trailSamples: number;
-  muzzleParticles: number;
-}> = {
-  performance: { impactParticles: 3, fragments: 3, marks: 3, lights: 0, trailSamples: 10, muzzleParticles: 1 },
-  high: { impactParticles: 5, fragments: 6, marks: 6, lights: 1, trailSamples: 16, muzzleParticles: 3 },
-  ultra: { impactParticles: 7, fragments: 8, marks: 8, lights: 1, trailSamples: 20, muzzleParticles: 4 }
-};
 
 function createRingTexture(size = 96): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -273,6 +269,8 @@ export class WeaponVisualDirector {
   private cursorMark = 0;
   private cursorDestruction = 0;
   private cursorLight = 0;
+  private performanceMarker?: (name: string) => void;
+  private presentation = createCombatVfxConfig();
 
   constructor() {
     this.group.name = 'Pooled Combat Visuals';
@@ -287,17 +285,28 @@ export class WeaponVisualDirector {
     this.environment = environment;
   }
 
+  /** Debug-only event sink. Undefined in normal gameplay. */
+  setPerformanceMarker(marker?: (name: string) => void): void {
+    this.performanceMarker = marker;
+  }
+
+  setPresentationConfig(config: CombatVfxPresentationConfig): void {
+    this.presentation = createCombatVfxConfig(config);
+    this.applyPresentationVisibility();
+  }
+
   setViewerPosition(position: THREE.Vector3): void {
     this.viewerPosition.copy(position);
   }
 
   emitMuzzle(position: THREE.Vector3, direction: THREE.Vector3, weapon: 'laser' | 'missile'): void {
+    this.performanceMarker?.(weapon === 'missile' ? 'torpedo-muzzle' : 'muzzle');
     const slot = this.nextSlot(this.muzzles, 'cursorMuzzle');
     slot.active = true;
     slot.age = 0;
     slot.duration = weapon === 'missile' ? 0.16 : 0.075;
     slot.weapon = weapon;
-    slot.group.visible = true;
+    slot.group.visible = this.presentation.muzzle;
     slot.group.position.copy(position);
     this.directionScratch.copy(direction).normalize();
     slot.group.quaternion.setFromUnitVectors(this.up, this.directionScratch);
@@ -313,7 +322,8 @@ export class WeaponVisualDirector {
     slot.chargeRing.scale.setScalar(1.25);
     slot.sparkMaterial.color.setHex(weapon === 'missile' ? 0xffb06c : 0xc7f5ff);
     slot.sparkMaterial.opacity = 0.82;
-    slot.particleCount = Math.min(MAX_MUZZLE_PARTICLES, QUALITY_BUDGETS[this.quality].muzzleParticles);
+    slot.sparks.visible = this.presentation.impactParticles;
+    slot.particleCount = Math.min(MAX_MUZZLE_PARTICLES, COMBAT_VFX_QUALITY[this.quality].muzzleParticles);
     slot.sparks.geometry.setDrawRange(0, slot.particleCount);
     for (let index = 0; index < slot.particleCount; index += 1) {
       const offset = index * 3;
@@ -337,6 +347,7 @@ export class WeaponVisualDirector {
   }
 
   emitEnergyBurst(origin: THREE.Vector3, end: THREE.Vector3, hardpointIndex: number): void {
+    this.performanceMarker?.('projectile');
     this.directionScratch.copy(end).sub(origin);
     const distance = Math.max(0.1, this.directionScratch.length());
     this.directionScratch.multiplyScalar(1 / distance);
@@ -351,7 +362,7 @@ export class WeaponVisualDirector {
       slot.pulseLength = THREE.MathUtils.clamp(distance * 0.045, 8.5, 19);
       slot.origin.copy(origin);
       slot.direction.copy(this.directionScratch);
-      slot.group.visible = true;
+      slot.group.visible = this.presentation.projectiles;
       slot.group.position.copy(origin);
       slot.group.quaternion.setFromUnitVectors(this.up, this.directionScratch);
       slot.group.scale.set(1, 0.01, 1);
@@ -365,6 +376,7 @@ export class WeaponVisualDirector {
   }
 
   activateMissile(position: THREE.Vector3, direction: THREE.Vector3, hardpointIndex = 0): number {
+    this.performanceMarker?.('torpedo');
     for (let index = 0; index < this.missiles.length; index += 1) {
       const slot = this.missiles[index];
       if (slot.active) continue;
@@ -372,9 +384,9 @@ export class WeaponVisualDirector {
       slot.age = 0;
       slot.phase = 'eject';
       slot.hardpointIndex = hardpointIndex;
-      slot.group.visible = true;
-      slot.trail.visible = true;
-      slot.ribbon.visible = true;
+      slot.group.visible = this.presentation.projectiles;
+      slot.trail.visible = this.presentation.trails;
+      slot.ribbon.visible = this.presentation.trails;
       slot.group.position.copy(position);
       this.directionScratch.copy(direction).normalize();
       slot.direction.copy(this.directionScratch);
@@ -417,6 +429,15 @@ export class WeaponVisualDirector {
     this.directionScratch.copy(slot.previousDirection).negate();
     slot.group.quaternion.setFromUnitVectors(this.normalAxis, this.directionScratch);
     slot.thrust = thrust;
+    slot.group.visible = this.presentation.projectiles;
+    slot.trail.visible = this.presentation.trails;
+    slot.ribbon.visible = this.presentation.trails;
+    if (!this.presentation.trails) {
+      slot.trail.geometry.setDrawRange(0, 0);
+      slot.ribbon.geometry.setDrawRange(0, 0);
+      slot.trailLength = 0;
+      return;
+    }
     slot.positions.copyWithin(3, 0, (TRAIL_SAMPLES - 1) * 3);
     slot.positions[0] = position.x;
     slot.positions[1] = position.y;
@@ -424,7 +445,7 @@ export class WeaponVisualDirector {
     slot.trailSamples = Math.min(TRAIL_SAMPLES, slot.trailSamples + 1);
     const budget = Math.min(
       TRAIL_SAMPLES,
-      QUALITY_BUDGETS[this.quality].trailSamples + (this.environment === 'atmosphere' ? 2 : 0)
+      COMBAT_VFX_QUALITY[this.quality].trailSamples + (this.environment === 'atmosphere' ? 2 : 0)
     );
     slot.trail.geometry.setDrawRange(0, Math.min(slot.trailSamples, budget));
     (slot.trail.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
@@ -450,8 +471,10 @@ export class WeaponVisualDirector {
   }
 
   emitImpact(event: CombatImpactVisual): void {
+    this.performanceMarker?.(event.kind === 'shield' ? 'shield-hit' : 'impact');
     const distance = this.viewerPosition.distanceTo(event.point);
-    const far = distance > 520;
+    const far = distance > COMBAT_VFX_DISTANCE.far;
+    const medium = distance > COMBAT_VFX_DISTANCE.close;
     const weapon = event.weapon ?? 'energy-burst';
     const torpedo = weapon === 'torpedo';
     const slot = this.nextSlot(this.impacts, 'cursorImpact');
@@ -463,7 +486,7 @@ export class WeaponVisualDirector {
     const shield = event.kind === 'shield';
     const readableImpactScale = event.scale * (torpedo ? 1 : shield ? 1.3 : 1.45);
     slot.baseScale = readableImpactScale;
-    slot.group.visible = true;
+    slot.group.visible = this.presentation.impacts && (!shield || this.presentation.shield);
     slot.group.position.copy(event.point);
     this.directionScratch.copy(event.normal).normalize();
     slot.group.quaternion.setFromUnitVectors(this.normalAxis, this.directionScratch);
@@ -480,6 +503,7 @@ export class WeaponVisualDirector {
     slot.core.scale.setScalar((torpedo ? (shield ? 3.4 : 2.8) : shield ? 1.5 : 0.82) * readableImpactScale);
     slot.ring.scale.setScalar((torpedo ? (shield ? 1.9 : 1.4) : shield ? 1.05 : 0.58) * readableImpactScale);
     slot.shock.visible = torpedo;
+    slot.particles.visible = this.presentation.impactParticles;
     slot.shock.scale.setScalar((shield ? 1.65 : 1.2) * readableImpactScale);
     slot.coreMaterial.opacity = shield ? 0.54 : 0.86;
     slot.ringMaterial.opacity = shield ? 0.58 : 0.42;
@@ -487,8 +511,13 @@ export class WeaponVisualDirector {
     slot.shockMaterial.opacity = torpedo ? 0.48 : 0;
 
     const incidence = Math.max(0.18, Math.abs(event.direction.dot(event.normal)));
-    const baseParticleBudget = QUALITY_BUDGETS[this.quality].impactParticles;
-    const particleBudget = far ? 0 : Math.min(MAX_IMPACT_PARTICLES, torpedo ? baseParticleBudget + 4 : baseParticleBudget);
+    const quality = COMBAT_VFX_QUALITY[this.quality];
+    const baseParticleBudget = quality.impactParticles;
+    const closeParticleBudget = Math.min(
+      MAX_IMPACT_PARTICLES,
+      torpedo ? baseParticleBudget + quality.torpedoParticleBonus : baseParticleBudget
+    );
+    const particleBudget = far ? 0 : medium ? Math.ceil(closeParticleBudget * 0.75) : closeParticleBudget;
     slot.particleCount = shield && !torpedo ? Math.min(3, particleBudget) : particleBudget;
     slot.particles.geometry.setDrawRange(0, slot.particleCount);
     for (let index = 0; index < slot.particleCount; index += 1) {
@@ -504,8 +533,12 @@ export class WeaponVisualDirector {
     }
     (slot.particles.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     this.damageVisualState = event.destroyed ? 'destroyed' : event.integrity < 0.28 ? 'critical' : event.integrity < 0.66 ? 'damaged' : 'stable';
-    if (!shield && !far && !event.destroyed) this.emitDamageMark(event);
-    if (event.destroyed) this.emitDestruction(event);
+    if (this.presentation.damageMarks && !shield && !far && !event.destroyed) this.emitDamageMark(event);
+    if (event.destroyed) {
+      this.performanceMarker?.('explosion');
+      this.performanceMarker?.('destruction');
+      this.emitDestruction(event);
+    }
   }
 
   update(delta: number): void {
@@ -548,10 +581,16 @@ export class WeaponVisualDirector {
     let marks = 0;
     let fragments = 0;
     let destructions = 0;
+    let muzzleParticles = 0;
+    let impactParticles = 0;
     let secondaryDestructions = 0;
     let destructionStage: WeaponVisualDiagnostics['destructionStage'] = 'none';
     let lights = 0;
-    for (let index = 0; index < this.muzzles.length; index += 1) if (this.muzzles[index].active) flashes += 1;
+    for (let index = 0; index < this.muzzles.length; index += 1) {
+      if (!this.muzzles[index].active) continue;
+      flashes += 1;
+      muzzleParticles += this.muzzles[index].particleCount;
+    }
     for (let index = 0; index < this.beams.length; index += 1) {
       if (!this.beams[index].active) continue;
       beams += 1;
@@ -568,6 +607,7 @@ export class WeaponVisualDirector {
       const slot = this.impacts[index];
       if (!slot.active) continue;
       impacts += 1;
+      impactParticles += slot.particleCount;
       if (slot.kind === 'shield') shieldImpacts += 1;
       else hullImpacts += 1;
     }
@@ -605,6 +645,8 @@ export class WeaponVisualDirector {
       hullImpactsActive: hullImpacts,
       decalsActive: marks,
       fragmentsActive: fragments,
+      muzzleParticlesActive: muzzleParticles,
+      impactParticlesActive: impactParticles,
       destructionsActive: destructions,
       secondaryDestructionsActive: secondaryDestructions,
       destructionStage,
@@ -814,9 +856,10 @@ export class WeaponVisualDirector {
       const velocities = new Float32Array(MAX_IMPACT_PARTICLES * 3);
       const particleGeometry = new THREE.BufferGeometry();
       particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      particleGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 42);
       const particleMaterial = new THREE.PointsMaterial({ size: 0.52, map: this.particleTexture, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
       const particles = new THREE.Points(particleGeometry, particleMaterial);
-      particles.frustumCulled = false;
+      particles.frustumCulled = true;
       group.add(core, ring, shock, particles);
       group.visible = false;
       this.group.add(group);
@@ -912,6 +955,7 @@ export class WeaponVisualDirector {
         coreMaterial,
         plasma,
         plasmaMaterials,
+        plasmaLayerCount: 2,
         ring,
         ringMaterial,
         fragments,
@@ -936,7 +980,7 @@ export class WeaponVisualDirector {
   }
 
   private emitDamageMark(event: CombatImpactVisual): void {
-    const allowed = QUALITY_BUDGETS[this.quality].marks;
+    const allowed = COMBAT_VFX_QUALITY[this.quality].marks;
     if (allowed <= 0) return;
     const index = this.cursorMark % allowed;
     this.cursorMark = (this.cursorMark + 1) % Math.max(1, allowed);
@@ -973,24 +1017,38 @@ export class WeaponVisualDirector {
     const profileFactor = profile === 'light' ? 1.8 : profile === 'heavy' ? 1.35 : 1.2;
     const visualScale = THREE.MathUtils.clamp(event.scale * profileFactor, 1.15, 3.2);
     const distance = this.viewerPosition.distanceTo(event.point);
-    const distanceTier = distance > 520 ? 0 : distance > 280 ? 0.5 : 1;
+    const distanceTier = distance > COMBAT_VFX_DISTANCE.far
+      ? 0
+      : distance > COMBAT_VFX_DISTANCE.close
+        ? 0.5
+        : 1;
     slot.active = true;
     slot.age = 0;
     slot.duration = profile === 'neutralize' ? 1.65 : profile === 'heavy' ? 1.55 : 1.08;
     slot.profile = profile;
     slot.baseScale = visualScale;
     slot.secondaryTriggered = false;
-    slot.group.visible = true;
+    slot.group.visible = this.destructionPresentationActive();
     slot.group.position.copy(event.point);
     this.directionScratch.copy(event.normal).normalize();
     slot.group.quaternion.setFromUnitVectors(this.normalAxis, this.directionScratch);
     slot.core.scale.setScalar((profile === 'heavy' ? 1.3 : 0.9) * visualScale);
     slot.ring.scale.setScalar((profile === 'neutralize' ? 1.6 : 1.15) * visualScale);
     slot.coreMaterial.opacity = 1;
+    slot.core.visible = this.presentation.explosionFlash;
     slot.coreMaterial.color.setHex(profile === 'neutralize' ? 0xd96a4e : 0xffe1ad);
     slot.ringMaterial.color.setHex(profile === 'neutralize' ? 0xb3413d : profile === 'heavy' ? 0xe08754 : 0xc98255);
     slot.ringMaterial.opacity = profile === 'neutralize' ? 0.42 : 0.5;
+    const plasmaLayers = distanceTier === 0
+      ? 0
+      : this.quality === 'ultra'
+        ? 2
+        : this.quality === 'high' || distanceTier === 1
+          ? 1
+          : 0;
+    slot.plasmaLayerCount = plasmaLayers;
     for (let layer = 0; layer < slot.plasma.length; layer += 1) {
+      slot.plasma[layer].visible = this.presentation.explosionPlasma && layer < plasmaLayers;
       slot.plasma[layer].scale.setScalar((1.1 + layer * 0.42) * visualScale);
       slot.plasmaMaterials[layer].color.setHex(
         profile === 'neutralize'
@@ -1001,10 +1059,11 @@ export class WeaponVisualDirector {
     }
     slot.fragmentMaterial.opacity = 0.92;
     slot.fragmentMaterial.emissiveIntensity = profile === 'neutralize' ? 0.08 : 0.24;
-    const qualityCount = Math.min(MAX_FRAGMENTS, QUALITY_BUDGETS[this.quality].fragments + (profile === 'heavy' ? 2 : 0));
+    const qualityCount = Math.min(MAX_FRAGMENTS, COMBAT_VFX_QUALITY[this.quality].fragments + (profile === 'heavy' ? 2 : 0));
     slot.fragmentCount = Math.floor((profile === 'neutralize' ? Math.min(2, qualityCount) : qualityCount) * distanceTier);
     slot.fragments.count = slot.fragmentCount;
-    slot.fragments.visible = slot.fragmentCount > 0;
+    slot.fragments.visible = this.presentation.fragments && slot.fragmentCount > 0;
+    slot.ring.visible = this.presentation.explosionRing;
     for (let index = 0; index < slot.fragmentCount; index += 1) {
       const offset = index * 3;
       const angle = index * 2.399963;
@@ -1037,7 +1096,8 @@ export class WeaponVisualDirector {
   }
 
   private activateLight(position: THREE.Vector3, color: number, intensity: number, duration: number): void {
-    const budget = QUALITY_BUDGETS[this.quality].lights;
+    if (!this.presentation.temporaryLights) return;
+    const budget = COMBAT_VFX_QUALITY[this.quality].lights;
     if (budget <= 0) return;
     const index = this.cursorLight % budget;
     this.cursorLight = (this.cursorLight + 1) % budget;
@@ -1057,6 +1117,7 @@ export class WeaponVisualDirector {
       if (!slot.active) continue;
       slot.age += delta;
       const t = Math.min(1, slot.age / slot.duration);
+      slot.group.visible = this.presentation.muzzle;
       const charge = slot.weapon === 'laser' ? THREE.MathUtils.clamp(t / 0.16, 0, 1) : 1;
       const flash = t < 0.18 ? t / 0.18 : Math.max(0, 1 - (t - 0.18) / 0.82);
       const life = Math.max(0, 1 - t);
@@ -1095,7 +1156,7 @@ export class WeaponVisualDirector {
       const fadeIn = Math.min(1, t * 12);
       const fadeOut = Math.min(1, (1 - t) * 7);
       const life = fadeIn * fadeOut;
-      slot.group.visible = life > 0.001;
+      slot.group.visible = this.presentation.projectiles && life > 0.001;
       slot.group.position.copy(slot.direction).multiplyScalar(center).add(slot.origin);
       slot.group.scale.set(1, visibleLength, 1);
       slot.coreMaterial.opacity = life * 0.96;
@@ -1249,15 +1310,21 @@ export class WeaponVisualDirector {
       if (!slot.active) continue;
       slot.age += delta;
       const t = Math.min(1, slot.age / slot.duration);
+      slot.group.visible = this.destructionPresentationActive();
       if (!slot.secondaryTriggered && slot.age > 0.14) {
         slot.secondaryTriggered = true;
       }
       const flash = Math.max(0, 1 - t / 0.18);
       const plasmaEnvelope = Math.sin(Math.PI * THREE.MathUtils.clamp((t - 0.025) / 0.74, 0, 1)) * Math.max(0, 1 - t * 0.72);
       const profileScale = slot.profile === 'heavy' ? 1.35 : slot.profile === 'neutralize' ? 1.16 : 1;
-      slot.coreMaterial.opacity = flash;
-      slot.core.scale.setScalar(slot.baseScale * profileScale * (0.7 + t * 1.2));
+      slot.core.visible = this.presentation.explosionFlash;
+      if (this.presentation.explosionFlash) {
+        slot.coreMaterial.opacity = flash;
+        slot.core.scale.setScalar(slot.baseScale * profileScale * (0.7 + t * 1.2));
+      }
       for (let layer = 0; layer < slot.plasma.length; layer += 1) {
+        slot.plasma[layer].visible = this.presentation.explosionPlasma && layer < slot.plasmaLayerCount;
+        if (!slot.plasma[layer].visible) continue;
         const irregular = 1 + Math.sin(slot.age * (11 + layer * 3.7) + layer * 2.2) * 0.08;
         slot.plasma[layer].scale.set(
           slot.baseScale * profileScale * (1.25 + t * (3.2 + layer * 0.65)) * irregular,
@@ -1266,11 +1333,15 @@ export class WeaponVisualDirector {
         );
         slot.plasmaMaterials[layer].opacity = plasmaEnvelope * (slot.profile === 'neutralize' ? 0.22 : layer === 0 ? 0.44 : 0.27);
       }
-      const ringLife = Math.max(0, 1 - t * (slot.profile === 'neutralize' ? 0.9 : 1.45));
-      slot.ringMaterial.opacity = ringLife * (slot.profile === 'neutralize' ? 0.34 + Math.sin(slot.age * 24) * 0.08 : 0.38);
-      const ringGrowth = slot.baseScale * profileScale * (1.1 + t * (slot.profile === 'neutralize' ? 4.4 : 3.2));
-      slot.ring.scale.setScalar(ringGrowth);
-      for (let fragment = 0; fragment < slot.fragmentCount; fragment += 1) {
+      slot.ring.visible = this.presentation.explosionRing;
+      if (this.presentation.explosionRing) {
+        const ringLife = Math.max(0, 1 - t * (slot.profile === 'neutralize' ? 0.9 : 1.45));
+        slot.ringMaterial.opacity = ringLife * (slot.profile === 'neutralize' ? 0.34 + Math.sin(slot.age * 24) * 0.08 : 0.38);
+        const ringGrowth = slot.baseScale * profileScale * (1.1 + t * (slot.profile === 'neutralize' ? 4.4 : 3.2));
+        slot.ring.scale.setScalar(ringGrowth);
+      }
+      slot.fragments.visible = this.presentation.fragments && slot.fragmentCount > 0;
+      for (let fragment = 0; this.presentation.fragments && fragment < slot.fragmentCount; fragment += 1) {
         const offset = fragment * 3;
         slot.positions[offset] += slot.velocities[offset] * delta;
         slot.positions[offset + 1] += slot.velocities[offset + 1] * delta;
@@ -1288,8 +1359,10 @@ export class WeaponVisualDirector {
         this.fragmentMatrix.compose(this.fragmentPosition, this.fragmentQuaternion, this.fragmentScale);
         slot.fragments.setMatrixAt(fragment, this.fragmentMatrix);
       }
-      slot.fragmentMaterial.opacity = t < 0.58 ? 0.92 : Math.max(0, 0.92 * (1 - (t - 0.58) / 0.42));
-      slot.fragments.instanceMatrix.needsUpdate = true;
+      if (this.presentation.fragments) {
+        slot.fragmentMaterial.opacity = t < 0.58 ? 0.92 : Math.max(0, 0.92 * (1 - (t - 0.58) / 0.42));
+        slot.fragments.instanceMatrix.needsUpdate = true;
+      }
       if (slot.age >= slot.duration) this.releaseSlot(slot, slot.group);
     }
   }
@@ -1331,5 +1404,51 @@ export class WeaponVisualDirector {
     this[cursorName] = (cursor + 1) % slots.length;
     if (slot.active) this.effectsReleased += 1;
     return slot;
+  }
+
+  private destructionPresentationActive(): boolean {
+    return this.presentation.explosionFlash ||
+      this.presentation.explosionPlasma ||
+      this.presentation.explosionRing ||
+      this.presentation.fragments;
+  }
+
+  private applyPresentationVisibility(): void {
+    for (let index = 0; index < this.muzzles.length; index += 1) {
+      const slot = this.muzzles[index];
+      slot.group.visible = slot.active && this.presentation.muzzle;
+      slot.sparks.visible = this.presentation.impactParticles;
+    }
+    for (let index = 0; index < this.beams.length; index += 1) {
+      this.beams[index].group.visible = this.beams[index].active && this.presentation.projectiles;
+    }
+    for (let index = 0; index < this.missiles.length; index += 1) {
+      const slot = this.missiles[index];
+      slot.group.visible = slot.active && this.presentation.projectiles;
+      slot.trail.visible = slot.active && this.presentation.trails;
+      slot.ribbon.visible = slot.active && this.presentation.trails;
+    }
+    for (let index = 0; index < this.impacts.length; index += 1) {
+      const slot = this.impacts[index];
+      slot.group.visible = slot.active && this.presentation.impacts &&
+        (slot.kind !== 'shield' || this.presentation.shield);
+      slot.particles.visible = this.presentation.impactParticles;
+    }
+    for (let index = 0; index < this.marks.length; index += 1) {
+      this.marks[index].mesh.visible = this.marks[index].active && this.presentation.damageMarks;
+    }
+    for (let index = 0; index < this.destructions.length; index += 1) {
+      const slot = this.destructions[index];
+      slot.group.visible = slot.active && this.destructionPresentationActive();
+      slot.core.visible = this.presentation.explosionFlash;
+      slot.ring.visible = this.presentation.explosionRing;
+      slot.fragments.visible = slot.active && this.presentation.fragments && slot.fragmentCount > 0;
+      for (let layer = 0; layer < slot.plasma.length; layer += 1) {
+        slot.plasma[layer].visible = this.presentation.explosionPlasma && layer < slot.plasmaLayerCount;
+      }
+    }
+    for (let index = 0; index < this.lights.length; index += 1) {
+      this.lights[index].light.visible = this.lights[index].active && this.presentation.temporaryLights;
+    }
   }
 }

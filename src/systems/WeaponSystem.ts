@@ -24,6 +24,7 @@ import {
   type WeaponVisualDiagnostics,
   type WeaponVisualQuality
 } from './WeaponVisualDirector';
+import type { CombatVfxPresentationConfig } from './CombatVfxPresentation';
 import { combatTuningProfile } from '../game/CombatTuningProfile';
 import {
   PLAYER_PRIMARY_WEAPON_MAGAZINE,
@@ -184,6 +185,7 @@ export class WeaponSystem {
     new THREE.Vector3(1.6, -0.2, -3.8)
   ];
   private visualCompanion?: CombatVisualCompanion;
+  private performanceMarker?: (name: string) => void;
 
   get selectedTarget(): WeaponTarget | undefined {
     return this.lockTarget;
@@ -272,8 +274,18 @@ export class WeaponSystem {
     this.visuals.setEnvironment(environment);
   }
 
+  setPresentationConfig(config: CombatVfxPresentationConfig): void {
+    this.visuals.setPresentationConfig(config);
+  }
+
   setVisualCompanion(companion: CombatVisualCompanion): void {
     this.visualCompanion = companion;
+  }
+
+  /** Debug-only marker sink shared with the pooled presentation layer. */
+  setPerformanceMarker(marker?: (name: string) => void): void {
+    this.performanceMarker = marker;
+    this.visuals.setPerformanceMarker(marker);
   }
 
   setCameraResponse(recoil: number, impulse: number): void {
@@ -665,6 +677,7 @@ export class WeaponSystem {
     if (hit) this.endScratch.copy(this.hitPoint);
     else this.endScratch.copy(this.directionScratch).multiplyScalar(range).add(this.originScratch);
 
+    this.performanceMarker?.('player-shot');
     this.visuals.emitMuzzle(this.originScratch, this.directionScratch, 'laser');
     this.visuals.emitEnergyBurst(this.originScratch, this.endScratch, this.cannonSide);
     this.state.firePulse = 1;
@@ -725,6 +738,7 @@ export class WeaponSystem {
     this.launchDirectionScratch.set(0, 0, -1).applyQuaternion(ship.quaternion).normalize();
     this.directionScratch.copy(this.launchDirectionScratch);
     if (lockTarget) this.directionScratch.copy(lockTarget.object.position).sub(this.originScratch).normalize();
+    this.performanceMarker?.('player-torpedo-launch');
     const visualIndex = this.visuals.activateMissile(this.originScratch, this.launchDirectionScratch, this.missileTubeSide);
     if (visualIndex < 0) {
       // Nothing was created, so the tube keeps its round.

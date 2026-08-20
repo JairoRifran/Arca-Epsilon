@@ -357,6 +357,7 @@ export type PlayerShipDiagnostics = {
   availableLods: string[];
   fallbackUsed: boolean;
   skippedVisualUpdates: number;
+  runtimeAccentsVisible: boolean;
   error: string;
 };
 
@@ -408,6 +409,7 @@ export class PlayerShip {
     availableLods: [],
     fallbackUsed: false,
     skippedVisualUpdates: 0,
+    runtimeAccentsVisible: true,
     error: ''
   };
 
@@ -426,6 +428,8 @@ export class PlayerShip {
   private readonly body = new THREE.Group();
 
   private parkedVisualState = false;
+
+  private parkedAccentsVisible = true;
 
   private weaponRecoil = 0;
 
@@ -563,6 +567,19 @@ export class PlayerShip {
     if (this.lowRoot) this.lowRoot.visible = useLow;
     this.diagnostics.lodLevel = useLow ? 'low' : this.nearLevel;
     this.diagnostics.triangles = this.diagnostics.trianglesByLod[this.diagnostics.lodLevel] ?? 0;
+
+    // The imported GLB remains visible at every LOD. Only the hundred-plus
+    // runtime greebles disappear once a parked ship is too far away for them
+    // to occupy useful pixels; hysteresis prevents toggling at the boundary.
+    if (!this.parkedVisualState) {
+      this.parkedAccentsVisible = true;
+    } else if (this.parkedAccentsVisible && cameraDistance > 60) {
+      this.parkedAccentsVisible = false;
+    } else if (!this.parkedAccentsVisible && cameraDistance < 52) {
+      this.parkedAccentsVisible = true;
+    }
+    if (this.runtimeAccents) this.runtimeAccents.visible = this.parkedAccentsVisible;
+    this.diagnostics.runtimeAccentsVisible = this.parkedAccentsVisible;
 
     this.weaponRecoil *= Math.exp(-15 * delta);
     this.weaponVibration *= Math.exp(-22 * delta);

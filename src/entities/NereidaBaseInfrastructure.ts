@@ -150,6 +150,7 @@ export class NereidaBaseInfrastructure {
   private readonly materials = new Set<THREE.Material>();
   private readonly baseWorldPosition = new THREE.Vector3();
   private detailProfile: NereidaBaseDetailProfile = 'high';
+  private diagnosticVisible = true;
   private mergedDraws = 0;
 
   constructor() {
@@ -233,7 +234,15 @@ export class NereidaBaseInfrastructure {
     this.detailProfile = profile;
   }
 
+  /** Presentation-only switch used by the explicit ground performance matrix. */
+  setDiagnosticVisible(visible: boolean): void {
+    this.diagnosticVisible = visible;
+    this.group.visible = visible;
+  }
+
   update(elapsed: number, observerPosition?: THREE.Vector3, basePosition?: THREE.Vector3): void {
+    this.group.visible = this.diagnosticVisible;
+    if (!this.diagnosticVisible) return;
     const pulse = 0.76 + Math.sin(elapsed * 1.75) * 0.12;
     this.serviceLightMaterial.emissiveIntensity = pulse;
     this.windowMaterial.emissiveIntensity = 0.28 + Math.sin(elapsed * 0.36) * 0.035;

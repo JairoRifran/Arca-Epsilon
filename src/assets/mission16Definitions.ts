@@ -112,13 +112,16 @@ export const mission16Tuning = {
   /** Seconds to compile each protocol prototype (detection/shield/network). */
   protocolSeconds: 4,
   /** Seconds of stable phase-hold to synchronise one node. */
-  nodeSyncSeconds: 5,
+  nodeSyncSeconds: 3,
   /**
    * The harmonic phase a node drifts through; holding the emitter inside the
    * band is what counts as aligned. Deterministic so a test can reproduce it.
    */
-  phaseTolerance: 12,
-  /** Percent the emitter phase moves per interaction press. */
+  phaseTolerance: 20,
+  /**
+   * Legacy blind-nudge step. A press now captures the node's current phase
+   * outright, so this is only the fallback spread if that capture is refused.
+   */
   phaseStep: 9,
   /** Seconds running the defensive echo simulation to map approach routes. */
   simulationSeconds: 7,

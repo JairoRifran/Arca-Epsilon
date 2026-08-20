@@ -308,10 +308,11 @@ export class PlanetaryWorld {
    */
   surfaceSun?: THREE.DirectionalLight;
   /** Shadow map resolution, lowered for software-GL automation runs. */
-  private readonly shadowMapSize = SURFACE_SHADOW_MAP_SIZE;
+  private shadowMapSize = SURFACE_SHADOW_MAP_SIZE;
   private readonly cloudSprites: { sprite: THREE.Sprite; speed: number; baseX: number; baseOpacity: number; lowDeck: boolean }[] = [];
   private dust?: THREE.Points;
   private dustSeeds?: Float32Array;
+  private dustUpdateAccumulator = 0;
   private sky?: THREE.Mesh;
   private sunSprite?: THREE.Sprite;
   private repeaterLight?: THREE.MeshStandardMaterial;
@@ -331,6 +332,8 @@ export class PlanetaryWorld {
   private rockContactMesh?: THREE.Mesh;
   private detailProfile: NereidaDetailProfile = 'high';
   private dustActiveCount = 480;
+  private diagnosticRocksVisible = true;
+  private diagnosticParticlesVisible = true;
 
   constructor() {
     this.group.name = 'PlanetaryWorld (Cuenca Nereida)';
@@ -1041,6 +1044,7 @@ export class PlanetaryWorld {
   setDetailProfile(profile: NereidaDetailProfile): void {
     this.detailProfile = profile;
     this.colonyModule.setDetailProfile(profile);
+    this.setSurfaceShadowMapSize();
     for (const entry of this.rockLodEntries) {
       entry.mesh.count = profile === 'performance'
         ? entry.performanceCount
@@ -1050,6 +1054,42 @@ export class PlanetaryWorld {
     }
     this.dustActiveCount = profile === 'performance' ? 260 : profile === 'high' ? 390 : 480;
     this.dust?.geometry.setDrawRange(0, this.dustActiveCount);
+  }
+
+  /** Render-only category switches for the explicit ground benchmark. */
+  setPerformanceIsolation(options: { rocks: boolean; particles: boolean; baseDetail: boolean }): void {
+    this.diagnosticRocksVisible = options.rocks;
+    this.diagnosticParticlesVisible = options.particles;
+    this.colonyModule.setInfrastructureDiagnosticVisible(options.baseDetail);
+    if (this.dust) this.dust.visible = options.particles;
+    if (this.impactDust) this.impactDust.visible = options.particles && this.impactDustLife > 0;
+    for (const cloud of this.cloudSprites) cloud.sprite.visible = options.particles;
+    for (const entry of this.rockLodEntries) {
+      if (!options.rocks) entry.mesh.visible = false;
+    }
+    if (this.rockContactMesh) this.rockContactMesh.visible = options.rocks;
+  }
+
+  /** Debug/quality switch; reallocates only when an explicit profile changes. */
+  setSurfaceShadowMapSize(size = this.profileShadowMapSize): void {
+    const next = Math.max(256, Math.round(size));
+    if (next === this.shadowMapSize) return;
+    this.shadowMapSize = next;
+    const sun = this.surfaceSun;
+    if (!sun) return;
+    sun.shadow.mapSize.set(next, next);
+    sun.shadow.map?.dispose();
+    sun.shadow.map = null;
+    sun.shadow.needsUpdate = true;
+  }
+
+  get surfaceShadowMapSize(): number {
+    return this.shadowMapSize;
+  }
+
+  private get profileShadowMapSize(): number {
+    if (SURFACE_SHADOW_MAP_SIZE <= 512) return SURFACE_SHADOW_MAP_SIZE;
+    return this.detailProfile === 'ultra' ? 2048 : 1024;
   }
 
   getProceduralDiagnostics(): {
@@ -1529,14 +1569,29 @@ export class PlanetaryWorld {
         const altitude = Math.max(0, observerPosition.y - entry.center.y - 35);
         const weightedDistance = Math.hypot(dx, dz, altitude * 1.35);
         const threshold = entry.viewDistance * profileDistance + (entry.mesh.visible ? 55 : 0);
-        entry.mesh.visible = weightedDistance <= threshold;
+        entry.mesh.visible = this.diagnosticRocksVisible && weightedDistance <= threshold;
+        if (entry.mesh.visible) {
+          const profileCount = this.detailProfile === 'performance'
+            ? entry.performanceCount
+            : this.detailProfile === 'ultra'
+              ? entry.maximumCount
+              : entry.highCount;
+          // The generation order keeps landmark stones first. Beyond the near
+          // field retain those silhouettes and drop sub-pixel scatter only.
+          entry.mesh.count = weightedDistance > entry.viewDistance * 0.58
+            ? Math.min(profileCount, entry.performanceCount)
+            : profileCount;
+        }
       }
       if (this.rockContactMesh) {
-        this.rockContactMesh.visible = observerPosition.y < (this.rockContactMesh.visible ? 280 : 245);
+        this.rockContactMesh.visible = this.diagnosticRocksVisible &&
+          observerPosition.y < (this.rockContactMesh.visible ? 280 : 245);
       }
     }
 
     for (const cloud of this.cloudSprites) {
+      cloud.sprite.visible = this.diagnosticParticlesVisible;
+      if (!this.diagnosticParticlesVisible) continue;
       // Endless drift: wrap across the dome on a 1400-unit cycle.
       cloud.sprite.position.x = ((cloud.baseX + elapsed * cloud.speed + 700) % 1400) - 700;
       const material = cloud.sprite.material as THREE.SpriteMaterial;
@@ -1551,7 +1606,14 @@ export class PlanetaryWorld {
       this.repeaterLight.emissiveIntensity = cycle < 0.1 || (cycle > 0.28 && cycle < 0.38) ? 2.4 : 0.35;
     }
 
-    if (this.dust && this.dustSeeds) {
+    this.dustUpdateAccumulator += delta;
+    if (
+      this.diagnosticParticlesVisible &&
+      this.dust &&
+      this.dustSeeds &&
+      this.dustUpdateAccumulator >= 1 / 30
+    ) {
+      this.dustUpdateAccumulator %= 1 / 30;
       // Wind field: dust streams north-east with a light vertical waver.
       const positions = this.dust.geometry.getAttribute('position') as THREE.BufferAttribute;
       for (let i = 0; i < positions.count; i += 1) {

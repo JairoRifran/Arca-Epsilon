@@ -70,6 +70,7 @@ export class PlayerShipLandingGear {
   private settlingProgress = 0;
   private surfaceSafeFlag = true;
   private built = false;
+  private distanceDetailVisible = true;
 
   private readonly legs: Leg[] = [];
   private readonly legById = new Map<LandingGearLegId, Leg>();
@@ -113,6 +114,18 @@ export class PlayerShipLandingGear {
   }
   get legCount(): number {
     return this.legs.length;
+  }
+
+  /** Cull only a fully settled gear assembly once it is sub-pixel at range. */
+  setObserverDistance(distance: number): void {
+    if (this.state !== 'deployed') {
+      this.distanceDetailVisible = true;
+    } else if (this.distanceDetailVisible && distance > 60) {
+      this.distanceDetailVisible = false;
+    } else if (!this.distanceDetailVisible && distance < 52) {
+      this.distanceDetailVisible = true;
+    }
+    this.group.visible = this.state !== 'retracted' && this.distanceDetailVisible;
   }
 
   legReadout(id: LandingGearLegId): {
@@ -355,6 +368,7 @@ export class PlayerShipLandingGear {
     if (this.state === 'retracted' || this.state === 'retracting') {
       this.state = 'deployingDoors';
       this.phaseProgress = 0;
+      this.distanceDetailVisible = true;
       this.group.visible = true;
     }
   }
@@ -458,6 +472,7 @@ export class PlayerShipLandingGear {
     this.phaseProgress = 1;
     this.deploymentProgress = 1;
     this.settlingProgress = 1;
+    this.distanceDetailVisible = true;
     this.group.visible = true;
   }
 
@@ -618,6 +633,7 @@ export class PlayerShipLandingGear {
     this.phaseProgress = 0;
     this.deploymentProgress = 0;
     this.settlingProgress = 0;
+    this.distanceDetailVisible = true;
     this.group.visible = false;
     for (const leg of this.legs) {
       leg.extension = 0;

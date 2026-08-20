@@ -5020,3 +5020,121 @@ progress.is-critical::-webkit-progress-value {
     opacity: 0.55;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Garage: hero viewport real
+
+   Antes el canvas ocupaba toda la pantalla y los paneles flotaban encima, asi
+   que el renderer dimensionaba contra un area que la UI tapaba en parte. Ahora
+   la pantalla es una rejilla: el escenario 3D tiene su celda, la columna de
+   informacion tiene la suya, y ninguna invade a la otra.
+   --------------------------------------------------------------------------- */
+.garage-screen {
+  display: grid;
+  grid-template-columns: 1fr clamp(19rem, 26vw, 27rem);
+  grid-template-rows: auto 1fr;
+  gap: 0 clamp(0.75rem, 1.6vw, 1.6rem);
+  padding: 0 clamp(1rem, 3vw, 2.4rem) clamp(1rem, 3vh, 2rem);
+}
+
+.garage-screen .mode-screen__topbar {
+  grid-column: 1 / -1;
+  position: static;
+}
+
+/* La celda de la nave. El renderer se mide contra este elemento. */
+.garage-stage {
+  position: relative;
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.garage-stage > canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.garage-column {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.6rem, 1.4vh, 1.1rem);
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 0.4rem;
+}
+
+/* Los paneles dejan de posicionarse solos: son items de la columna. */
+.garage-screen .garage-roster,
+.garage-screen .garage-specification {
+  position: static;
+  width: auto;
+  max-width: none;
+  inset: auto;
+  margin: 0;
+}
+
+/* Menos aire interno: la columna es mas angosta que el panel flotante previo. */
+.garage-screen .garage-specification { padding: 0.95rem 1.05rem; }
+.garage-screen .garage-stats { gap: 0.5rem; }
+
+/*
+  Compacto: por debajo de este ancho dos columnas dejan de caber sin
+  estrangular la nave, asi que la informacion pasa debajo y el escenario se
+  queda con la mayor parte de la altura.
+*/
+@media (max-width: 900px), (max-height: 520px) {
+  .garage-screen {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .garage-stage { grid-column: 1; grid-row: 2; }
+
+  .garage-column {
+    grid-column: 1;
+    grid-row: 3;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .garage-screen .garage-roster { flex: 1 1 12rem; }
+  .garage-screen .garage-specification { flex: 3 1 20rem; }
+  .garage-screen .garage-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Retrato estrecho: la nave manda, los stats se leen desplazando. */
+@media (max-width: 560px) {
+  .garage-screen { grid-template-rows: auto minmax(14rem, 2fr) minmax(0, 3fr); }
+  .garage-column { flex-direction: column; }
+}
+
+/* Short landscape surface view: preserve the objective and world, while the
+   secondary log yields the limited vertical space to the interaction prompt. */
+@media (min-width: 621px) and (max-width: 900px) and (max-height: 520px) {
+  .hud.surface-active .mission-panel,
+  .hud.surface-active .systems-panel {
+    display: none;
+  }
+
+  .hud.surface-active .interact-prompt {
+    left: calc(50% + 4rem);
+    bottom: 3.15rem;
+    max-width: 19rem;
+  }
+
+  .hud.surface-active .controls-strip {
+    bottom: 0.45rem;
+    max-height: 2.15rem;
+    overflow: hidden;
+  }
+}

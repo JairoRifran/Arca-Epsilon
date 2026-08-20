@@ -697,6 +697,8 @@ export type ArcaDiagnostics = {
 };
 
 export class Diagnostics {
+  constructor(private readonly publishGlobal = true) {}
+
   readonly data: ArcaDiagnostics = {
     fps: 0,
     drawCalls: 0,
@@ -1392,6 +1394,7 @@ export class Diagnostics {
    * Frame-rate accounting and the renderer counters still run every frame.
    */
   patchDue(delta: number): boolean {
+    if (!this.publishGlobal) return false;
     // Must predict the frame that will publish, not the state after the last
     // one: `update` resets the accumulator whenever it publishes, so a getter
     // reading the current value would report "not due" on every later frame
@@ -1413,7 +1416,7 @@ export class Diagnostics {
     this.data.triangles = renderer.info.render.triangles;
     Object.assign(this.data, patch);
     this.publishAccumulator += delta;
-    if (delta === 0 || this.publishAccumulator >= PUBLISH_INTERVAL_SECONDS) {
+    if (this.publishGlobal && (delta === 0 || this.publishAccumulator >= PUBLISH_INTERVAL_SECONDS)) {
       window.__arcaDiagnostics = { ...this.data };
       this.publishAccumulator = 0;
     }

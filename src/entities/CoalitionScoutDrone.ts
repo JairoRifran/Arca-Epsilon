@@ -7,9 +7,15 @@ import {
   type CoalitionMaterialFamily
 } from '../assets/coalitionVisualLanguage';
 import { createSoftParticleTexture } from '../assets/materials';
+import {
+  COMBAT_VFX_QUALITY,
+  createCombatVfxConfig,
+  type CombatVfxPresentationConfig
+} from '../systems/CombatVfxPresentation';
 import { mission18Tuning } from '../assets/mission18Definitions';
 import { combatTuningProfile } from '../game/CombatTuningProfile';
 import type { WeaponTarget } from '../systems/WeaponSystem';
+import type { WeaponVisualQuality } from '../systems/WeaponVisualDirector';
 
 /** Lifecycle of one scout drone. */
 export type DroneState =
@@ -121,6 +127,8 @@ export class CoalitionScoutDrone {
   private portNavigationMaterial?: THREE.MeshStandardMaterial;
   private starboardNavigationMaterial?: THREE.MeshStandardMaterial;
   private smokeTexture?: THREE.Texture;
+  private presentation = createCombatVfxConfig();
+  private quality: WeaponVisualQuality = 'high';
   /** The pool is built on first use, never at boot. */
   private built = false;
   /** Settlement centre the wave orbits and attacks. */
@@ -150,10 +158,46 @@ export class CoalitionScoutDrone {
   private completedPasses = 0;
   private attackRunSeconds = 0;
   private maximumSimultaneousAttackersObserved = 0;
+  private performanceMarker?: (name: string) => void;
 
   constructor() {
     this.group.name = 'Drones de Reconocimiento // Coalición';
     this.group.visible = false;
+  }
+
+  /** Builds the CPU-side pool for the current combat mode without spawning it. */
+  prepareResources(): void {
+    this.ensureBuilt();
+  }
+
+  get resourcesPrepared(): boolean {
+    return this.built;
+  }
+
+  /** Debug-only event sink; absent during normal gameplay. */
+  setPerformanceMarker(marker?: (name: string) => void): void {
+    this.performanceMarker = marker;
+  }
+
+  setPresentationConfig(config: CombatVfxPresentationConfig): void {
+    this.presentation = createCombatVfxConfig(config);
+    if (!this.built) return;
+    for (let index = 0; index < this.slots.length; index += 1) {
+      const slot = this.slots[index];
+      for (let plume = 0; plume < slot.thrusterPlumes.length; plume += 1) {
+        slot.thrusterPlumes[plume].visible = this.presentation.engineTrails;
+      }
+      slot.smoke.visible = (slot.active || slot.deathVisual) && this.presentation.damageSmoke;
+    }
+  }
+
+  setQuality(quality: WeaponVisualQuality): void {
+    this.quality = quality;
+    if (!this.built) return;
+    const count = COMBAT_VFX_QUALITY[quality].coalitionSmokeParticles;
+    for (let index = 0; index < this.slots.length; index += 1) {
+      this.slots[index].smoke.geometry.setDrawRange(0, count);
+    }
   }
 
   /**
@@ -295,6 +339,7 @@ export class CoalitionScoutDrone {
       }
       const smokeGeometry = new THREE.BufferGeometry();
       smokeGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      smokeGeometry.setDrawRange(0, COMBAT_VFX_QUALITY[this.quality].coalitionSmokeParticles);
       smokeGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 14);
       const smokeMaterial = new THREE.PointsMaterial({
         color: 0x84b9bd,
@@ -305,7 +350,7 @@ export class CoalitionScoutDrone {
         depthWrite: false
       });
       const smoke = new THREE.Points(smokeGeometry, smokeMaterial);
-      smoke.frustumCulled = false;
+      smoke.frustumCulled = true;
       smoke.visible = false;
       highDetail.add(smoke);
 
@@ -395,6 +440,7 @@ export class CoalitionScoutDrone {
    */
   launchWave(count: number, retreatRunner = false): void {
     if (this.activeCount > 0) return;
+    this.performanceMarker?.('enemy-spawn-request');
     this.ensureBuilt();
     const wanted = Math.min(count, this.slots.length);
     this.group.visible = true;
@@ -448,6 +494,7 @@ export class CoalitionScoutDrone {
     }
     for (let i = wanted; i < this.slots.length; i += 1) this.deactivate(i);
     this.retreatSlot = retreatRunner ? 0 : -1;
+    this.performanceMarker?.('enemy-visible');
   }
 
   /** Clear the sky immediately (wave complete, mission reset, save load). */
@@ -470,7 +517,7 @@ export class CoalitionScoutDrone {
     slot.deathVisual = preserveDeathVisual;
     slot.deathAge = 0;
     slot.group.visible = preserveDeathVisual;
-    slot.smoke.visible = preserveDeathVisual;
+    slot.smoke.visible = preserveDeathVisual && this.presentation.damageSmoke;
     slot.smokeMaterial.opacity = preserveDeathVisual ? 0.32 : 0;
     slot.thrusterMaterial.emissiveIntensity = preserveDeathVisual ? 0.08 : 0.22;
     slot.thrusterPlumeMaterial.opacity = preserveDeathVisual ? 0.03 : 0.12;
@@ -590,13 +637,16 @@ export class CoalitionScoutDrone {
       const plumeStrength = Math.max(0.02, (thrustBase + slot.muzzlePulse * 0.08) * (1 - hurt * 0.68) * failurePulse);
       slot.thrusterPlumeMaterial.opacity = plumeStrength * (this.environment === 'atmosphere' ? 0.62 : 0.42);
       for (let engine = 0; engine < slot.thrusterPlumes.length; engine += 1) {
+        slot.thrusterPlumes[engine].visible = this.presentation.engineTrails;
         slot.thrusterPlumes[engine].scale.set(0.68 + thrustBase * 0.35, 0.72 + thrustBase * 1.8, 0.68 + thrustBase * 0.35);
         slot.thrusterCores[engine].scale.setScalar(0.86 + thrustBase * 0.22);
       }
+      slot.smoke.visible = this.presentation.damageSmoke && (slot.state === 'critical' || slot.deathVisual);
       if (slot.smoke.visible) {
         const positions = slot.smoke.geometry.getAttribute('position') as THREE.BufferAttribute;
         const array = positions.array as Float32Array;
-        for (let s = 0; s < array.length; s += 3) {
+        const smokeValues = COMBAT_VFX_QUALITY[this.quality].coalitionSmokeParticles * 3;
+        for (let s = 0; s < smokeValues; s += 3) {
           array[s] += slot.smokeVelocities[s] * delta;
           array[s + 1] += slot.smokeVelocities[s + 1] * delta;
           array[s + 2] += slot.smokeVelocities[s + 2] * delta;

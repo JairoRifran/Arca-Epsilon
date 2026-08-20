@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#020507" />
+    <link rel="icon" href="/images/arca-epsilon-boot-space.jpg" type="image/jpeg" />
     <style>
       /* Critical first paint: the full UI stylesheet arrives with main.ts. */
       html,
@@ -416,8 +417,15 @@
         </aside>
       </section>
 
+      <!--
+        Garage: rejilla real, no paneles flotando sobre el canvas.
+
+        El canvas era `position: absolute; inset: 0` y los paneles se apoyaban
+        encima, asi que el renderer creia disponer de toda la pantalla y la nave
+        quedaba parcialmente detras de la tarjeta de stats. Ahora el escenario
+        3D tiene su propia celda y el renderer se mide contra ella.
+      -->
       <section class="mode-screen garage-screen" id="garage-screen" aria-hidden="true" hidden>
-        <canvas id="garage-canvas" aria-label="Vista tridimensional de la nave equipada"></canvas>
         <header class="mode-screen__topbar">
           <div>
             <span class="eyebrow">Hangar de configuración</span>
@@ -425,6 +433,10 @@
           </div>
           <button class="mode-icon-button" id="garage-back-button" type="button" aria-label="Volver al menú" title="Volver al menú">&times;</button>
         </header>
+        <div class="garage-stage" id="garage-stage">
+          <canvas id="garage-canvas" aria-label="Vista tridimensional de la nave equipada"></canvas>
+        </div>
+        <div class="garage-column">
         <aside class="garage-roster" aria-label="Naves disponibles">
           <span class="eyebrow">Inventario de naves</span>
           <button class="garage-ship-entry is-selected" type="button">
@@ -452,6 +464,7 @@
             <div><dt>Torpedos</dt><dd id="garage-stat-torpedoes">4 tubos</dd></div>
           </dl>
         </section>
+        </div>
       </section>
 
       <section class="combat-mode-layer" id="combat-mode-layer" aria-hidden="true" hidden>
