@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { AssetLoader } from '../core/AssetLoader';
+import { CHARACTER_HEIGHT_METRES, withoutHorizontalRootMotion } from '../assets/characterClips';
 
 export type CharacterGlbStatus = 'loading' | 'loaded' | 'fallback' | 'error';
 export type CharacterAnimationState =
@@ -475,7 +476,7 @@ export class SurfaceCharacter {
     const box = new THREE.Box3().setFromObject(imported);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    const scale = size.y > 0 ? 1.78 / size.y : 1;
+    const scale = size.y > 0 ? CHARACTER_HEIGHT_METRES / size.y : 1;
     imported.position.set(-center.x, -box.min.y, -center.z);
     const normalized = new THREE.Group();
     normalized.name = 'Arca Pilot Normalized Root';
@@ -493,7 +494,7 @@ export class SurfaceCharacter {
     const sourceClips = [base, ...animationGlbs].flatMap((gltf) => gltf.animations);
     this.diagnostics.animationClips = sourceClips.map((clip) => clip.name || 'unnamed');
     this.diagnostics.loadedAnimationSources = animationGlbs.length;
-    const clips = sourceClips.map((clip) => this.withoutHorizontalRootMotion(clip));
+    const clips = sourceClips.map((clip) => withoutHorizontalRootMotion(clip));
     this.diagnostics.discardedDuplicateMeshes = animationGlbs.reduce(
       (count, gltf) => count + this.disposeAnimationSourceScene(gltf.scene),
       0
@@ -574,22 +575,6 @@ export class SurfaceCharacter {
       ridingLiftDown: idle,
       ridingLiftUp: idle
     };
-  }
-
-  private withoutHorizontalRootMotion(source: THREE.AnimationClip): THREE.AnimationClip {
-    const clip = source.clone();
-    clip.name = source.name || 'character-animation';
-    for (const track of clip.tracks) {
-      if (!/hips.*position|hips.*translation/i.test(track.name) || track.getValueSize() !== 3) continue;
-      const values = track.values;
-      const baseX = values[0];
-      const baseZ = values[2];
-      for (let i = 0; i < values.length; i += 3) {
-        values[i] = baseX;
-        values[i + 2] = baseZ;
-      }
-    }
-    return clip;
   }
 
   private createStaticPoseClip(source: THREE.AnimationClip): THREE.AnimationClip {

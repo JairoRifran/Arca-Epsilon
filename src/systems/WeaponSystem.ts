@@ -12,6 +12,23 @@ import * as THREE from 'three';
  */
 const AIM_ASSIST_MIN_ALIGNMENT = 0.96;
 
+/**
+ * Dispersion, in radians, at the widest point of a sustained burst.
+ *
+ * A weapon that puts every one of eleven shots a second through the same pixel
+ * reads as a laser pointer. Bloom is what makes it read as a gun: the first
+ * rounds are exact and the group opens as the trigger is held. 0.011 rad is
+ * about 0.63 degrees -- roughly two metres of scatter at a hundred, felt but
+ * never enough to fight the aim assist inside its cone.
+ */
+const SPREAD_MAX_RADIANS = 0.011;
+/** Consecutive rapid shots needed to reach full dispersion. */
+const SPREAD_RAMP_SHOTS = 9;
+/** How fast the group tightens again once firing stops, per second. */
+const SPREAD_RECOVERY_PER_SECOND = 5.5;
+/** A held trigger counts as continuous while gaps stay under this. */
+const SPREAD_CONTINUITY_SECONDS = 0.28;
+
 /** Integer clamp used when restoring persisted ammunition. */
 function clampInt(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.floor(Number.isFinite(value) ? value : min)));
@@ -156,6 +173,11 @@ export class WeaponSystem {
   private readonly aimAssistScratch = new THREE.Vector3();
   private aimAssistActive = false;
   private lastAimAssistApplied = false;
+  /** Consecutive shots in the current burst, which drives dispersion. */
+  private burstShots = 0;
+  private lastShotAt = -Infinity;
+  private spreadClock = 0;
+  private readonly spreadScratch = new THREE.Vector3();
   private lastTorpedoBlockReason = 'none';
 
   private readonly missiles: LogicalMissile[] = [];
@@ -335,6 +357,11 @@ export class WeaponSystem {
     timerDelta = delta
   ): void {
     const elapsedTimer = Math.max(0, timerDelta);
+    this.spreadClock += delta;
+    // The group tightens once the trigger is released.
+    if (this.spreadClock - this.lastShotAt > SPREAD_CONTINUITY_SECONDS) {
+      this.burstShots = Math.max(0, this.burstShots - delta * SPREAD_RECOVERY_PER_SECOND);
+    }
     this.updateReloads(elapsedTimer);
     this.state.laserCooldown = Math.max(0, this.state.laserCooldown - elapsedTimer);
     this.state.missileCooldown = Math.max(0, this.state.missileCooldown - elapsedTimer);
@@ -611,7 +638,12 @@ export class WeaponSystem {
     return this.lastAimAssistApplied;
   }
 
-  fireLaser(ship: THREE.Object3D, targets: WeaponTarget[]): boolean {
+  /**
+   * `shooterVelocity` is used for presentation only -- muzzle sparks inherit
+   * the ship's momentum so they trail behind it instead of hanging in place.
+   * The bolt itself is hitscan and unaffected, so ballistics are unchanged.
+   */
+  fireLaser(ship: THREE.Object3D, targets: WeaponTarget[], shooterVelocity?: THREE.Vector3): boolean {
     // Reloading holds the cannon only; torpedoes and flight stay available.
     if (this.primaryReloading) {
       this.lastPrimaryBlockReason = 'primary-reloading';
@@ -672,13 +704,30 @@ export class WeaponSystem {
       }
     }
 
+    // Bloom. Applied after the assist so a locked shot still converges, and
+    // derived from the shot counter rather than Math.random, so replaying the
+    // same burst reproduces the same group and tests stay deterministic.
+    const continuous = this.spreadClock - this.lastShotAt <= SPREAD_CONTINUITY_SECONDS;
+    this.burstShots = continuous ? this.burstShots + 1 : 1;
+    this.lastShotAt = this.spreadClock;
+    const bloom = Math.min(1, Math.max(0, this.burstShots - 1) / SPREAD_RAMP_SHOTS);
+    if (bloom > 0) {
+      // A golden-angle spiral of offsets: never repeats across a magazine, and
+      // needs no random source.
+      const angle = this.burstShots * 2.399963;
+      const radius = Math.sqrt((this.burstShots * 0.618034) % 1) * bloom * SPREAD_MAX_RADIANS;
+      this.spreadScratch.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0)
+        .applyQuaternion(ship.quaternion);
+      this.directionScratch.add(this.spreadScratch).normalize();
+    }
+
     const range = combatTuningProfile.weapons.laserRange;
     const hit = this.findRayHit(this.originScratch, this.directionScratch, targets, range, 16);
     if (hit) this.endScratch.copy(this.hitPoint);
     else this.endScratch.copy(this.directionScratch).multiplyScalar(range).add(this.originScratch);
 
     this.performanceMarker?.('player-shot');
-    this.visuals.emitMuzzle(this.originScratch, this.directionScratch, 'laser');
+    this.visuals.emitMuzzle(this.originScratch, this.directionScratch, 'laser', shooterVelocity);
     this.visuals.emitEnergyBurst(this.originScratch, this.endScratch, this.cannonSide);
     this.state.firePulse = 1;
     this.state.lastFiredWeapon = 'laser';

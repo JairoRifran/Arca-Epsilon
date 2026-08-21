@@ -2,10 +2,30 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
-const [, , inputPath, outputPath] = process.argv;
+const [, , inputPath, outputPath, ...flags] = process.argv;
 if (!inputPath || !outputPath) {
-  throw new Error('Usage: node scripts/extract-glb-animation.mjs <input.glb> <output.glb>');
+  throw new Error(
+    'Usage: node scripts/extract-glb-animation.mjs <input.glb> <output.glb> [--only=<clip>] [--name=<clip>]'
+  );
 }
+
+/**
+ * `--only` keeps a single clip. Authoring tools routinely export a real take
+ * alongside a near-empty stub -- `personaje-parado` ships a 3.03 s `rigify_clip`
+ * next to a 0.07 s `Armature|clip0|baselayer` -- and shipping both leaves the
+ * runtime to guess which one is the animation.
+ *
+ * `--name` renames the surviving clip. SurfaceCharacter maps clips to states by
+ * matching their names, so a clip called `rigify_clip` is invisible to it no
+ * matter what it contains. Renaming here, once, beats teaching the runtime
+ * every name an exporter might invent.
+ */
+const flagValue = (flag) => {
+  const match = flags.find((entry) => entry.startsWith(`${flag}=`));
+  return match ? match.slice(flag.length + 1) : undefined;
+};
+const onlyClip = flagValue('--only');
+const renameTo = flagValue('--name');
 
 function readGlb(filePath) {
   const data = fs.readFileSync(filePath);
@@ -34,8 +54,18 @@ function padToFour(buffer, padByte) {
 
 await MeshoptDecoder.ready;
 const source = readGlb(inputPath);
+const allClips = source.json.animations ?? [];
+const selectedClips = onlyClip ? allClips.filter((animation) => animation.name === onlyClip) : allClips;
+if (onlyClip && selectedClips.length === 0) {
+  throw new Error(
+    `${inputPath} has no clip named "${onlyClip}". Available: ${allClips.map((a) => a.name).join(', ') || 'none'}`
+  );
+}
+if (renameTo && selectedClips.length !== 1) {
+  throw new Error(`--name needs exactly one clip; ${selectedClips.length} selected. Narrow it with --only.`);
+}
 const usedAccessorIndices = [...new Set(
-  (source.json.animations ?? []).flatMap((animation) =>
+  selectedClips.flatMap((animation) =>
     animation.samplers.flatMap((sampler) => [sampler.input, sampler.output])
   )
 )];
@@ -80,7 +110,8 @@ const outputAccessors = usedAccessorIndices.map((index) => {
   accessor.bufferView = viewIndexMap.get(accessor.bufferView);
   return accessor;
 });
-const outputAnimations = structuredClone(source.json.animations);
+const outputAnimations = structuredClone(selectedClips);
+if (renameTo) outputAnimations[0].name = renameTo;
 for (const animation of outputAnimations) {
   for (const sampler of animation.samplers) {
     sampler.input = accessorIndexMap.get(sampler.input);
@@ -122,4 +153,7 @@ binaryHeader.writeUInt32LE(0x004e4942, 4);
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, Buffer.concat([header, jsonHeader, jsonChunk, binaryHeader, binaryChunk]));
-console.log(`${inputPath} -> ${outputPath} (${totalLength} bytes, ${outputAnimations.length} clip)`);
+console.log(
+  `${inputPath} -> ${outputPath} (${totalLength} bytes, ` +
+  `${outputAnimations.length} clip: ${outputAnimations.map((a) => a.name).join(', ')})`
+);

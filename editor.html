@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#020507" />
+    <!-- Herramienta interna: fuera de buscadores. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Arca Epsilon · Editor de Naves</title>
+  </head>
+  <body>
+    <main class="editor" id="editor">
+      <header class="editor__bar">
+        <div>
+          <p class="eyebrow">Arca Epsilon</p>
+          <h1>Editor de Naves</h1>
+        </div>
+        <div class="editor__bar-actions">
+          <span class="editor__ship" id="editor-ship">epsilon-scout</span>
+        </div>
+      </header>
+
+      <!-- El escenario tiene su propia celda: el panel nunca lo pisa. -->
+      <div class="editor__stage" id="editor-stage-host">
+        <div id="garage-screen" style="position:absolute;inset:0">
+        <div class="garage-stage" id="garage-stage">
+          <canvas id="garage-canvas" aria-label="Vista de la nave en edición"></canvas>
+        </div>
+        </div>
+        <p class="editor__loading" id="editor-loading">Cargando modelo…</p>
+      </div>
+
+      <aside class="editor__panel">
+        <!--
+          Carga de modelo. El GLB es la fuente de detalle: el casco entero
+          cuesta 2 draw calls, mientras que reproducirlo con primitivas costaria
+          cientos. Lo procedural queda para lo que debe animarse.
+        -->
+        <div class="panel-block">
+          <div class="panel-block__head">
+            <h2>Modelo</h2>
+            <button type="button" class="is-quiet is-small" id="restore-ship">Nave original</button>
+          </div>
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="model-file" accept=".glb,.gltf" hidden />
+            <strong>Soltá un .glb aquí</strong>
+            <small>o hacé clic para elegirlo. No se sube a ningún lado.</small>
+          </label>
+          <p class="panel-block__note" id="model-note"></p>
+        </div>
+
+        <div class="panel-block">
+          <div class="panel-block__head">
+            <h2>Vista</h2>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-gizmos" checked />
+            <span>Marcadores de hardpoint</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-rotate" checked />
+            <span>Rotación automática</span>
+          </label>
+          <div class="view-buttons" id="view-buttons">
+            <button type="button" data-yaw="-0.55" data-pitch="0.08">3/4</button>
+            <button type="button" data-yaw="-1.5708" data-pitch="0">Lateral</button>
+            <button type="button" data-yaw="-3.1416" data-pitch="0.05">Popa</button>
+            <button type="button" data-yaw="0" data-pitch="0.05">Proa</button>
+            <button type="button" data-yaw="-0.55" data-pitch="-0.17">Bajo</button>
+          </div>
+          <p class="legend">
+            <i class="dot dot--engine"></i>Motores
+            <i class="dot dot--cannon"></i>Cañones
+            <i class="dot dot--tube"></i>Tubos
+            <i class="dot dot--pod"></i>Pod
+          </p>
+        </div>
+
+        <div class="panel-block">
+          <div class="panel-block__head">
+            <h2>Motores</h2>
+            <button type="button" class="is-quiet is-small" id="reset-engines">Restaurar</button>
+          </div>
+          <p class="panel-block__note">
+            Fracciones del casco, no metros. Así siguen valiendo para naves de otro tamaño.
+          </p>
+          <div id="engine-controls" class="controls"></div>
+        </div>
+
+        <div class="panel-block">
+          <div class="panel-block__head">
+            <h2>Luz y reflejo</h2>
+            <button type="button" class="is-quiet is-small" id="reset-presentation">Restaurar</button>
+          </div>
+          <div id="presentation-controls" class="controls"></div>
+        </div>
+
+        <div class="panel-block">
+          <div class="panel-block__head">
+            <h2>Valores</h2>
+            <button type="button" id="copy-values">Copiar código</button>
+          </div>
+          <pre class="code" id="values-code"></pre>
+          <p class="panel-block__note" id="copy-note"></p>
+        </div>
+
+        <div class="panel-block">
+          <div class="panel-block__head"><h2>Posiciones resueltas</h2></div>
+          <div class="readout" id="resolved"></div>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/editor/main.ts"></script>
+  </body>
+</html>

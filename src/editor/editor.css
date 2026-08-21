@@ -1,0 +1,357 @@
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+/*
+ * Ship editor styling.
+ *
+ * Shares the game's palette so the tool reads as part of Arca Epsilon, but it
+ * is a workbench: the stage gets the space, the controls sit in a fixed column,
+ * and nothing overlaps the model. Deliberately close to the owner console's
+ * look rather than the in-world HUD.
+ */
+
+:root {
+  --ink: #05080c;
+  --panel: #0b131a;
+  --panel-2: #101b24;
+  --line: rgba(148, 186, 205, 0.16);
+  --line-strong: rgba(148, 186, 205, 0.32);
+  --text: #e8f2f6;
+  --text-2: #aec4cd;
+  --dim: #74909c;
+  --mission: #7de8b8;
+  --info: #8fc8e8;
+  --warn: #ffc37a;
+  --danger: #ff7a8a;
+  --engine: #ff9a3c;
+  --display: Rajdhani, Inter, system-ui, sans-serif;
+  --body: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 20% -10%, #12222e 0%, var(--ink) 55%);
+  color: var(--text);
+  font-family: var(--body);
+  overflow: hidden;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--dim);
+  font-family: var(--display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0.15rem 0 0;
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+button {
+  border: 1px solid var(--mission);
+  background: rgba(125, 232, 184, 0.12);
+  padding: 0.42rem 0.8rem;
+  color: var(--mission);
+  cursor: pointer;
+  font-family: var(--display);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+button:hover { background: rgba(125, 232, 184, 0.22); }
+button.is-quiet { border-color: var(--line-strong); background: none; color: var(--text-2); }
+button.is-small { padding: 0.25rem 0.5rem; font-size: 0.64rem; }
+
+input[type='email'], input[type='password'], input[type='number'] {
+  border: 1px solid var(--line-strong);
+  background: var(--ink);
+  padding: 0.4rem 0.5rem;
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 0.85rem;
+}
+
+/* --- Gate ---------------------------------------------------------------- */
+.gate { display: grid; place-items: center; min-height: 100vh; padding: 1.5rem; }
+
+.gate__card {
+  width: min(26rem, 100%);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 1.6rem;
+}
+
+.gate__message { color: var(--text-2); font-size: 0.9rem; margin: 1rem 0 0; }
+
+.gate__hint {
+  margin: 1rem 0 0;
+  border-left: 3px solid var(--warn);
+  padding: 0.5rem 0.7rem;
+  background: rgba(255, 195, 122, 0.08);
+  color: var(--warn);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.gate__form { display: grid; gap: 0.8rem; margin-top: 1.2rem; }
+.gate__form label { display: grid; gap: 0.3rem; }
+.gate__form span {
+  color: var(--dim);
+  font-family: var(--display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* --- Editor shell -------------------------------------------------------- */
+.editor {
+  display: grid;
+  grid-template-columns: 1fr clamp(20rem, 27vw, 26rem);
+  grid-template-rows: auto 1fr;
+  gap: 0 clamp(0.75rem, 1.5vw, 1.4rem);
+  height: 100vh;
+  padding: 0.9rem clamp(0.9rem, 2vw, 1.6rem) 1rem;
+}
+
+.editor__bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.8rem;
+}
+
+.editor__bar-actions { display: flex; align-items: center; gap: 0.7rem; }
+.editor__who { color: var(--dim); font-size: 0.78rem; }
+
+.editor__ship {
+  border: 1px solid var(--line-strong);
+  padding: 0.18rem 0.5rem;
+  color: var(--info);
+  font-family: var(--display);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* The stage owns its cell. Nothing is ever drawn over the model. */
+.editor__stage {
+  position: relative;
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--line);
+  background: #05080c;
+  overflow: hidden;
+}
+
+.garage-stage { position: absolute; inset: 0; }
+.garage-stage > canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+
+.editor__loading {
+  position: absolute;
+  inset: auto 0 1rem;
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.editor__panel {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.3rem;
+}
+
+.panel-block {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 0.8rem 0.9rem;
+}
+
+.panel-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.panel-block__note { margin: 0 0 0.6rem; color: var(--dim); font-size: 0.74rem; line-height: 1.45; }
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  color: var(--text-2);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.view-buttons { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
+.view-buttons button { flex: 1 1 auto; padding: 0.3rem 0.4rem; font-size: 0.66rem; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.7rem;
+  margin: 0.7rem 0 0;
+  color: var(--text-2);
+  font-size: 0.72rem;
+}
+
+.dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; display: inline-block; margin-right: 0.15rem; }
+.dot--engine { background: var(--engine); }
+.dot--cannon { background: var(--mission); }
+.dot--tube { background: var(--info); }
+.dot--pod { background: #ffd166; }
+
+/* --- Controls ------------------------------------------------------------ */
+.controls { display: grid; gap: 0.75rem; }
+
+.control__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.control__label {
+  color: var(--text-2);
+  font-family: var(--display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.control__value {
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 0.86rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.control__hint { display: block; margin-top: 0.15rem; color: var(--dim); font-size: 0.7rem; }
+
+.control input[type='range'] {
+  width: 100%;
+  accent-color: var(--engine);
+  cursor: pointer;
+}
+
+/* --- Output -------------------------------------------------------------- */
+.code {
+  margin: 0;
+  border: 1px solid var(--line);
+  background: var(--ink);
+  padding: 0.6rem 0.7rem;
+  color: var(--mission);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.readout { display: grid; gap: 0.3rem; font-size: 0.74rem; }
+
+.readout__row {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.5rem;
+  color: var(--text-2);
+}
+
+.readout__row b {
+  color: var(--dim);
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.readout__row span { color: var(--text); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 900px) {
+  .editor { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 3fr) minmax(0, 2fr); }
+  .editor__stage { grid-column: 1; grid-row: 2; }
+  .editor__panel { grid-column: 1; grid-row: 3; }
+}
+
+/* ---------------------------------------------------------------------------
+   Carga de modelo
+   --------------------------------------------------------------------------- */
+.dropzone {
+  display: grid;
+  gap: 0.2rem;
+  place-items: center;
+  border: 1px dashed var(--line-strong);
+  background: rgba(148, 186, 205, 0.04);
+  padding: 1rem 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.dropzone:hover,
+.dropzone.is-over {
+  border-color: var(--mission);
+  background: rgba(125, 232, 184, 0.08);
+}
+
+.dropzone strong {
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dropzone small { color: var(--dim); font-size: 0.72rem; }
+
+/* Un modelo cargado tiene que notarse; el fondo del editor es muy oscuro. */
+.editor__stage.is-dropping::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--mission);
+  pointer-events: none;
+}

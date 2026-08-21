@@ -1,8 +1,14 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import {
+  cannonMuzzleHardpoints,
+  mainEngineHardpoints,
+  torpedoTubeHardpoints,
+  ventralPodHardpoint
+} from '../game/PlayerShipHardpoints';
 import { AssetLoader } from '../core/AssetLoader';
 import { PlayerShip } from '../entities/PlayerShip';
-import type { ShipDefinition } from '../ships/ShipCatalog';
+import { STARTER_SHIP, type ShipDefinition } from '../ships/ShipCatalog';
 
 /**
  * Air left around the silhouette.
@@ -47,6 +53,8 @@ export class GarageView {
     rendererHeight: 1
   };
   private readonly stage: HTMLElement;
+  private gizmos?: THREE.Group;
+  private autoRotate = true;
   private raf = 0;
   /**
    * Framing derived from the ship's own bounds.
@@ -58,6 +66,8 @@ export class GarageView {
   private framing = { height: 8, spread: 19.4, centerY: 0, distance: 27 };
   private environment?: THREE.Texture;
   private keyLight?: THREE.DirectionalLight;
+  private rimLight?: THREE.DirectionalLight;
+  private fillLight?: THREE.HemisphereLight;
   private loadedDefinition?: ShipDefinition;
   private yaw = -0.55;
   private targetYaw = -0.55;
@@ -139,6 +149,12 @@ export class GarageView {
 
   get state(): GarageDiagnostics {
     return { ...this.diagnostics };
+  }
+
+  /** Stops or resumes the presentation spin, so a chosen angle stays put. */
+  setAutoRotate(enabled: boolean): boolean {
+    this.autoRotate = enabled;
+    return this.autoRotate;
   }
 
   setView(yaw: number, pitch = this.targetPitch): GarageDiagnostics {
@@ -247,10 +263,12 @@ export class GarageView {
     // Rim, cooler and behind, to cut the silhouette away from the dark hangar.
     const rim = new THREE.DirectionalLight(0x6FB2C8, 2.6);
     rim.position.set(11, 6, -13);
+    this.rimLight = rim;
 
     // Fill only lifts the underside; the environment now carries most of the
     // ambient response, so this is much weaker than it used to be.
     const bounce = new THREE.HemisphereLight(0x89aeb8, 0x0d1113, 0.55);
+    this.fillLight = bounce;
     this.scene.add(key, key.target, rim, bounce);
     this.buildPlatform();
   }
@@ -369,6 +387,124 @@ export class GarageView {
    * because both defects were invisible from the outside: the camera looked
    * correct and the shadow was switched on, yet neither did its job.
    */
+  /**
+   * Draws a marker at every hardpoint, in the ship's own space.
+   *
+   * The whole reason the procedural engines drifted out of line with the GLB's
+   * bells is that nothing showed where they were. The markers are parented to
+   * the ship group, so they rotate with it and stay correct at any angle.
+   */
+  setHardpointGizmos(visible: boolean): number {
+    if (!this.gizmos) {
+      this.gizmos = new THREE.Group();
+      this.gizmos.name = 'Hardpoint gizmos';
+      this.ship.group.add(this.gizmos);
+    }
+    this.gizmos.visible = visible;
+    if (!visible) return 0;
+    return this.refreshHardpointGizmos();
+  }
+
+  /** Rebuilds the markers from the current hardpoint values. */
+  refreshHardpointGizmos(): number {
+    if (!this.gizmos) return 0;
+    for (const child of [...this.gizmos.children]) {
+      this.gizmos.remove(child);
+      if (child instanceof THREE.Mesh) child.geometry.dispose();
+    }
+    const bounds = this.ship.hullBounds;
+    const marks: { position: THREE.Vector3; colour: number; size: number }[] = [];
+    for (const engine of mainEngineHardpoints(bounds)) {
+      marks.push({ position: engine.position, colour: 0xff9a3c, size: engine.radius });
+    }
+    for (const muzzle of cannonMuzzleHardpoints(bounds)) {
+      marks.push({ position: muzzle.position, colour: 0x7de8b8, size: 0.22 });
+    }
+    for (const tube of torpedoTubeHardpoints(bounds)) {
+      marks.push({ position: tube.position, colour: 0x8fc8e8, size: 0.16 });
+    }
+    marks.push({ position: ventralPodHardpoint(bounds), colour: 0xffd166, size: 0.26 });
+
+    for (const mark of marks) {
+      // Depth-tested off so a marker inside the hull is still findable, which
+      // is the case that matters when something is buried in the wrong place.
+      const material = new THREE.MeshBasicMaterial({
+        color: mark.colour, transparent: true, opacity: 0.85, depthTest: false
+      });
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(mark.size, 12, 8), material);
+      mesh.position.copy(mark.position);
+      mesh.renderOrder = 999;
+      this.gizmos.add(mesh);
+    }
+    return marks.length;
+  }
+
+  /** Moves the procedural engines and refreshes their markers together. */
+  applyEngineOffset(offset: { x?: number; y?: number; z?: number }): unknown {
+    const applied = this.ship.setEngineOffset(offset);
+    this.refreshHardpointGizmos();
+    return applied;
+  }
+
+  /**
+   * Presentation knobs the editor drives.
+   *
+   * Only lighting and tone response: nothing here changes geometry, materials
+   * or gameplay, so a bad setting can look wrong but cannot break a ship.
+   */
+  setPresentation(patch: {
+    exposure?: number;
+    environmentIntensity?: number;
+    keyIntensity?: number;
+    rimIntensity?: number;
+    fillIntensity?: number;
+    shadowSoftness?: number;
+  }): Record<string, number> {
+    if (patch.exposure !== undefined) this.renderer.toneMappingExposure = patch.exposure;
+    if (patch.environmentIntensity !== undefined) this.scene.environmentIntensity = patch.environmentIntensity;
+    if (patch.keyIntensity !== undefined && this.keyLight) this.keyLight.intensity = patch.keyIntensity;
+    if (patch.rimIntensity !== undefined && this.rimLight) this.rimLight.intensity = patch.rimIntensity;
+    if (patch.fillIntensity !== undefined && this.fillLight) this.fillLight.intensity = patch.fillIntensity;
+    if (patch.shadowSoftness !== undefined && this.keyLight) {
+      this.keyLight.shadow.radius = patch.shadowSoftness;
+      // A changed radius only takes effect once the map is redrawn.
+      this.keyLight.shadow.needsUpdate = true;
+    }
+    return this.presentation();
+  }
+
+  /** Current presentation values, for the editor's readout and export. */
+  presentation(): Record<string, number> {
+    return {
+      exposure: Number(this.renderer.toneMappingExposure.toFixed(2)),
+      environmentIntensity: Number((this.scene.environmentIntensity ?? 1).toFixed(2)),
+      keyIntensity: Number((this.keyLight?.intensity ?? 0).toFixed(2)),
+      rimIntensity: Number((this.rimLight?.intensity ?? 0).toFixed(2)),
+      fillIntensity: Number((this.fillLight?.intensity ?? 0).toFixed(2)),
+      shadowSoftness: Number((this.keyLight?.shadow.radius ?? 0).toFixed(1))
+    };
+  }
+
+  /**
+   * Loads an arbitrary GLB, for authoring a ship that is not in the catalog.
+   *
+   * The URL is usually an object URL over a dropped file, so it never touches
+   * the network or the ship catalog. Framing, gizmos and the shadow frustum all
+   * re-derive from the new bounds, which is what makes the editor usable for a
+   * hull of any proportion.
+   */
+  async loadExternalModel(url: string, label: string): Promise<GarageDiagnostics> {
+    const definition = {
+      ...STARTER_SHIP,
+      id: `external:${label}`,
+      displayName: label,
+      model: { garage: url, gameplayMedium: url, gameplayLow: url, gameplayOriginal: url }
+    };
+    await this.show(definition);
+    if (this.gizmos?.visible) this.refreshHardpointGizmos();
+    return this.diagnostics;
+  }
+
   inspect(): Record<string, unknown> {
     const raw = new THREE.Box3().setFromObject(this.ship.group);
     const rawSphere = raw.getBoundingSphere(new THREE.Sphere());
@@ -460,7 +596,7 @@ export class GarageView {
     this.raf = 0;
     if (!this.diagnostics.visible) return;
     const delta = Math.min(this.clock.getDelta(), 0.05);
-    if (!this.dragging && this.loadedDefinition) this.targetYaw += delta * 0.09;
+    if (this.autoRotate && !this.dragging && this.loadedDefinition) this.targetYaw += delta * 0.09;
     this.yaw += (this.targetYaw - this.yaw) * (1 - Math.exp(-delta * 8));
     this.pitch += (this.targetPitch - this.pitch) * (1 - Math.exp(-delta * 8));
     this.ship.group.rotation.set(this.pitch, this.yaw, 0);

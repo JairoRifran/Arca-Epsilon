@@ -209,7 +209,7 @@ test('weapon stores are untouched by the navigation pass', async ({ page }) => {
     mag: weapons.primaryMagazineCurrent, reserve: weapons.primaryReserveCurrent,
     tubes: weapons.torpedoLoadedCount, torpedoReserve: weapons.torpedoReserveCurrent
   }));
-  expect(weapons.primaryMagazineMaximum).toBe(32);
+  expect(weapons.primaryMagazineMaximum).toBe(90);
   expect(weapons.torpedoTubeCapacity).toBe(4);
   expect(errors).toEqual([]);
 });

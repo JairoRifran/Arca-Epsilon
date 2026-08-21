@@ -74,19 +74,37 @@ function safeBounds(bounds: THREE.Vector3): { width: number; height: number; dep
  * mouth rather than inside it, which is what `direction` is for — each engine
  * carries its own axis so a future canted nozzle does not need a special case.
  */
+/**
+ * Where the procedural engine assemblies sit, as fractions of the hull bounds.
+ *
+ * These are the numbers that decide whether the code-built nozzles line up with
+ * the bells modelled into the GLB. They cannot be derived: the shipped model is
+ * two merged meshes with no material groups and no node names, so nothing in it
+ * identifies an engine. Tuned by eye against the render instead, which is why
+ * they live here as one named block rather than inline literals.
+ */
+export const ENGINE_OFFSET = {
+  /** Lateral spacing, fraction of hull width. */
+  x: 0.135,
+  /** Drop below the centreline, fraction of hull height. */
+  y: 0.075,
+  /** Distance aft, fraction of hull depth. The tail plane sits at 0.5. */
+  z: 0.49
+};
+
 export function mainEngineHardpoints(bounds: THREE.Vector3): EngineHardpoint[] {
   const { width, height, depth } = safeBounds(bounds);
   const radius = width * 0.085;
   return [
     {
       id: 'portMain',
-      position: new THREE.Vector3(-width * HARDPOINT_AXIS_X, -height * HARDPOINT_AXIS_Y, depth * 0.48),
+      position: new THREE.Vector3(-width * ENGINE_OFFSET.x, -height * ENGINE_OFFSET.y, depth * ENGINE_OFFSET.z),
       direction: new THREE.Vector3(0, 0, 1),
       radius
     },
     {
       id: 'starboardMain',
-      position: new THREE.Vector3(width * HARDPOINT_AXIS_X, -height * HARDPOINT_AXIS_Y, depth * 0.48),
+      position: new THREE.Vector3(width * ENGINE_OFFSET.x, -height * ENGINE_OFFSET.y, depth * ENGINE_OFFSET.z),
       direction: new THREE.Vector3(0, 0, 1),
       radius
     }

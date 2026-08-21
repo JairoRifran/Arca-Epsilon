@@ -40,8 +40,21 @@ export const combatTuningProfile = {
   },
   weapons: {
     laserRange: 680,
-    laserDamage: 24,
-    laserCooldownSeconds: 0.28,
+    /**
+     * Damage per pulse, set so the machine-gun cadence keeps the old lethality.
+     *
+     * 24 at 0.28 s was 85.7 DPS. 8 at 0.09 s is 88.9 -- and against a 96 HP
+     * scout the kill takes 12 pulses in 1.08 s, where it used to take 4 in
+     * 1.12 s. Time to kill is unchanged; only the feel is different, which is
+     * the point. Raising the rate without this would have tripled DPS and
+     * undone the enemy tuning around it.
+     */
+    laserDamage: 8,
+    // Machine-gun cadence: ~11 shots a second instead of ~3.6. This is a real
+    // balance change -- damage per shot is untouched, so sustained DPS roughly
+    // triples and the 32-round magazine now lasts about 2.9 s of held fire
+    // rather than 9 s.
+    laserCooldownSeconds: 0.09,
     laserProjectileSpeed: Number.POSITIVE_INFINITY,
     torpedoLockRange: 780,
     torpedoDamage: 90,
@@ -175,14 +188,22 @@ export const combatBaseline = {
  * a magazine with a shared-pool debit would gate the same trigger twice. Flight,
  * boost and shields keep using `resources.energy` untouched.
  *
- * 32 pulses at the existing 0.28 s cooldown is ~8.96 s of continuous fire: a
- * real burst that still forces the player to manage reloads.
+ * 90 pulses at the 0.09 s cooldown is ~8.1 s of continuous fire: a real burst
+ * that still forces the player to manage reloads.
  */
 export const PLAYER_PRIMARY_WEAPON_MAGAZINE = {
-  magazineCapacity: 32,
-  initialMagazine: 32,
-  reserveCapacity: 160,
-  initialReserve: 160,
+  /*
+   * Scaled with the cadence, not enlarged.
+   *
+   * 32 rounds lasted 9 s at the old rate and only 2.9 s at the new one, which
+   * would have meant reloading almost as often as firing. 90 restores 8.1 s of
+   * held fire, and the reserve keeps the same five-magazine ratio it had -- the
+   * ammunition economy is the same shape, just counted in faster rounds.
+   */
+  magazineCapacity: 90,
+  initialMagazine: 90,
+  reserveCapacity: 450,
+  initialReserve: 450,
   reloadDuration: 1.65,
   manualReload: true,
   autoReload: false

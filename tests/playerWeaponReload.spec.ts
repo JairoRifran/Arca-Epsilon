@@ -142,14 +142,14 @@ test('primary: capacitor, manual reload and reserve accounting', async ({ page }
     key: start.reloadKey, hud: start.hudPrimary
   }));
   expect(start.primaryResourceType).toBe('pulse-capacitor');
-  expect(start.primaryMagazineCurrent).toBe(32);
-  expect(start.primaryMagazineMaximum).toBe(32);
-  expect(start.primaryReserveCurrent).toBe(160);
+  expect(start.primaryMagazineCurrent).toBe(90);
+  expect(start.primaryMagazineMaximum).toBe(90);
+  expect(start.primaryReserveCurrent).toBe(450);
 
   // 6. One valid event consumes exactly one charge.
   await page.evaluate(() => window.__arcaDebug?.firePrimaryOnce());
   const oneShot = await w(page);
-  expect(oneShot.primaryMagazineCurrent, 'one charge per event').toBe(31);
+  expect(oneShot.primaryMagazineCurrent, 'one charge per event').toBe(89);
   expect(oneShot.primaryShotsCreated).toBe(1);
   expect(oneShot.primaryChargesSpent, 'charges match shots created').toBe(1);
 
@@ -207,9 +207,9 @@ test('primary: capacitor, manual reload and reserve accounting', async ({ page }
     mag: `${reloaded.primaryMagazineCurrent}/${reloaded.primaryMagazineMaximum}`,
     reserve: reloaded.primaryReserveCurrent, hud: reloaded.hudPrimary
   }));
-  expect(reloaded.primaryMagazineCurrent, 'capacitor refilled').toBe(32);
+  expect(reloaded.primaryMagazineCurrent, 'capacitor refilled').toBe(90);
   expect(reloaded.primaryReserveCurrent, 'reserve drops by exactly what moved')
-    .toBe(reserveAtEmpty - 32);
+    .toBe(reserveAtEmpty - 90);
   expect(reloaded.primaryReloadDuration, 'documented reload time').toBeCloseTo(1.65, 2);
 
   await page.evaluate(() => window.__arcaDebug?.resetWeaponAudit());
@@ -217,7 +217,9 @@ test('primary: capacitor, manual reload and reserve accounting', async ({ page }
   expect((await w(page)).primaryShotsCreated, 'the cannon fires again').toBe(1);
 
   // 22. Reloading a full magazine costs nothing.
-  await page.evaluate(() => window.__arcaDebug?.setWeaponAmmo({ primaryMagazine: 32, primaryReserve: 100 }));
+  // 90 is the full magazine now; 32 would be a partial one and G would
+  // correctly start a reload, which is the opposite of what this checks.
+  await page.evaluate(() => window.__arcaDebug?.setWeaponAmmo({ primaryMagazine: 90, primaryReserve: 100 }));
   await page.keyboard.press('KeyG');
   await page.waitForTimeout(400);
   const full = await w(page);
@@ -335,7 +337,7 @@ test('both systems reload in parallel and each unblocks on its own timer', async
     torpedoReloading: afterPrimary.torpedoReloading,
     mag: afterPrimary.primaryMagazineCurrent
   }));
-  expect(afterPrimary.primaryMagazineCurrent, 'cannon is loaded').toBe(32);
+  expect(afterPrimary.primaryMagazineCurrent, 'cannon is loaded').toBe(90);
 
   await awaitTorpedoReloaded(page);
   const done = await w(page);
@@ -405,8 +407,8 @@ test('resupply, save/load and legacy migration', async ({ page }) => {
   const migrated = await page.evaluate(() => window.__arcaDebug?.setWeaponAmmo({ torpedoTotal: 11 }));
   expect(migrated!.torpedoTubes).toEqual([true, true, true, true]);
   expect(migrated!.torpedoReserve).toBe(0);
-  expect(migrated!.primaryMagazine, 'a pre-magazine save gets a full capacitor').toBe(32);
-  expect(migrated!.primaryReserve).toBe(160);
+  expect(migrated!.primaryMagazine, 'a pre-magazine save gets a full capacitor').toBe(90);
+  expect(migrated!.primaryReserve).toBe(450);
 
   const small = await page.evaluate(() => window.__arcaDebug?.setWeaponAmmo({ torpedoTotal: 2 }));
   expect(small!.torpedoTubes).toEqual([true, true, false, false]);
@@ -417,8 +419,8 @@ test('resupply, save/load and legacy migration', async ({ page }) => {
     primaryMagazine: 3, primaryReserve: 5, torpedoTubes: [false, false, false, false], torpedoReserve: 0
   }));
   const refilled = await page.evaluate(() => window.__arcaDebug?.refillWeaponStores());
-  expect(refilled!.primaryMagazine).toBe(32);
-  expect(refilled!.primaryReserve).toBe(160);
+  expect(refilled!.primaryMagazine).toBe(90);
+  expect(refilled!.primaryReserve).toBe(450);
   expect(refilled!.torpedoTubes).toEqual([true, true, true, true]);
   expect(refilled!.torpedoReserve).toBe(0);
 
@@ -430,9 +432,9 @@ test('resupply, save/load and legacy migration', async ({ page }) => {
       const s = await w(page);
       return `${s.hudPrimary}|${s.hudTorpedo}`;
     }, { message: 'HUD must match the refilled stores', timeout: 60_000, intervals: [500] })
-    .toMatch(/CANON 32\/32.*\|.*TORPEDOS 4\/4/);
+    .toMatch(/CANON 90\/90.*\|.*TORPEDOS 4\/4/);
   const hud = await w(page);
-  expect(hud.hudPrimary, 'HUD shows the live magazine').toContain(`${hud.primaryMagazineCurrent}/32`);
+  expect(hud.hudPrimary, 'HUD shows the live magazine').toContain(`${hud.primaryMagazineCurrent}/90`);
   expect(hud.hudTorpedo).toContain(`${hud.torpedoLoadedCount}/4`);
   const counts = await page.evaluate(() => {
     const scene = (window as unknown as { __arcaScene: import('three').Scene }).__arcaScene;

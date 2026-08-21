@@ -26,6 +26,7 @@
     "audio:check:m13": "node scripts/generate-m13-audio.mjs --list",
     "audio:generate:all": "node scripts/generate-elevenlabs-audio.mjs && node scripts/generate-elevenlabs-voices.mjs",
     "optimize:pilot-animation": "node scripts/extract-glb-animation.mjs public/models/characters/arca-pilot-run.glb public/models/characters/arca-pilot-run-animation.glb",
+    "optimize:pilot-idle": "node scripts/extract-glb-animation.mjs public/models/characters/personaje-parado-fast-normal.glb public/models/characters/arca-pilot-idle-animation.glb --only=rigify_clip --name=idle_standing",
     "optimize:models": "node scripts/optimize-glb-lod.mjs"
   },
   "dependencies": {

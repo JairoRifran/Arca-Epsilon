@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createSoftParticleTexture } from '../assets/materials';
+import { CombatEmberField } from './CombatEmberField';
 import {
   COMBAT_VFX_DISTANCE,
   COMBAT_VFX_QUALITY,
@@ -46,6 +47,7 @@ export type WeaponVisualDiagnostics = {
   decalsActive: number;
   fragmentsActive: number;
   muzzleParticlesActive: number;
+  emberParticlesActive: number;
   impactParticlesActive: number;
   destructionsActive: number;
   secondaryDestructionsActive: number;
@@ -167,8 +169,16 @@ type DestructionSlot = TimedSlot & {
 };
 type LightSlot = TimedSlot & { light: THREE.PointLight };
 
-const MUZZLE_POOL_SIZE = 6;
-const BEAM_POOL_SIZE = 8;
+/*
+ * Pools sized for sustained fire.
+ *
+ * At the old 0.28 s cadence a handful of slots was plenty. At 0.09 s a tracer
+ * still has ~0.135 s of life when the next two shots leave, so a small pool
+ * recycles a live streak and the stream visibly flickers. These are fixed
+ * allocations made once at build time; nothing grows per shot.
+ */
+const MUZZLE_POOL_SIZE = 14;
+const BEAM_POOL_SIZE = 22;
 const MISSILE_POOL_SIZE = 4;
 const IMPACT_POOL_SIZE = 10;
 const MARK_POOL_SIZE = 8;
@@ -197,6 +207,36 @@ function createRingTexture(size = 96): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
+}
+
+/**
+ * The projectile body: a cone frustum, wide at the head and tapering to the
+ * tail, carrying a brightness ramp in its vertex colours.
+ *
+ * The slot orients the group with `setFromUnitVectors(up, direction)`, so local
+ * +Y is the line of fire and the head sits at the top of the cylinder. Scaling
+ * is per-axis (`radius, length, radius`), which means the taper survives any
+ * length the bolt is stretched to.
+ *
+ * The ramp is not linear. A bolt spends most of its visible length as tail, so
+ * a straight gradient greys the whole thing out; raising the parameter to a
+ * power keeps the head hot and lets the tail fall away quickly, which is what
+ * gives the round its weight.
+ */
+function createTaperedBoltGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.CylinderGeometry(1, 0.26, 1, 8, 1, true);
+  const position = geometry.getAttribute('position');
+  const colors = new Float32Array(position.count * 3);
+  for (let index = 0; index < position.count; index += 1) {
+    // The unit cylinder is centred on the origin, so y runs -0.5 .. 0.5.
+    const along = THREE.MathUtils.clamp(position.getY(index) + 0.5, 0, 1);
+    const heat = 0.16 + Math.pow(along, 2.1) * 1.34;
+    colors[index * 3] = heat;
+    colors[index * 3 + 1] = heat;
+    colors[index * 3 + 2] = heat;
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geometry;
 }
 
 function createCombatDebrisGeometry(): THREE.BufferGeometry {
@@ -256,6 +296,21 @@ export class WeaponVisualDirector {
   private readonly marks: DamageMarkSlot[] = [];
   private readonly destructions: DestructionSlot[] = [];
   private readonly lights: LightSlot[] = [];
+  // Declared after `particleTexture` deliberately: field initialisers run in
+  // source order, so moving this up would hand the field an undefined map.
+  private readonly embers = new CombatEmberField(160, this.particleTexture);
+  /**
+   * A light that belongs to the barrel, kept apart from the impact pool.
+   * The impact pool has one slot on ultra and none below it; letting the
+   * cannon borrow it would mean eleven muzzle flashes a second evicting every
+   * hit light before it was seen.
+   */
+  private readonly muzzleLight = new THREE.PointLight(0xbfe9ff, 0, 46, 2);
+  private muzzleLightAge = 0;
+  private muzzleLightDuration = 0;
+  private muzzleLightPeak = 0;
+  private readonly emitterVelocity = new THREE.Vector3();
+  private readonly ricochetScratch = new THREE.Vector3();
   private quality: WeaponVisualQuality = 'high';
   private environment: CombatEnvironment = 'vacuum';
   private lastWeapon = 'none';
@@ -283,6 +338,7 @@ export class WeaponVisualDirector {
 
   setEnvironment(environment: CombatEnvironment): void {
     this.environment = environment;
+    this.embers.setEnvironment(environment);
   }
 
   /** Debug-only event sink. Undefined in normal gameplay. */
@@ -299,7 +355,12 @@ export class WeaponVisualDirector {
     this.viewerPosition.copy(position);
   }
 
-  emitMuzzle(position: THREE.Vector3, direction: THREE.Vector3, weapon: 'laser' | 'missile'): void {
+  emitMuzzle(
+    position: THREE.Vector3,
+    direction: THREE.Vector3,
+    weapon: 'laser' | 'missile',
+    emitterVelocity?: THREE.Vector3
+  ): void {
     this.performanceMarker?.(weapon === 'missile' ? 'torpedo-muzzle' : 'muzzle');
     const slot = this.nextSlot(this.muzzles, 'cursorMuzzle');
     slot.active = true;
@@ -338,8 +399,65 @@ export class WeaponVisualDirector {
     }
     (slot.sparks.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     this.muzzlePoint.copy(position);
+
+    // Embers are thrown into the shared field, not into this slot. The flash
+    // lives 75 ms; the sparks it throws have to outlast it by roughly eight
+    // times or they are gone before a frame ever draws them.
+    if (this.presentation.muzzle && this.presentation.impactParticles) {
+      const count = COMBAT_VFX_QUALITY[this.quality].muzzleEmbers;
+      if (emitterVelocity) this.emitterVelocity.copy(emitterVelocity);
+      else this.emitterVelocity.set(0, 0, 0);
+      this.embers.emit(
+        position,
+        this.directionScratch,
+        weapon === 'missile' ? count + 3 : count,
+        this.emitterVelocity,
+        weapon === 'missile' ? 9.6 : 7.4,
+        weapon === 'missile' ? 0.78 : 0.62
+      );
+    }
+
+    // Firing lights the hull that fired. Deliberately not a shadow-casting
+    // light: a point light with shadows renders six faces of a cube map every
+    // frame it is live, and at this cadence that would cost more than every
+    // other effect in the director combined. The shadows that matter here are
+    // the ones already in the scene -- this light moves through them.
+    this.pulseMuzzleLight(position, weapon);
+
     this.lastWeapon = weapon === 'missile' ? 'Misil guiado Epsilon' : 'Cañón de energía Epsilon';
     this.lastWeaponType = weapon === 'missile' ? 'physical-guided' : 'energy';
+  }
+
+  private pulseMuzzleLight(position: THREE.Vector3, weapon: 'laser' | 'missile'): void {
+    if (!this.presentation.temporaryLights || !this.presentation.muzzle) {
+      this.muzzleLightPeak = 0;
+      this.muzzleLightDuration = 0;
+      this.muzzleLight.intensity = 0;
+      return;
+    }
+    this.muzzleLight.position.copy(position);
+    this.muzzleLight.color.setHex(weapon === 'missile' ? 0xffb070 : 0x9fdcff);
+    this.muzzleLightPeak = weapon === 'missile' ? 26 : 13;
+    this.muzzleLightDuration = weapon === 'missile' ? 0.2 : 0.11;
+    this.muzzleLightAge = 0;
+    this.muzzleLight.intensity = this.muzzleLightPeak;
+  }
+
+  /**
+   * A hard attack and a slower decay. A symmetric fade reads as a lamp being
+   * turned up and down; a gun goes bright instantly and falls off.
+   */
+  private updateMuzzleLight(delta: number): void {
+    if (this.muzzleLightDuration <= 0) return;
+    this.muzzleLightAge += delta;
+    const t = this.muzzleLightAge / this.muzzleLightDuration;
+    if (t >= 1) {
+      this.muzzleLightDuration = 0;
+      this.muzzleLight.intensity = 0;
+      return;
+    }
+    const decay = (1 - t) * (1 - t);
+    this.muzzleLight.intensity = this.muzzleLightPeak * decay;
   }
 
   emitBeam(origin: THREE.Vector3, end: THREE.Vector3): void {
@@ -355,11 +473,17 @@ export class WeaponVisualDirector {
       const slot = this.nextSlot(this.beams, 'cursorBeam');
       slot.active = true;
       slot.age = 0;
-      slot.duration = 0.135 + pulse * 0.012;
+      // Slightly longer life and a longer streak now that shots overlap: at
+      // eleven a second the eye reads the stream, not the individual bolt, and
+      // a short stub looks like flicker rather than fire.
+      slot.duration = 0.17 + pulse * 0.012;
       slot.delay = pulse * 0.018;
       slot.pulseIndex = pulse;
       slot.distance = distance;
-      slot.pulseLength = THREE.MathUtils.clamp(distance * 0.045, 8.5, 19);
+      // Streak length. The old ceiling of 27 m was set when the cannon fired
+      // once per click; at eleven a second a stub that short reads as a
+      // spark rather than a round with a body behind it.
+      slot.pulseLength = THREE.MathUtils.clamp(distance * 0.062, 16, 44);
       slot.origin.copy(origin);
       slot.direction.copy(this.directionScratch);
       slot.group.visible = this.presentation.projectiles;
@@ -532,6 +656,38 @@ export class WeaponVisualDirector {
       slot.velocities[offset + 2] = (0.8 + (index % 3) * 0.35) * (torpedo ? 24 : 16);
     }
     (slot.particles.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+
+    // Ricochet embers. The slot's own particles are spall -- they are parented
+    // to the impact group, live 0.26 s and sell the flash. These are the sparks
+    // that leave the hit and keep going, so they belong in the world-space
+    // field with their own life.
+    //
+    // Only metal throws them. A shield stopping a round is a field discharging,
+    // not material being knocked loose, and giving both the same sparks is what
+    // makes an energy screen read as painted-on tin.
+    if (!far && !shield && this.presentation.impactParticles && this.presentation.impacts) {
+      // Mirror the incoming direction about the surface normal. Sparks come off
+      // a plate the way light comes off a mirror, which is why a glancing hit
+      // sprays along the hull and a square hit throws them back at the shooter.
+      this.ricochetScratch
+        .copy(event.direction)
+        .addScaledVector(event.normal, -2 * event.direction.dot(event.normal))
+        .normalize()
+        // Bias out of the surface so the spray never starts inside the plate.
+        .addScaledVector(event.normal, 0.55)
+        .normalize();
+      const emberBudget = COMBAT_VFX_QUALITY[this.quality].muzzleEmbers;
+      this.embers.emit(
+        event.point,
+        this.ricochetScratch,
+        torpedo ? emberBudget + 4 : medium ? Math.ceil(emberBudget * 0.6) : emberBudget,
+        undefined,
+        // Harder hits throw further, and a torpedo throws hardest.
+        (torpedo ? 15.5 : 10.5) * (0.7 + incidence * 0.6),
+        torpedo ? 0.85 : 0.58
+      );
+    }
+
     this.damageVisualState = event.destroyed ? 'destroyed' : event.integrity < 0.28 ? 'critical' : event.integrity < 0.66 ? 'damaged' : 'stable';
     if (this.presentation.damageMarks && !shield && !far && !event.destroyed) this.emitDamageMark(event);
     if (event.destroyed) {
@@ -549,6 +705,8 @@ export class WeaponVisualDirector {
     this.updateMarks(delta);
     this.updateDestructions(delta);
     this.updateLights(delta);
+    this.updateMuzzleLight(delta);
+    this.embers.update(delta);
   }
 
   clearTransient(): void {
@@ -562,6 +720,10 @@ export class WeaponVisualDirector {
     for (let index = 0; index < this.lights.length; index += 1) {
       this.lights[index].light.intensity = 0;
     }
+    this.embers.clear();
+    this.muzzleLightAge = 0;
+    this.muzzleLightDuration = 0;
+    this.muzzleLight.intensity = 0;
     this.lastWeapon = 'none';
     this.lastWeaponType = 'none';
     this.activeHardpoint = 'none';
@@ -646,6 +808,7 @@ export class WeaponVisualDirector {
       decalsActive: marks,
       fragmentsActive: fragments,
       muzzleParticlesActive: muzzleParticles,
+      emberParticlesActive: this.embers.getDiagnostics().alive,
       impactParticlesActive: impactParticles,
       destructionsActive: destructions,
       secondaryDestructionsActive: secondaryDestructions,
@@ -667,7 +830,13 @@ export class WeaponVisualDirector {
   }
 
   private buildPools(): void {
-    const beamGeometry = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true);
+    // The bolt is a teardrop, not a stick. A uniform cylinder reads as a line
+    // segment with no direction; a wide leading face tapering to a thin tail,
+    // shaded bright at the head and dark at the tail, reads as something
+    // travelling. Both live in the shared geometry -- the taper in the radii,
+    // the shading in vertex colours -- so the weight costs no extra draw call
+    // and every beam slot inherits it.
+    const beamGeometry = createTaperedBoltGeometry();
     const plumeGeometry = new THREE.ConeGeometry(1, 1, 8, 1, true);
     const missileBodyGeometry = new THREE.CylinderGeometry(0.24, 0.31, 2.1, 10);
     const missileNoseGeometry = new THREE.ConeGeometry(0.24, 0.68, 10);
@@ -722,15 +891,17 @@ export class WeaponVisualDirector {
     }
     for (let index = 0; index < BEAM_POOL_SIZE; index += 1) {
       const group = new THREE.Group();
-      const coreMaterial = new THREE.MeshBasicMaterial({ color: 0xf3feff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-      const glowMaterial = new THREE.MeshBasicMaterial({ color: 0x5bbde1, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-      const afterglowMaterial = new THREE.MeshBasicMaterial({ color: 0x3387a5, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+      const coreMaterial = new THREE.MeshBasicMaterial({ color: 0xf3feff, transparent: true, depthWrite: false, vertexColors: true, blending: THREE.AdditiveBlending });
+      const glowMaterial = new THREE.MeshBasicMaterial({ color: 0x5bbde1, transparent: true, depthWrite: false, vertexColors: true, blending: THREE.AdditiveBlending });
+      const afterglowMaterial = new THREE.MeshBasicMaterial({ color: 0x3387a5, transparent: true, depthWrite: false, vertexColors: true, blending: THREE.AdditiveBlending });
       const core = new THREE.Mesh(beamGeometry, coreMaterial);
       const glow = new THREE.Mesh(beamGeometry, glowMaterial);
       const afterglow = new THREE.Mesh(beamGeometry, afterglowMaterial);
-      core.scale.set(0.045, 1, 0.045);
-      glow.scale.set(0.14, 1, 0.14);
-      afterglow.scale.set(0.28, 1, 0.28);
+      // Thicker than before. At eleven rounds a second the eye tracks the
+      // stream rather than one bolt, and a hairline core disappeared into it.
+      core.scale.set(0.058, 1, 0.058);
+      glow.scale.set(0.185, 1, 0.185);
+      afterglow.scale.set(0.36, 1, 0.36);
       group.add(afterglow, glow, core);
       group.visible = false;
       this.group.add(group);
@@ -977,6 +1148,16 @@ export class WeaponVisualDirector {
       this.group.add(light);
       this.lights.push({ active: false, age: 0, duration: 0, light });
     }
+
+    // The muzzle light stays in the graph permanently at zero intensity rather
+    // than being toggled with `visible`. Three.js keys its shader programs on
+    // the number of lights in the scene, so switching one on and off eleven
+    // times a second would recompile every lit material in the frame it
+    // changed. An always-present light that only changes intensity costs one
+    // extra term in the shader and never a recompile.
+    this.muzzleLight.visible = true;
+    this.group.add(this.muzzleLight);
+    this.group.add(this.embers.points);
   }
 
   private emitDamageMark(event: CombatImpactVisual): void {
@@ -1450,5 +1631,6 @@ export class WeaponVisualDirector {
     for (let index = 0; index < this.lights.length; index += 1) {
       this.lights[index].light.visible = this.lights[index].active && this.presentation.temporaryLights;
     }
+    this.embers.setVisible(this.presentation.muzzle && this.presentation.impactParticles);
   }
 }

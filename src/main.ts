@@ -1613,8 +1613,26 @@ const onFootCameraTuning = {
   HEIGHT: 1.05,
   TARGET_HEIGHT: 1.28,
   SHOULDER_OFFSET: 0.82,
+  /**
+   * Orbit pitch limits for the camera's *position*.
+   *
+   * The camera sits at `HEIGHT + sin(pitch) * DISTANCE`, so a negative pitch
+   * lowers it. Past about -0.08 it goes underground and the terrain clamp
+   * fights the input, which is why looking up was effectively impossible.
+   * The position stays bounded; upward aim is handled by AIM_MIN below.
+   */
   PITCH_MIN: -0.08,
   PITCH_MAX: 0.62,
+  /**
+   * How far past PITCH_MIN the player may keep pushing.
+   *
+   * Beyond the position limit the camera stops descending and the *look target*
+   * rises instead, so the view tilts up towards the ship or the sky without
+   * burying the camera in the ground.
+   */
+  AIM_MIN: -0.95,
+  /** Metres the look target rises per radian of aim past the position limit. */
+  AIM_LIFT: 9.5,
   ORBIT_RESPONSE: 14,
   FOLLOW_RESPONSE: 10.8,
   TERRAIN_CLEARANCE: 1.05,
@@ -1622,6 +1640,11 @@ const onFootCameraTuning = {
 } as const;
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
+/** True while the primary trigger is held, so the cannon fires in bursts. */
+let primaryTriggerHeld = false;
+
+/** How far the hull may pitch from level, in radians. */
+const SHIP_PITCH_LIMIT = 1.15;
 let yaw = -0.08;
 let pitch = 0.02;
 // The hull follows the pilot's aim with inertia: smoothed heading plus a
@@ -1882,7 +1905,7 @@ const auroraCoreDressing = new AuroraCoreDressing();
 let mission11DeployStartedAt = -Infinity;
 const mission12 = new Mission12FirstInhabitants();
 const auroraCrewCapsule = new AuroraCrewCapsule();
-const auroraFirstCrew = new AuroraFirstCrew();
+const auroraFirstCrew = new AuroraFirstCrew(assetLoader);
 let mission12DescentElapsed = -1;
 const mission13 = new Mission13FirstStorm();
 const auroraStormStations = new AuroraStormStations();
@@ -15064,7 +15087,7 @@ function fireLaser(): void {
   // shields still draw on that pool exactly as before.
   combatWeaponMode = 'laser';
   weaponAudit.primaryFireEvents += 1;
-  const fired = weaponSystem.fireLaser(ship, getWeaponTargets());
+  const fired = weaponSystem.fireLaser(ship, getWeaponTargets(), velocity);
   if (fired) {
     weaponAudit.primaryShotsCreated += 1;
     weaponAudit.primaryChargesSpent += 1;
@@ -21044,13 +21067,19 @@ function updateCamera(delta: number): void {
       lookTarget.lerp(onFootCameraObstacleCenter, 0.2);
     }
     const distance = transitioning ? onFootCameraTuning.TRANSITION_DISTANCE : onFootCameraTuning.DISTANCE;
-    const horizontalDistance = Math.cos(footCameraPitch) * distance;
+    // Split the look into what moves the camera and what only aims it. Pushing
+    // past the position limit lifts the target rather than sinking the camera,
+    // so the player can look up at the ship overhead and still see the ground.
+    const orbitPitch = Math.max(footCameraPitch, onFootCameraTuning.PITCH_MIN);
+    const aimSurplus = onFootCameraTuning.PITCH_MIN - Math.min(footCameraPitch, onFootCameraTuning.PITCH_MIN);
+    lookTarget.y += aimSurplus * onFootCameraTuning.AIM_LIFT;
+    const horizontalDistance = Math.cos(orbitPitch) * distance;
     const cameraBasis = getOnFootCameraBasis();
     const desiredUnresolved = onFootCameraDesired
       .copy(characterTarget)
       .addScaledVector(cameraBasis.forward, -horizontalDistance)
       .addScaledVector(cameraBasis.right, transitioning ? 0.4 : onFootCameraTuning.SHOULDER_OFFSET);
-    desiredUnresolved.y += onFootCameraTuning.HEIGHT + Math.sin(footCameraPitch) * distance;
+    desiredUnresolved.y += onFootCameraTuning.HEIGHT + Math.sin(orbitPitch) * distance;
     const desired = resolveOnFootCameraCollision(characterTarget, desiredUnresolved);
     const cameraGround =
       surfaceGroundHeight(desired.x, desired.z) + onFootCameraTuning.TERRAIN_CLEARANCE;
@@ -21510,6 +21539,17 @@ function updateSceneMotion(delta: number, elapsed: number, visualDelta = delta):
   }
   if (combatJammerProbeActive) {
     coalitionJammer.update(delta, elapsed, () => undefined);
+  }
+  // Sustained fire. Gated exactly like the single shot on mousedown, so a
+  // paused game, a cradle launch or a locked weapon stops the burst too.
+  if (
+    primaryTriggerHeld &&
+    !gamePaused &&
+    playerModeSystem.insideShip &&
+    !mission24.ascentActive &&
+    !arkDeparture.weaponsLocked
+  ) {
+    fireLaser();
   }
   weaponSystem.update(delta, ship, getWeaponTargets(), camera.position, Math.min(1, visualDelta));
   if (weaponSystem.events.missileIgnitions < torpedoIgnitionAudioCursor) torpedoIgnitionAudioCursor = 0;
@@ -22752,9 +22792,23 @@ void (async () => {
   bootExperience.completeTask(activeBootTask, BOOT_TASK_STATUS[activeBootTask]);
   activeBootTask = 'pilot';
   bootExperience.updateTask(activeBootTask, 0, BOOT_TASK_STATUS[activeBootTask]);
+  // Animation-only companions to the walk rig: every character GLB in this
+  // project shares one skeleton, so a clip weighs 23 KB instead of the 1.1 MB
+  // its authoring file does. The idle is the one the player sees most -- it is
+  // whatever the character does while they read the HUD -- and until now it was
+  // a single frozen frame of the walk cycle.
   await surfaceCharacter.load('/models/characters/arca-pilot-walk.glb', [
-    '/models/characters/arca-pilot-run-animation.glb'
+    '/models/characters/arca-pilot-run-animation.glb',
+    '/models/characters/arca-pilot-idle-animation.glb'
   ]);
+  // The Aurora crew rides in the same boot task. It is a second body mesh and
+  // costs about as much as the pilot, but it is loaded here rather than lazily
+  // on mission 12 because the alternative is a 1.2 MB fetch landing in the
+  // middle of the scene where the settlers first step out of the capsule.
+  await auroraFirstCrew.load(
+    '/models/characters/humanos-observando-fast-normal.glb',
+    '/models/characters/arca-pilot-walk-animation.glb'
+  );
   bootExperience.completeTask(activeBootTask, BOOT_TASK_STATUS[activeBootTask]);
   activeBootTask = 'systems';
   bootExperience.updateTask(activeBootTask, 0.2, BOOT_TASK_STATUS[activeBootTask]);
@@ -23642,20 +23696,40 @@ window.addEventListener('mousemove', (event) => {
     footCameraTargetPitch -= event.movementY * settings.mouseSensitivity;
     footCameraTargetPitch = THREE.MathUtils.clamp(
       footCameraTargetPitch,
-      onFootCameraTuning.PITCH_MIN,
+      onFootCameraTuning.AIM_MIN,
       onFootCameraTuning.PITCH_MAX
     );
     return;
   }
   yaw -= event.movementX * settings.mouseSensitivity;
   pitch -= event.movementY * settings.mouseSensitivity;
-  pitch = THREE.MathUtils.clamp(pitch, -0.82, 0.82);
+  // Was +/-0.82 rad (47 deg), too flat to look up at the Ark or a drone
+  // overhead. 1.15 rad is 66 deg: a real climb angle while staying clear of the
+  // 90 deg gimbal singularity these Euler angles would hit.
+  pitch = THREE.MathUtils.clamp(pitch, -SHIP_PITCH_LIMIT, SHIP_PITCH_LIMIT);
 });
 
 window.addEventListener('mousedown', (event) => {
   if (gamePaused || !playerModeSystem.insideShip) return;
-  if (event.button === 0) fireLaser();
+  // Holding the trigger fires in bursts. No new rate logic: `fireLaser` already
+  // refuses while the cannon is cooling or empty, so the weapon's own cadence
+  // paces the burst and the balance is untouched.
+  if (event.button === 0) {
+    primaryTriggerHeld = true;
+    fireLaser();
+  }
   if (event.button === 2) fireMissile();
+});
+
+window.addEventListener('mouseup', (event) => {
+  if (event.button === 0) primaryTriggerHeld = false;
+});
+
+// A button released outside the window never sends mouseup here, and the ship
+// would otherwise keep firing after the player alt-tabs away.
+window.addEventListener('blur', () => { primaryTriggerHeld = false; });
+document.addEventListener('pointerlockchange', () => {
+  if (!document.pointerLockElement) primaryTriggerHeld = false;
 });
 
 window.addEventListener('contextmenu', (event) => {
@@ -25188,7 +25262,8 @@ if (diagnosticsMode) {
     },
     setOnFootCameraPitch: (value) => {
       if (!Number.isFinite(value)) return footCameraPitch;
-      footCameraPitch = THREE.MathUtils.clamp(value, onFootCameraTuning.PITCH_MIN, onFootCameraTuning.PITCH_MAX);
+      // Same range the mouse gets, so a test can reach the upward aim band.
+      footCameraPitch = THREE.MathUtils.clamp(value, onFootCameraTuning.AIM_MIN, onFootCameraTuning.PITCH_MAX);
       footCameraTargetPitch = footCameraPitch;
       return footCameraPitch;
     },
@@ -28616,6 +28691,40 @@ if (diagnosticsMode && window.__arcaDebug) {
     getGarageState: () => garageView?.state ?? null,
     setGarageView: (yaw: number, pitch?: number) => garageView?.setView(yaw, pitch) ?? null,
     inspectGarage: () => garageView?.inspect() ?? null,
+    /**
+     * Why boarding is or is not possible right now.
+     *
+     * "F does nothing" and "I cannot get closer" are indistinguishable from
+     * outside: one is a range gate, the other is a collider. This reports both
+     * so the difference is visible.
+     */
+    getBoardingState: () => {
+      const proximity = getBoardingProximity();
+      const player = surfaceCharacter.group.position;
+      // Probe a step straight at the anchor: if the collision world refuses it,
+      // the player is being blocked rather than simply standing too far away.
+      const toAnchor = new THREE.Vector3().subVectors(proximity.anchor, player).setY(0);
+      const stepLength = Math.min(1.5, toAnchor.length());
+      const step = toAnchor.clone().normalize().multiplyScalar(stepLength);
+      const probe = probeCharacterCollision(player.toArray(), step.toArray());
+      return {
+        anchor: proximity.anchor.toArray().map((n) => Number(n.toFixed(2))),
+        player: player.toArray().map((n) => Number(n.toFixed(2))),
+        horizontal: Number(proximity.horizontal.toFixed(2)),
+        vertical: Number(proximity.vertical.toFixed(2)),
+        horizontalRange: BOARDING_HORIZONTAL_RANGE,
+        verticalTolerance: BOARDING_VERTICAL_TOLERANCE,
+        available: proximity.available,
+        onFoot: playerModeSystem.onFootActive,
+        parkedShipResolved,
+        liftState: shipAccessLift.state,
+        requestedStep: Number(stepLength.toFixed(2)),
+        probe
+      };
+    },
+    /** Live nudge for aligning the procedural engines with the GLB bells. */
+    setEngineOffset: (offset: { x?: number; y?: number; z?: number }) => playerShip.setEngineOffset(offset),
+    getEngineOffset: () => playerShip.getEngineHardpoints().map((e) => e.position.toArray()),
     openGarageMode: async () => {
       await openGarage();
       return garageView?.state ?? null;
@@ -28757,6 +28866,11 @@ if (diagnosticsMode && window.__arcaDebug) {
       targetPosition: weaponProbeObject.position.toArray() as [number, number, number],
       targetHealth: weaponProbeTarget.health,
       targetSurface: String(weaponProbeObject.userData.combatSurface ?? 'none')
+    }),
+    getAuroraCrewState: () => ({
+      ...auroraFirstCrew.diagnostics,
+      visible: auroraFirstCrew.group.visible,
+      disembarked: mission12.state.auroraFirstCrewDisembarked
     }),
     getEnemyCombatVisualState: () => ({
       ...enemyCombatVisuals.getDiagnostics(),

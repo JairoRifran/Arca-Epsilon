@@ -79,6 +79,26 @@ export const MODEL_ASSET_AUDIT: readonly ModelAssetAuditEntry[] = [
     id: 'pilot-run-animation', path: '/models/characters/arca-pilot-run-animation.glb', bytes: 13_668,
     meshCount: 0, materialCount: 0, triangleCount: 0, textureCount: 0, animationCount: 1,
     loadedAtStartup: true, duplicated: false, optimizationRisk: 'low', purpose: 'Clip de carrera sin malla ni textura duplicadas'
+  },
+  {
+    id: 'pilot-idle-animation', path: '/models/characters/arca-pilot-idle-animation.glb', bytes: 23_296,
+    meshCount: 0, materialCount: 0, triangleCount: 0, textureCount: 0, animationCount: 1,
+    loadedAtStartup: true, duplicated: false, optimizationRisk: 'low', purpose: 'Clip de reposo; antes el idle era un frame congelado del walk'
+  },
+  {
+    id: 'pilot-idle-source', path: '/models/characters/personaje-parado-fast-normal.glb', bytes: 1_143_420,
+    meshCount: 1, materialCount: 1, triangleCount: 0, textureCount: 1, animationCount: 2,
+    loadedAtStartup: false, duplicated: true, optimizationRisk: 'high', purpose: 'Fuente del reposo; malla identica al piloto, no se carga en runtime'
+  },
+  {
+    id: 'crew-walk-animation', path: '/models/characters/arca-pilot-walk-animation.glb', bytes: 15_660,
+    meshCount: 0, materialCount: 0, triangleCount: 0, textureCount: 0, animationCount: 1,
+    loadedAtStartup: true, duplicated: false, optimizationRisk: 'low', purpose: 'Caminata prestada a la tripulacion de Aurora; mismo esqueleto'
+  },
+  {
+    id: 'aurora-crew-observers', path: '/models/characters/humanos-observando-fast-normal.glb', bytes: 1_272_760,
+    meshCount: 1, materialCount: 1, triangleCount: 0, textureCount: 1, animationCount: 1,
+    loadedAtStartup: true, duplicated: false, optimizationRisk: 'high', purpose: 'Habitantes de Aurora; una carga, tres clones con esqueleto propio'
   }
 ];
 

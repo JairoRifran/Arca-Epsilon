@@ -48,7 +48,7 @@ test('part B HUD captures', async ({ page }) => {
 
   // 1. Full loadout.
   await setAmmo({ primaryMagazine: 32, primaryReserve: 160, torpedoTubes: [true, true, true, true], torpedoReserve: 8 });
-  await shot('01-cannon-full-32-160', 'CANON 32/32');
+  await shot('01-cannon-full-32-160', 'CANON 90/90');
 
   // 2-4. Partially spent, empty, and the empty prompt.
   await setAmmo({ primaryMagazine: 18, primaryReserve: 160 });
@@ -69,7 +69,7 @@ test('part B HUD captures', async ({ page }) => {
     () => (window.__arcaDebug?.getWeaponResourceState() as { primaryReloading?: boolean })?.primaryReloading === false,
     undefined, { timeout: 120_000 }
   );
-  await shot('07-cannon-reloaded-reserve-down', 'CANON 32/32');
+  await shot('07-cannon-reloaded-reserve-down', 'CANON 90/90');
 
   // 8-11. Tubes: full, one launched, empty, and the prompt.
   await setAmmo({ torpedoTubes: [true, true, true, true], torpedoReserve: 8 });
@@ -105,7 +105,7 @@ test('part B HUD captures', async ({ page }) => {
 
   // 15. After a Base Nereida resupply.
   await page.evaluate(() => window.__arcaDebug?.refillWeaponStores());
-  await shot('15-after-nereida-resupply', 'CANON 32/32');
+  await shot('15-after-nereida-resupply', 'CANON 90/90');
 
   // 16. Aurora keeps an incomplete loadout: no resupply there.
   await setAmmo({ primaryMagazine: 9, primaryReserve: 40, torpedoTubes: [true, false, false, false], torpedoReserve: 2 });

@@ -47,13 +47,24 @@ export class CombatCameraImpulse {
     return this.recoil;
   }
 
+  /**
+   * Kick from firing.
+   *
+   * The cannon impulses are about a third of what they were, because the rate
+   * went from 3.6 to 11 shots a second. At the old values a held trigger pinned
+   * `recoil` at 1 within two frames and never let it fall, turning a punch into
+   * a constant rattle. Scaled by the rate change, the *sustained* level now
+   * lands near where a single shot used to peak, so holding fire feels like a
+   * running weapon instead of a broken camera. The torpedo is untouched: it is
+   * still one deliberate launch.
+   */
   triggerFire(kind: Exclude<CombatImpulseKind, 'received'>, shipQuaternion: THREE.Quaternion): void {
-    const strength = kind === 'missile' ? 0.115 : 0.032;
+    const strength = kind === 'missile' ? 0.115 : 0.011;
     this.worldDirection.set(0, 0, 1).applyQuaternion(shipQuaternion);
     this.translationVelocity.addScaledVector(this.worldDirection, strength);
-    this.rotationVelocity.x += kind === 'missile' ? 0.012 : 0.003;
-    this.rotationVelocity.y += kind === 'missile' ? -0.007 : 0.002;
-    this.recoil = Math.min(1, this.recoil + (kind === 'missile' ? 0.55 : 0.2));
+    this.rotationVelocity.x += kind === 'missile' ? 0.012 : 0.001;
+    this.rotationVelocity.y += kind === 'missile' ? -0.007 : 0.0007;
+    this.recoil = Math.min(1, this.recoil + (kind === 'missile' ? 0.55 : 0.07));
   }
 
   triggerReceived(fromWorldPosition: THREE.Vector3, shipPosition: THREE.Vector3, camera: THREE.Camera): void {

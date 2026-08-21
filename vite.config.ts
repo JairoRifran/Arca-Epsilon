@@ -16,7 +16,8 @@ export default defineConfig({
       // its code, and none of Three.js, ends up in the other's bundle.
       input: {
         main: resolve(__dirname, 'index.html'),
-        admin: resolve(__dirname, 'admin.html')
+        admin: resolve(__dirname, 'admin.html'),
+        editor: resolve(__dirname, 'editor.html')
       },
       output: {
         manualChunks(id) {

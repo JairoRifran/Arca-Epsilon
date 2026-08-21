@@ -137,8 +137,8 @@ test('the launcher uses the tube that was consumed, and nothing else changed', a
 
   // 20-25. The earlier stages are untouched.
   const weapons = await page.evaluate(() => window.__arcaDebug?.getWeaponResourceState()) as Record<string, number>;
-  expect(weapons.primaryMagazineMaximum, 'magazine still 32').toBe(32);
-  expect(weapons.primaryReserveMaximum, 'reserve still 160').toBe(160);
+  expect(weapons.primaryMagazineMaximum, 'magazine scaled with the cadence').toBe(90);
+  expect(weapons.primaryReserveMaximum, 'reserve keeps its five-magazine ratio').toBe(450);
   expect(weapons.torpedoTubeCapacity, 'still four tubes').toBe(4);
   expect(weapons.torpedoReserveMaximum, 'finite torpedo reserve is retired').toBe(0);
 

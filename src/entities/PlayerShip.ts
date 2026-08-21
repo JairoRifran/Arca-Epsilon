@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
   cannonMuzzleHardpoints,
+  ENGINE_OFFSET,
   mainEngineHardpoints,
   torpedoTubeHardpoints,
   ventralPodHardpoint
@@ -819,6 +820,25 @@ export class PlayerShip {
 
   getEngineSocketPositions(): THREE.Vector3[] {
     return mainEngineHardpoints(this.bounds).map((e) => e.position.clone());
+  }
+
+  /**
+   * Moves the procedural engine assemblies to a new hull-relative offset.
+   *
+   * The GLB's own engine bells cannot be located programmatically -- it is two
+   * merged meshes with no material groups or node names -- so the alignment has
+   * to be found by looking at it. This repositions the already-built assemblies
+   * so that can be done live instead of through a rebuild per attempt.
+   */
+  setEngineOffset(offset: { x?: number; y?: number; z?: number }): typeof ENGINE_OFFSET {
+    if (Number.isFinite(offset.x)) ENGINE_OFFSET.x = offset.x as number;
+    if (Number.isFinite(offset.y)) ENGINE_OFFSET.y = offset.y as number;
+    if (Number.isFinite(offset.z)) ENGINE_OFFSET.z = offset.z as number;
+    const sockets = this.getEngineSocketPositions();
+    for (let index = 0; index < this.engineVisuals.length && index < sockets.length; index += 1) {
+      this.engineVisuals[index].group.position.copy(sockets[index]);
+    }
+    return { ...ENGINE_OFFSET };
   }
 
   /** Full engine hardpoints: mouth, axis and radius, from the one source. */
