@@ -9175,17 +9175,25 @@ function updateMission20Systems(delta: number, elapsed: number): void {
   mission20.setActiveHostiles(coalitionDrones.activeCount + (coalitionJammer.alive ? 1 : 0));
 
   switch (mission20.step) {
-    case 'emergencyAscent':
+    case 'emergencyAscent': {
+      // Fraction of the way to the ascent altitude, so the readout climbs with
+      // the ship instead of sitting at 0% until it clears the atmosphere.
+      const ascentClimb = inSurfacePhase
+        ? THREE.MathUtils.clamp(ship.position.y / mission20Tuning.ascentAltitude, 0, 1)
+        : 1;
       transientWarning = aboveAtmosphere
         ? `ASCENSO ${Math.round(mission20.phaseProgress)}% // INTERFERENCIA`
-        : 'SUBE A LA NAVE Y ASCIENDE // F';
-      if (mission20.advanceAscent(delta, aboveAtmosphere)) {
+        : playerModeSystem.insideShip
+          ? `ASCENSO ${Math.round(mission20.phaseProgress)}% // MANTENÉ EL ASCENSO`
+          : 'SUBE A LA NAVE Y ASCIENDE // F';
+      if (mission20.advanceAscent(delta, aboveAtmosphere, ascentClimb)) {
         syncMission20Visuals();
         triggerDialogue('m20_ascent', 'mission20-ascent');
         missionText.textContent = 'Alcanza el Arca.';
         saveProgress();
       }
       break;
+    }
     case 'rendezvousWithArk':
       transientWarning = `EL ARCA A ${Math.round(arkDistance)} m`;
       if (mission20.advanceRendezvous(delta, arkDistance <= mission20Tuning.rendezvousRange)) {

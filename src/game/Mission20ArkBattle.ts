@@ -134,6 +134,9 @@ export class Mission20ArkBattle {
   // wave from its stable beginning rather than mid-dogfight.
   private stationProgress = 0;
   private ascentTimer = 0;
+
+  /** 0..1 of the way to the ascent altitude. Drives the climb readout. */
+  private ascentClimb = 0;
   private capitalTimer = 0;
   private arkIntegrity = 84;
   private engineIntegrity: number[] = [100, 100];
@@ -272,8 +275,15 @@ export class Mission20ArkBattle {
     const t = mission20Tuning;
     const waveCount = this.activeWaveCount;
     switch (this.step) {
-      case 'emergencyAscent':
-        return Math.min(100, (this.ascentTimer / t.ascentSeconds) * 100);
+      case 'emergencyAscent': {
+        // Used to be the hold timer alone, which only starts once the ship is
+        // already above the atmosphere — so the readout sat at 0% for the whole
+        // climb, exactly when the pilot most needs to see it moving. The climb
+        // itself now drives the bulk of the bar and the hold finishes it.
+        const climb = this.ascentClimb * 85;
+        const hold = Math.min(1, this.ascentTimer / t.ascentSeconds) * 15;
+        return Math.min(100, climb + hold);
+      }
       case 'rendezvousWithArk':
         return Math.min(100, (this.stationProgress / t.rendezvousSeconds) * 100);
       case 'restoreArkLink': {
@@ -324,8 +334,16 @@ export class Mission20ArkBattle {
   // Phases 1-3: ascent, rendezvous, external link
   // -------------------------------------------------------------------------
 
-  advanceAscent(deltaSeconds: number, aboveAtmosphere: boolean): boolean {
+  /**
+   * @param climbFraction 0..1 of the way to the ascent altitude, fed every
+   * frame so the readout tracks the actual climb.
+   */
+  advanceAscent(deltaSeconds: number, aboveAtmosphere: boolean, climbFraction = 0): boolean {
     if (this.step !== 'emergencyAscent') return false;
+    // Recorded before the gate below, which is the whole point: the climb is
+    // what the pilot is doing for most of this step, so it has to register even
+    // though the hold timer has not started yet.
+    this.ascentClimb = Math.max(0, Math.min(1, climbFraction));
     if (!aboveAtmosphere) return false;
     this.ascentTimer += deltaSeconds;
     if (this.ascentTimer < mission20Tuning.ascentSeconds) return false;
@@ -716,6 +734,7 @@ export class Mission20ArkBattle {
   private resetVolatile(): void {
     this.stationProgress = 0;
     this.ascentTimer = 0;
+    this.ascentClimb = 0;
     this.capitalTimer = 0;
     this.arkIntegrity = 84;
     this.engineIntegrity = new Array(ENGINE_COUNT).fill(100);
