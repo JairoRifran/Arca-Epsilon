@@ -21613,6 +21613,17 @@ function animate(): void {
       updateSurfacePlayer(surfacePlayerDelta);
       groundPerformanceTelemetry.endStage('surfacePlayer', surfacePlayerStartedAt);
     } else {
+      // There is no on-foot in space, so the pilot is always in the ship here.
+      //
+      // `syncShipContext` refuses to act unless the player is already inside
+      // (`if (!this.insideShip || this.transitionActive) return`), which means a
+      // save written on foot and resumed in orbit stayed stuck in ON_FOOT
+      // forever. The branch below then zeroed the velocity every frame, so the
+      // ship could not move at all — no thrust, no drift, nothing.
+      if (!playerModeSystem.insideShip && !playerModeSystem.transitionActive) {
+        playerModeSystem.forceShip(false, cameraModeSystem.mode === 'cockpit');
+        surfaceCharacter.setVisible(false);
+      }
       playerModeSystem.syncShipContext(false, cameraModeSystem.mode === 'cockpit');
     }
 
