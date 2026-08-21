@@ -13248,6 +13248,34 @@ function getPlayerShipHullLength(): number {
   return mission01HullLength;
 }
 
+/**
+ * True only while Mission 01 is genuinely the mission being played.
+ *
+ * The onboarding leaked: a save deep in the campaign restores the tutorial as
+ * "started" (correctly — that pilot did fly it), and every consumer keyed off
+ * that flag alone. The result was M01's HUD, its beacon objective and its
+ * descent-gate copy showing up in the middle of Mission 21, on top of whatever
+ * that mission was actually saying.
+ *
+ * Started-and-not-completed is checked on every later mission rather than
+ * trusting a single "current mission" field, because the campaign advances
+ * through several parallel trackers and only their conjunction is authoritative.
+ */
+function mission01IsActiveMission(): boolean {
+  if (!mission01Tutorial.started) return false;
+  if (missionManager.step === 'missionComplete') return false;
+  // M02 is a surface mission, so `inSurfacePhase` at the call sites already
+  // covers it; from M03 on the check has to be explicit.
+  return !(
+    mission03.started || mission04.started || mission05.started || mission06.started ||
+    mission07.started || mission08.started || mission09.started || mission10.started ||
+    mission11.started || mission12.started || mission13.started || mission14.started ||
+    mission15.started || mission16.started || mission17.started || mission18.started ||
+    mission19.started || mission20.started || mission21.started || mission22.started ||
+    mission23.started || mission24.started || mission25.started
+  );
+}
+
 /** Degrees between the ship's nose and a world point. */
 function mission01AlignmentTo(target: THREE.Vector3): number {
   mission01Forward.set(0, 0, -1).applyQuaternion(ship.quaternion);
@@ -13265,7 +13293,14 @@ function mission01AlignmentTo(target: THREE.Vector3): number {
  * scan can never both claim the objective line on the same frame.
  */
 function updateMission01Onboarding(delta: number, elapsed: number): void {
-  if (inSurfacePhase || !mission01Tutorial.started) return;
+  if (inSurfacePhase || !mission01IsActiveMission()) {
+    // Hard backstop. The assist scales acceleration, braking and rotation, so
+    // if it were ever left engaged outside M01 it would quietly alter the feel
+    // of every later mission. Restore already forces it off; this guarantees it
+    // for any path that does not go through restore.
+    if (mission01Assist.active) mission01Assist.forceOff();
+    return;
+  }
 
   // A standing refusal is a fact about the descent gate, so it is lifted by the
   // gate opening — not by the pilot happening to advance a step.
@@ -13451,6 +13486,7 @@ function advanceMission01ToDebugStep(step: string): boolean {
  * keeps one binding doing one thing at a time.
  */
 function handleMission01BeaconInteraction(): boolean {
+  if (!mission01IsActiveMission()) return false;
   if (inSurfacePhase || !mission01Beacon.located || mission01Beacon.phase !== 'located') return false;
   const distance = ship.position.distanceTo(mission01BeaconPosition(mission01BeaconWorld));
   if (distance > mission01BeaconTuning.scanRadius) return false;
@@ -13471,7 +13507,7 @@ function handleMission01BeaconInteraction(): boolean {
  * structural instead of a convention someone has to remember.
  */
 function updateMission01Hud(): void {
-  const active = mission01Tutorial.started && !inSurfacePhase && missionManager.step !== 'missionComplete';
+  const active = !inSurfacePhase && mission01IsActiveMission();
   mission01Hud.setVisible(active);
   if (!active) return;
 
@@ -21294,7 +21330,7 @@ function updateCamera(delta: number): void {
  */
 function mission01FlightFramingActive(): boolean {
   if (inSurfacePhase || inBasin) return false;
-  if (!mission01Tutorial.started) return false;
+  if (!mission01IsActiveMission()) return false;
   const step = missionManager.step;
   return (
     step !== 'atmosphericEntry' &&
